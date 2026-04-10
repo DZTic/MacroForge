@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>MacroForge Overlay</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      background: transparent;
+      overflow: hidden;
+      /* Rend la fenêtre invisible aux clics (ils passent au jeu) */
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .badge {
+      position: absolute;
+      transform: translate(-50%, -100%) translateY(-12px);
+      background: rgba(15, 15, 30, 0.92);
+      border: 2px solid;
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      pointer-events: none;
+      animation: pop-in 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+                 fade-out 0.4s ease 1.6s forwards;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    }
+
+    .badge.press  { border-color: #00e5ff; color: #00e5ff; }
+    .badge.release{ border-color: #ff6b35; color: #ff6b35; }
+    .badge.key    { border-color: #a78bfa; color: #a78bfa; }
+    .badge.wait   { border-color: #34d399; color: #34d399; }
+
+    .badge .num {
+      font-size: 15px;
+      font-weight: 900;
+    }
+    .badge .label {
+      font-size: 11px;
+      opacity: 0.85;
+    }
+
+    /* Petit point sur le curseur */
+    .dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      animation: dot-pop 0.1s ease forwards, dot-fade 0.3s ease 0.5s forwards;
+    }
+    .dot.press  { background: #00e5ff; box-shadow: 0 0 10px #00e5ff; }
+    .dot.release{ background: #ff6b35; box-shadow: 0 0 10px #ff6b35; }
+
+    @keyframes pop-in {
+      from { opacity: 0; transform: translate(-50%, -100%) translateY(-4px) scale(0.7); }
+      to   { opacity: 1; transform: translate(-50%, -100%) translateY(-12px) scale(1); }
+    }
+    @keyframes fade-out {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+    @keyframes dot-pop {
+      from { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+      to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+    @keyframes dot-fade {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <script type="module">
+    const { listen } = window.__TAURI__.event;
+    const container = document.getElementById('container');
+
+    // Duree d'affichage des badges (ms)
+    const BADGE_DURATION = 2000;
+
+    function spawnBadge(x, y, index, total, type, detail) {
+      const classMap = {
+        MousePress:   'press',
+        MouseRelease: 'release',
+        KeyPress:     'key',
+        KeyRelease:   'key',
+        WaitImage:    'wait',
+      };
+      const cls = classMap[type] || 'key';
+
+      // Badge
+      const badge = document.createElement('div');
+      badge.className = `badge ${cls}`;
+      badge.style.left = `${x}px`;
+      badge.style.top  = `${y}px`;
+      badge.innerHTML = `
+        <span class="num">#${index}</span>
+        <span class="label">${detail}</span>
+        <span class="label" style="opacity:0.5">/${total}</span>
+      `;
+      container.appendChild(badge);
+
+      // Point coloré sur le clic
+      if (type === 'MousePress' || type === 'MouseRelease') {
+        const dot = document.createElement('div');
+        dot.className = `dot ${cls}`;
+        dot.style.left = `${x}px`;
+        dot.style.top  = `${y}px`;
+        container.appendChild(dot);
+        setTimeout(() => dot.remove(), 900);
+      }
+
+      setTimeout(() => badge.remove(), BADGE_DURATION);
+    }
+
+    // Écoute les events du backend
+    listen('playback-action', (event) => {
+      const { index, total, action_type, x, y, detail } = event.payload;
+      spawnBadge(x ?? 0, y ?? 0, index, total, action_type, detail);
+    });
+
+    // Écoute l'état du playback pour masquer/afficher l'overlay
+    listen('playback-state-changed', (event) => {
+      if (!event.payload) {
+        // Playback terminé : nettoyer
+        setTimeout(() => { container.innerHTML = ''; }, 1500);
+      }
+    });
+  </script>
+</body>
+</html>

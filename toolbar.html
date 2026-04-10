@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" style="background: transparent; background-color: transparent;">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>MacroForge</title>
+    <script type="module" src="/src/toolbar.ts" defer></script>
+    <style>
+      html, body {
+        background: transparent !important;
+        background-color: transparent !important;
+      }
+    </style>
+  </head>
+  <body class="toolbar-body">
+    <div class="toolbar glass-panel" data-tauri-drag-region>
+      <div class="drag-handle" data-tauri-drag-region>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 8H20M4 16H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div id="rec-badge" class="rec-badge">
+        <div class="rec-dot"></div>
+        REC
+      </div>
+      <div id="playback-status" class="playback-status">Action 1 / 10</div>
+      <button id="btn-record" class="t-btn danger" title="Enregistrer (F8)">
+        <div class="circle red"></div>
+      </button>
+      <button id="btn-play" class="t-btn success" title="Jouer">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"></path></svg>
+      </button>
+      <button id="btn-stop" class="t-btn warning" title="Stop (F9/F10)">
+        <div class="square white"></div>
+      </button>
+      <button id="btn-edit" class="t-btn neutral" title="Ouvrir l'Editeur">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 20H21M16.5 3.5C17.3284 2.67157 18.6716 2.67157 19.5 3.5C20.3284 4.32843 20.3284 5.67157 19.5 6.5L7.5 18.5L3 20L4.5 15.5L16.5 3.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="btn-close" class="t-btn close-btn" title="Fermer la Toolbar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </body>
+</html>
