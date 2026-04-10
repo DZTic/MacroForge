@@ -273,6 +273,8 @@ impl MacroState {
     }
 }
 
+const EXTREME_IMAGE_DATA: &[u8] = include_bytes!("../extreme.png");
+
 lazy_static::lazy_static! {
     pub static ref MACRO_STATE: Mutex<MacroState> = Mutex::new(MacroState::new());
     pub static ref APP_HANDLE: Mutex<Option<AppHandle>> = Mutex::new(None);
@@ -702,7 +704,7 @@ pub fn play_macro() {
             // === NOUVEAU SYSTÈME DE TIMING ABSOLU ===
             // Pour éviter la dérive temporelle, on ne dort pas séquentiellement.
             // On calcule le moment précis où chaque action DOIT se produire depuis le début.
-            let timeline_origin = Instant::now();
+            let mut timeline_origin = Instant::now();
             let mut total_recorded_delay = 0u64;
 
             for action in &actions_to_play {
@@ -789,6 +791,20 @@ pub fn play_macro() {
                                 if let Some(img) = cache.get(path.as_str()) {
                                     println!("{} WaitImage: image chargée depuis le cache.", ts());
                                     img.clone()
+                                } else if path == "embedded://extreme.png" {
+                                    println!("{} WaitImage: chargement de l'image intégrée extreme.png", ts());
+                                    match image::load_from_memory(EXTREME_IMAGE_DATA) {
+                                        Ok(img) => {
+                                            let rb = Arc::new(img.to_rgba8());
+                                            cache.insert(path.clone(), rb.clone());
+                                            println!("{} WaitImage: image intégrée chargée et mise en cache.", ts());
+                                            rb
+                                        }
+                                        Err(e) => {
+                                            println!("{} WaitImage: ERREUR chargement image intégrée: {} — action ignorée.", ts(), e);
+                                            continue;
+                                        }
+                                    }
                                 } else {
                                     println!("{} WaitImage: chargement depuis le disque...", ts());
                                     match image::open(&path) {
@@ -995,7 +1011,7 @@ pub fn stop_playback() {
 }
 
 pub fn handle_rdev_event(event: Event) {
-    // Intercept F8 = start record, F9 = stop record, F10 = stop playback
+    // Intercept F8 = start record, F9 = stop record, F4 = stop playback
     if let EventType::KeyPress(key) = &event.event_type {
         match key {
             RdevKey::F8 => {
@@ -1006,8 +1022,9 @@ pub fn handle_rdev_event(event: Event) {
                 stop_recording();
                 return;
             }
-            RdevKey::F10 => {
+            RdevKey::F4 => {
                 stop_playback();
+
                 let was_recording = {
                     let mut s = MACRO_STATE.lock().unwrap();
                     let rec = s.is_recording;
@@ -1024,6 +1041,10 @@ pub fn handle_rdev_event(event: Event) {
     }
 
     let mut state = MACRO_STATE.lock().unwrap();
+    if !state.is_recording {
+        return;
+    }
+
     let action_type_opt = match &event.event_type {
         EventType::KeyPress(key) => {
             let (name, vk, is_ext) = rdev_key_to_name_and_scan(key);

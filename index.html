@@ -136,6 +136,38 @@
         </div>
       </div>
     </div>
+    <!-- Modal Image Choice -->
+    <div id="modal-image-choice" class="modal-overlay hidden">
+      <div class="modal-content glass-panel" style="width: 380px;">
+        <h3>Configuration de l'image</h3>
+        <p>Souhaitez-vous utiliser une image de votre PC ou l'image de référence intégrée ?</p>
+        
+        <div class="warning-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-warning"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Si vous utilisez une image locale, votre macro ne fonctionnera pas sur un autre PC sans cette image.</span>
+        </div>
+
+        <div class="image-options-stack">
+          <button id="btn-choice-embedded" class="btn secondary image-option">
+            <div class="option-details">
+              <strong>Image Intégrée</strong>
+              <span>Utiliser "extreme.png" (Portabilité max)</span>
+            </div>
+          </button>
+          <button id="btn-choice-local" class="btn secondary image-option">
+            <div class="option-details">
+              <strong>Image Locale</strong>
+              <span>Choisir un fichier sur mon PC</span>
+            </div>
+          </button>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btn-choice-cancel" class="btn secondary">Annuler</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modals for manual action input -->
     <div id="modal-container">
       <!-- Key Modal -->

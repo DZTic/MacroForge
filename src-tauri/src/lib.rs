@@ -76,6 +76,7 @@ fn close_toolbar(app: tauri::AppHandle) {
 #[tauri::command]
 fn open_toolbar(app: tauri::AppHandle) {
     use tauri::Manager;
+    // On affiche la toolbar
     if let Some(window) = app.get_webview_window("toolbar") {
         let _ = window.show();
         let _ = window.set_focus();
@@ -87,6 +88,7 @@ fn show_main_window(app: tauri::AppHandle) {
     use tauri::Manager;
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
+        let _ = window.unminimize();
         let _ = window.set_focus();
     }
 }
@@ -95,6 +97,14 @@ fn show_main_window(app: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             macro_core::set_app_handle(app.handle().clone());
 

@@ -348,11 +348,19 @@ async function manualAddAction(action: any) {
 }
 
 async function addImageAction() {
-    const path = await open({
-        multiple: false,
-        filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg'] }]
-    });
-    if (!path || typeof path !== "string") return;
+    const choice = await promptImageChoice();
+    if (!choice) return;
+
+    let path: string | null = null;
+    if (choice === "embedded") {
+        path = "embedded://extreme.png";
+    } else {
+        path = await open({
+            multiple: false,
+            filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg'] }]
+        }) as string | null;
+        if (!path || typeof path !== "string") return;
+    }
 
     const timeoutStr = await promptTimeout("5000");
     if (timeoutStr === null) return;
@@ -519,6 +527,32 @@ setInterval(async () => {
     await invoke("set_macro_actions", { actions: currentActions });
     renderActions(currentActions);
 };
+
+function promptImageChoice(): Promise<"embedded" | "local" | null> {
+    return new Promise((resolve) => {
+        const modal = document.getElementById("modal-image-choice") as HTMLDivElement;
+        const btnEmbedded = document.getElementById("btn-choice-embedded") as HTMLButtonElement;
+        const btnLocal = document.getElementById("btn-choice-local") as HTMLButtonElement;
+        const btnCancel = document.getElementById("btn-choice-cancel") as HTMLButtonElement;
+
+        modal.classList.remove("hidden");
+
+        const cleanup = () => {
+            modal.classList.add("hidden");
+            btnEmbedded.removeEventListener("click", onEmbedded);
+            btnLocal.removeEventListener("click", onLocal);
+            btnCancel.removeEventListener("click", onCancel);
+        };
+
+        const onEmbedded = () => { cleanup(); resolve("embedded"); };
+        const onLocal = () => { cleanup(); resolve("local"); };
+        const onCancel = () => { cleanup(); resolve(null); };
+
+        btnEmbedded.addEventListener("click", onEmbedded);
+        btnLocal.addEventListener("click", onLocal);
+        btnCancel.addEventListener("click", onCancel);
+    });
+}
 
 function promptEditMulti(title: string, fields: { label: string, value: string }[]): Promise<string[] | null> {
     return new Promise((resolve) => {

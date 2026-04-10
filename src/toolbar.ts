@@ -27,10 +27,14 @@ function updateRecordingUI(recording: boolean) {
         btnRecord.innerHTML = '<div class="square white"></div>';
         btnRecord.classList.replace("danger", "warning");
         recBadge.classList.add("visible");
+        btnEdit.style.display = "none";
+        btnClose.style.display = "none";
     } else {
         btnRecord.innerHTML = '<div class="circle red"></div>';
         btnRecord.classList.replace("warning", "danger");
         recBadge.classList.remove("visible");
+        btnEdit.style.display = "flex";
+        btnClose.style.display = "flex";
     }
 }
 
@@ -90,7 +94,12 @@ btnStop.addEventListener("click", async () => {
 });
 
 btnEdit.addEventListener("click", async () => {
-    await invoke("show_main_window");
+    console.log("Tentative d'ouverture de l'éditeur (main window)...");
+    try {
+        await invoke("show_main_window");
+    } catch (err) {
+        console.error("Erreur lors de l'appel à show_main_window:", err);
+    }
 });
 
 btnClose.addEventListener("click", async () => {

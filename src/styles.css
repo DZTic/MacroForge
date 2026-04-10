@@ -856,3 +856,66 @@ html:has(> .toolbar-body),
   width: 100%;
   box-sizing: border-box;
 }
+
+/* Image Choice Modal Specific Styles */
+.warning-box {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 10px 0;
+}
+
+.warning-box span {
+  font-size: 13px;
+  color: var(--warning);
+  line-height: 1.4;
+}
+
+.icon-warning {
+  width: 20px;
+  height: 20px;
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.image-options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.image-option {
+  text-align: left;
+  justify-content: flex-start !important;
+  padding: 16px !important;
+  height: auto !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.image-option:hover {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: var(--accent) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.option-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.option-details strong {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.option-details span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
