@@ -236,6 +236,8 @@ pub struct MacroState {
     pub is_playing: bool,
     pub actions: Vec<MacroAction>,
     pub last_event_time: Option<Instant>,
+    pub recording_start_time: Option<Instant>,
+    pub expected_time_cursor: f64,
     pub stop_playback_flag: Arc<Mutex<bool>>,
     pub last_x: f64,
     pub last_y: f64,
@@ -255,6 +257,8 @@ impl MacroState {
             is_playing: false,
             actions: Vec::new(),
             last_event_time: None,
+            recording_start_time: None,
+            expected_time_cursor: 0.0,
             stop_playback_flag: Arc::new(Mutex::new(false)),
             last_x: 0.0,
             last_y: 0.0,
@@ -273,10 +277,11 @@ lazy_static::lazy_static! {
     pub static ref MACRO_STATE: Mutex<MacroState> = Mutex::new(MacroState::new());
     pub static ref APP_HANDLE: Mutex<Option<AppHandle>> = Mutex::new(None);
     pub static ref IMAGE_CACHE: Mutex<HashMap<String, Arc<image::RgbaImage>>> = Mutex::new(HashMap::new());
-    /// Last known foreground window that is NOT MacroForge itself
-    #[cfg(windows)]
+}
+
+#[cfg(windows)]
+lazy_static::lazy_static! {
     pub static ref LAST_GAME_HWND: Mutex<isize> = Mutex::new(0);
-    #[cfg(windows)]
     pub static ref RAW_INPUT_FLAG: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
 
@@ -396,8 +401,12 @@ fn spawn_raw_input_listener() {
                                     state.pending_dy = 0;
                                     
                                     state.last_move_record_time = Some(now);
-                                    let delay_ms = if let Some(last) = state.last_event_time {
-                                        now.duration_since(last).as_millis() as u64
+                                    let delay_ms = if let Some(start) = state.recording_start_time {
+                                        let elapsed_f64 = now.duration_since(start).as_secs_f64() * 1000.0;
+                                        let diff = elapsed_f64 - state.expected_time_cursor;
+                                        let d = diff.round() as u64;
+                                        state.expected_time_cursor += d as f64;
+                                        d
                                     } else {
                                         0
                                     };
@@ -572,10 +581,13 @@ fn rdev_key_to_name_and_scan(key: &RdevKey) -> (String, u16, bool) {
         RdevKey::BackQuote => 0xC0,
         // Pour les autres, on essaye de mapper le code brut d'rdev vers un VK
         RdevKey::Unknown(sc) => {
+            #[cfg(windows)]
             unsafe {
                 use winapi::um::winuser::{MapVirtualKeyW, MAPVK_VSC_TO_VK_EX};
                 MapVirtualKeyW(*sc as u32, MAPVK_VSC_TO_VK_EX) as u16
             }
+            #[cfg(not(windows))]
+            { *sc as u16 }
         },
         _ => 0,
     };
@@ -589,6 +601,8 @@ pub fn start_recording() {
         state.is_recording = true;
         state.actions.clear();
         state.last_event_time = None;
+        state.recording_start_time = Some(Instant::now());
+        state.expected_time_cursor = 0.0;
         state.last_move_record_time = None;
         state.key_press_times.clear();
         state.is_mouse_down = false;
@@ -631,6 +645,7 @@ pub fn stop_recording() -> usize {
         }
         
         state.last_event_time = None;
+        state.recording_start_time = None;
         state.actions.len()
     };
     
@@ -687,7 +702,7 @@ pub fn play_macro() {
             // === NOUVEAU SYSTÈME DE TIMING ABSOLU ===
             // Pour éviter la dérive temporelle, on ne dort pas séquentiellement.
             // On calcule le moment précis où chaque action DOIT se produire depuis le début.
-            let mut timeline_origin = Instant::now();
+            let timeline_origin = Instant::now();
             let mut total_recorded_delay = 0u64;
 
             for action in &actions_to_play {
@@ -1111,8 +1126,12 @@ pub fn handle_rdev_event(event: Event) {
 
     if let Some(action_type) = action_type_opt {
         let now = Instant::now();
-        let delay_ms = if let Some(last) = state.last_event_time {
-            now.duration_since(last).as_millis() as u64
+        let delay_ms = if let Some(start) = state.recording_start_time {
+            let elapsed_f64 = now.duration_since(start).as_secs_f64() * 1000.0;
+            let diff = elapsed_f64 - state.expected_time_cursor;
+            let d = diff.round() as u64;
+            state.expected_time_cursor += d as f64;
+            d
         } else {
             0
         };
