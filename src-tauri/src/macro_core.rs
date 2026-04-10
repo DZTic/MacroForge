@@ -12,7 +12,7 @@ use winapi::um::winuser::{
     CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, GetForegroundWindow, GetMessageW,
     GetRawInputData, MSG, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RegisterClassW,
     RegisterRawInputDevices, RIDEV_INPUTSINK, RID_INPUT, SendInput, WM_INPUT,
-    WNDCLASSW, INPUT, INPUT_MOUSE, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MOUSEEVENTF_ABSOLUTE,
+    WNDCLASSW, INPUT, INPUT_MOUSE, MOUSEEVENTF_ABSOLUTE,
     MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP,
     MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEINPUT, SM_CXVIRTUALSCREEN,
     SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
@@ -682,11 +682,7 @@ pub fn play_macro() {
             println!("{} --- Itération #{} démarrée ---", ts(), iteration);
 
             // Réinitialisé à chaque itération pour éviter toute pollution inter-boucle
-            let mut key_down_times: HashMap<u16, Instant> = HashMap::new();
             let mut action_index = 0usize;
-
-            let mut playback_last_x: i32 = -1;
-            let mut playback_last_y: i32 = -1;
 
             // === NOUVEAU SYSTÈME DE TIMING ABSOLU ===
             // Pour éviter la dérive temporelle, on ne dort pas séquentiellement.
