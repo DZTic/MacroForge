@@ -6,14 +6,15 @@
 
 ## ✨ Fonctionnalités Clés
 
-- ⏱️ **Timing Haute Précision** : Utilise un système de chronologie absolue pour éliminer toute dérive temporelle, même sur de longues durées ou de nombreuses répétitions.
-- 🖱️ **Mode Raw Input (FPS)** : Capture les deltas de la souris directement via l'API Windows Raw Input, permettant d'enregistrer et de rejouer des mouvements de caméra fluides dans des jeux comme Roblox, Minecraft ou tout autre FPS.
-- 🖼️ **Détection d'Images Ultra-Rapide** : Capture d'écran via GDI et recherche parallélisée (système Rayon) pour détecter des éléments visuels à l'écran avec une latence minimale.
-- 📺 **Overlay de Débogage** : Une interface transparente s'affiche par-dessus vos applications pour vous montrer en temps réel l'action en cours d'exécution.
-- 🔄 **Boucles Robustes** : Mode répétition infinie ou limitée avec une gestion stable de la mémoire et des ressources.
-- 🛑 **Arrêt d'Urgence (F10)** : Une touche de sécurité globale pour arrêter instantanément toute macro en cours.
-- 💾 **Gestion de Profils** : Sauvegardez et chargez vos macros au format JSON pour les partager ou les réutiliser plus tard.
-- 🗔 **Multi-Fenêtrage** : Interface principale, barre d'outils flottante et overlay de monitoring.
+- 🌍 **Support Multilingue (i18n)** : Interface disponible en **Français** et **Anglais** avec basculement instantané.
+- ⏱️ **Timing Haute Précision** : Système de chronologie absolue pour éliminer toute dérive temporelle, même sur de longues durées.
+- 🖱️ **Mode Raw Input (FPS)** : Capture les deltas de la souris directement via l'API Windows, idéal pour les mouvements de caméra dans les jeux (Roblox, Minecraft, etc.).
+- 🖼️ **Vision par Ordinateur (GDI/Rayon)** : Détection d'images ultra-rapide avec recherche parallélisée pour une latence minimale.
+- 🛑 **Arrêt d'Urgence Visuel** : Définissez une "image d'arrêt" qui interrompt immédiatement la macro si elle est détectée à l'écran.
+- 🗔 **Interface Flottante (Toolbar)** : Une barre d'outils compacte pour piloter vos macros tout en restant concentré sur votre tâche.
+- ↕️ **Édition Intuitive** : Réorganisez vos actions par **Glisser-Déposer (Drag & Drop)** et modifiez les délais ou coordonnées en un clic.
+- 📺 **Overlay de Monitoring** : Interface transparente affichant l'action en cours d'exécution par-dessus vos applications.
+- 💾 **Gestion de Profils** : Exportez/Importez vos macros au format `.mforge` (JSON).
 
 ## 🚀 Installation
 
@@ -21,7 +22,7 @@
 
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Node.js](https://nodejs.org/) (LTS recommandé)
-- Windows (obligatoire pour les fonctionnalités bas niveau comme le Raw Input et GDI)
+- Windows (obligatoire pour les fonctionnalités bas niveau)
 
 ### Installation des dépendances
 
@@ -44,28 +45,27 @@ npm run tauri build
 ## 🛠️ Stack Technique
 
 - **Backend** : Rust (Tauri v2)
-  - `rdev` pour l'écoute globale des entrées.
-  - `winapi` pour les interactions Windows de bas niveau (Raw Input, GDI, SendInput).
-  - `rayon` pour le traitement d'image haute performance.
-  - `serde` pour la sérialisation des macros.
-- **Frontend** : TypeScript + HTML/CSS Vanille
-  - `Vite` pour le bundling.
-- **UI** : Design moderne avec effets de verre (glassmorphism) et animations fluides.
+  - `rdev` : Captures globales d'entrées.
+  - `winapi` : Interactions Raw Input, GDI, SendInput.
+  - `rayon` : Parallélisation du traitement d'images.
+- **Frontend** : TypeScript + HTML/CSS Moderne
+  - `Vite 6` : Bundling ultra-rapide.
+- **UI/UX** : Design Premium (Glassmorphism), animations fluides et système d'infobulles intelligent.
 
 ## ⌨️ Raccourcis Clavier (Hotkeys)
 
-- **F8** : Démarrer l'enregistrement.
-- **F9** : Arrêter l'enregistrement.
+- **F8** : Démarrer / Arrêter l'enregistrement.
+- **F9** : Arrêt forcé de l'enregistrement.
 - **F10** : Arrêt d'urgence de la macro en cours de lecture.
 
 ## 📖 Utilisation
 
-1. **Enregistrement** : Appuyez sur **F8** ou cliquez sur "Enregistrer". Effectuez vos actions.
-   - **Mode FPS** : Pour capturer les mouvements de caméra dans un jeu FPS, maintenez le **clic droit** enfoncé pendant l'enregistrement. MacroForge passera automatiquement en mode **Raw Input** pour capturer les déplacements physiques de la souris (deltas) plutôt que les coordonnées à l'écran.
-2. **Édition** : Visionnez et modifiez les actions capturées dans l'interface principale.
-3. **Lecture** : Cliquez sur "Jouer la Macro". L'overlay apparaîtra pour suivre la progression et vous indiquer quelle action est en cours.
-4. **Image Search** : Utilisez le bouton "Image" pour ajouter une recherche visuelle. La macro attendra que l'image cible apparaisse à l'écran avant de continuer.
-5. **Boucles** : Activez l'option "Boucler" pour répéter la séquence indéfiniment.
+1. **Enregistrement** : Appuyez sur **F8** pour commencer.
+   - **Note FPS** : Maintenez le **clic droit** pour capturer les mouvements relatifs (deltas) dans les jeux.
+2. **Édition** : Utilisez la liste principale pour réordonner les actions (Drag & Drop) ou les supprimer/éditer.
+3. **Barre d'outils** : Cliquez sur "Toolbar" pour passer en mode mini-contrôleur flottant.
+4. **Image Search** : Ajoutez une action "Image" pour attendre qu'un élément visuel apparaisse avant de continuer.
+5. **Boucles** : Activez "Boucler" pour répéter la macro à l'infini.
 
 ## ⚠️ Sécurité et Éthique
 

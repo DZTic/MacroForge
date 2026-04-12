@@ -1,18 +1,23 @@
-# --- Dépendances & Build ---
+# --- Node.js & Vite ---
 node_modules/
 dist/
 dist-ssr/
 *.local
-/pkg/
+.env
+.env.*
+.eslintcache
+.npm/
 
 # --- Rust & Tauri ---
-/target/
-/src-tauri/target/
-/src-tauri/target_old/
-/target_dev/
+target/
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/gen/
+src-tauri/target_old/
 /src-tauri/gen/schemas/
+target_dev/
 
-# --- Logs & Temporaires ---
+# --- Logs & Debug ---
 logs
 *.log
 npm-debug.log*
@@ -20,7 +25,7 @@ yarn-debug.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# --- IDE & Éditeurs ---
+# --- IDE & Système ---
 .vscode/*
 !.vscode/extensions.json
 !.vscode/launch.json
@@ -36,8 +41,20 @@ Thumbs.db
 *.bak
 *.tmp
 
-# --- Spécifique au Projet MacroForge ---
+# --- Fichiers Temporaires & Artefacts de Build ---
+patch_macro_core*
+test_accuracy
+test_precision
+test_*
+*.exe
+*.pdb
+*.obj
+
+# --- Artifacts de l'Agent & Session ---
 /.agents/
 /scratch/
 /src-tauri/errors.txt
 /src-tauri/2
+.gemini/
+.claude/
+.cursor/

@@ -1,225 +1,283 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MacroForge</title>
-    <script type="module" src="/src/main.ts" defer></script>
-  </head>
-  <body>
-    <div class="app-background"></div>
-    <main class="container glass-panel">
-      <header class="header">
-        <div class="logo-area">
-          <div class="icon-m">M</div>
-          <h1>MacroForge</h1>
-        </div>
-        <div class="header-actions">
-          <div class="add-actions-group">
-            <button id="btn-add-key" class="btn secondary sm" title="Ajouter Touche Clavier">
-              <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M18 12h.01M10 12h6M6 16h.01M10 16h.01M14 16h.01M18 16h.01"/></svg>
-              Clavier
-            </button>
-            <button id="btn-add-mouse" class="btn secondary sm" title="Ajouter Clic Souris">
-              <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"><path d="M12 2v20M5 7v10a7 7 0 0 0 14 0V7A7 7 0 0 0 5 7z"/><path d="M12 2a7 7 0 0 1 7 7h-7V2z"/></svg>
-              Souris
-            </button>
-            <button id="btn-add-wait" class="btn secondary sm" title="Ajouter Temps d'attente (Délai)">
-              <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              Pause
-            </button>
-            <button id="btn-add-image" class="btn secondary sm" title="Attendre l'apparition d'une Image">
-              <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              Image
-            </button>
-          </div>
-          <div class="divider-v"></div>
-          <button id="btn-save" class="btn secondary">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Sauver
-          </button>
-          <button id="btn-load" class="btn secondary">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Ouvrir
-          </button>
-          <button id="btn-open-toolbar" class="btn secondary">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-            Toolbar
-          </button>
-        </div>
-      </header>
 
-      <section class="macros-section">
-        <div class="section-header">
-          <h2>Actions de la Macro</h2>
-          <div class="badges">
-            <span id="badge-count" class="badge">0 action(s)</span>
-            <span id="badge-current" class="badge badge-playing" style="display:none">▶ #—</span>
-          </div>
-        </div>
-        <div class="jump-bar">
-          <label for="jump-input">Aller à :</label>
-          <input id="jump-input" type="number" min="1" placeholder="n°" />
-          <button id="jump-btn" class="btn secondary sm">↵ Go</button>
-          <span id="jump-result" style="font-size:12px;color:var(--text-muted)"></span>
-        </div>
-        
-        <div class="action-list" id="action-list">
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <p>Aucune action enregistrée.</p>
-            <span>Appuyez sur <strong>F8</strong> pour commencer l'enregistrement ou utilisez la Toolbar.</span>
-          </div>
-        </div>
-      </section>
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="/src/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MacroForge</title>
+  <script type="module" src="/src/main.ts" defer></script>
+</head>
 
-      <footer class="footer-controls">
-        <div class="loop-control">
-          <label class="switch">
-            <input type="checkbox" id="check-loop">
-            <span class="slider round"></span>
-          </label>
-          <span>Boucler</span>
-        </div>
-        <div class="loop-control" style="border-right: none;">
-          <label class="switch">
-            <input type="checkbox" id="check-show-mouse">
-            <span class="slider round"></span>
-          </label>
-          <span>Mouvements Souris</span>
-        </div>
-        <div class="divider-v" style="height: 30px;"></div>
-        <div class="stop-image-control">
-          <button id="btn-set-stop-image" class="btn secondary sm" title="Définir une image d'arrêt d'urgence">
-            <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-            Image d'arrêt
+<body>
+  <div class="app-background"></div>
+  <main class="container glass-panel">
+    <header class="header">
+      <div class="logo-area" data-tooltip-id="title_logo">
+        <div class="icon-m">M</div>
+        <h1>MacroForge</h1>
+      </div>
+      <div class="header-actions">
+        <div class="add-actions-group">
+          <select id="lang-select" class="btn secondary sm" style="width: auto; padding: 2px 5px; margin-right: 10px; border-color: rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+            <option value="fr">FR</option>
+            <option value="en">EN</option>
+          </select>
+          <button id="btn-add-key" class="btn secondary sm" data-tooltip-id="title_add_key">
+            <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path
+                d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M18 12h.01M10 12h6M6 16h.01M10 16h.01M14 16h.01M18 16h.01" />
+            </svg>
+            <span data-i18n="btn_keyboard">Clavier</span>
           </button>
-          <span id="stop-image-status" class="status-text">Inactif</span>
-          <button id="btn-clear-stop-image" class="btn secondary sm danger-text hidden" title="Supprimer l'image d'arrêt">✕</button>
+          <button id="btn-add-mouse" class="btn secondary sm" data-tooltip-id="title_add_mouse">
+            <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M5 7v10a7 7 0 0 0 14 0V7A7 7 0 0 0 5 7z" />
+              <path d="M12 2a7 7 0 0 1 7 7h-7V2z" />
+            </svg>
+            <span data-i18n="btn_mouse">Souris</span>
+          </button>
+          <button id="btn-add-wait" class="btn secondary sm" data-tooltip-id="title_add_wait">
+            <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <span data-i18n="btn_wait">Pause</span>
+          </button>
+          <button id="btn-add-image" class="btn secondary sm" data-tooltip-id="title_add_image">
+            <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+            <span data-i18n="btn_image">Image</span>
+          </button>
         </div>
-        <button id="btn-record" class="btn primary record">
-          <div class="circle red"></div> Enregistrer (F8)
+        <div class="divider-v"></div>
+        <button id="btn-save" class="btn secondary" data-tooltip-id="title_save">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <polyline points="17 21 17 13 7 13 7 21" />
+            <polyline points="7 3 7 8 15 8" />
+          </svg>
+          <span data-i18n="btn_save">Sauver</span>
         </button>
-        <button id="btn-play" class="btn primary play">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"></path></svg> Jouer la Macro
+        <button id="btn-load" class="btn secondary" data-tooltip-id="title_load">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span data-i18n="btn_load">Ouvrir</span>
         </button>
-      </footer>
-    </main>
+        <button id="btn-open-toolbar" class="btn secondary" data-tooltip-id="title_toolbar">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="3" y1="9" x2="21" y2="9" />
+            <line x1="9" y1="21" x2="9" y2="9" />
+          </svg>
+          <span data-i18n="btn_toolbar">Toolbar</span>
+        </button>
+      </div>
+    </header>
 
-    <!-- Modal timeout -->
-    <div id="timeout-modal" class="modal-overlay hidden">
-      <div class="modal-content glass-panel">
-        <h3>Délai d'attente (ms)</h3>
-        <p>Veuillez entrer le délai maximum d'attente pour l'image :</p>
-        <input type="number" id="timeout-input" class="modal-input" value="5000" min="0" step="100"/>
+    <section class="macros-section">
+      <div class="section-header">
+        <h2 data-i18n="sect_actions">Actions de la Macro</h2>
+        <div class="badges">
+          <span id="badge-count" class="badge">0 action(s)</span>
+          <span id="badge-current" class="badge badge-playing" style="display:none">▶ #—</span>
+        </div>
+      </div>
+      <div class="jump-bar">
+        <label for="jump-input" data-i18n="lbl_jump">Aller à :</label>
+        <input id="jump-input" type="number" min="1" placeholder="n°" />
+        <button id="jump-btn" class="btn secondary sm" data-i18n="btn_go">↵ Go</button>
+        <span id="jump-result" style="font-size:12px;color:var(--text-muted)"></span>
+      </div>
+
+      <div class="action-list" id="action-list">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <p data-i18n="desc_no_actions">Aucune action enregistrée.</p>
+          <span data-i18n="desc_press_f8">Appuyez sur <strong>F8</strong> pour commencer l'enregistrement ou utilisez la Toolbar.</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer-controls">
+      <div class="loop-control" data-tooltip-id="title_loop">
+        <label class="switch">
+          <input type="checkbox" id="check-loop">
+          <span class="slider round"></span>
+        </label>
+        <span data-i18n="lbl_loop">Boucler</span>
+      </div>
+      <div class="loop-control" style="border-right: none;"
+        data-tooltip-id="title_mouse_moves">
+        <label class="switch">
+          <input type="checkbox" id="check-show-mouse">
+          <span class="slider round"></span>
+        </label>
+        <span data-i18n="lbl_mouse_moves">Mouvements Souris</span>
+      </div>
+      <div class="divider-v" style="height: 30px;"></div>
+      <div class="stop-image-control">
+        <button id="btn-set-stop-image" class="btn secondary sm" data-tooltip-id="title_stop_image_btn">
+          <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+          </svg>
+          <span data-i18n="btn_stop_image">Image d'arrêt</span>
+        </button>
+        <span id="stop-image-status" class="status-text"
+          data-tooltip-id="title_stop_image_status" data-i18n="lbl_inactive">Inactif</span>
+        <button id="btn-clear-stop-image" class="btn secondary sm danger-text hidden"
+          data-tooltip-id="title_clear_stop_image">✕</button>
+      </div>
+      <button id="btn-record" class="btn primary record"
+        data-tooltip-id="title_record" data-i18n="btn_record">
+        <div class="circle red"></div> Enregistrer (F8)
+      </button>
+      <button id="btn-play" class="btn primary play"
+        data-tooltip-id="title_play" data-i18n="btn_play">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5V19L19 12L8 5Z"></path>
+        </svg> Jouer la Macro
+      </button>
+    </footer>
+  </main>
+
+  <!-- Modal timeout -->
+  <div id="timeout-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel">
+      <h3 data-i18n="mod_timeout_title">Délai d'attente (ms)</h3>
+      <p data-i18n="mod_timeout_desc">Veuillez entrer le délai maximum d'attente pour l'image :</p>
+      <input type="number" id="timeout-input" class="modal-input" value="5000" min="0" step="100" />
+      <div class="modal-actions">
+        <button id="modal-btn-cancel" class="btn secondary" data-i18n="mod_cancel">Annuler</button>
+        <button id="modal-btn-ok" class="btn primary" data-i18n="mod_ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Edit Multi (Coordonnées + Délai) -->
+  <div id="edit-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel" style="width: 340px;">
+      <h3 id="edit-title" data-i18n="mod_edit_title">Modifier l'action</h3>
+      <div class="edit-fields-stack">
+        <div class="field-row" id="field-row-1">
+          <label id="label-1" data-i18n="mod_val1">Valeur 1</label>
+          <input type="number" id="edit-input-1" class="modal-input" />
+        </div>
+        <div class="field-row" id="field-row-2">
+          <label id="label-2" data-i18n="mod_val2">Valeur 2</label>
+          <input type="number" id="edit-input-2" class="modal-input" />
+        </div>
+        <div class="field-row" id="field-row-3">
+          <label id="label-3" data-i18n="mod_wait">Attente (ms)</label>
+          <input type="number" id="edit-input-3" class="modal-input" placeholder="0" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="edit-btn-cancel" class="btn secondary" data-i18n="mod_cancel">Annuler</button>
+        <button id="edit-btn-ok" class="btn primary" data-i18n="mod_save">Sauvegarder</button>
+      </div>
+    </div>
+  </div>
+  <!-- Modal Image Choice -->
+  <div id="modal-image-choice" class="modal-overlay hidden">
+    <div class="modal-content glass-panel" style="width: 380px;">
+      <h3 data-i18n="mod_img_config">Configuration de l'image</h3>
+      <p data-i18n="mod_img_desc">Souhaitez-vous utiliser une image de votre PC ou l'image de référence intégrée ?</p>
+
+      <div class="warning-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-warning">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+        <span data-i18n="mod_img_warn">Si vous utilisez une image locale, votre macro ne fonctionnera pas sur un autre PC sans cette
+          image.</span>
+      </div>
+
+      <div class="image-options-stack">
+        <button id="btn-choice-embedded" class="btn secondary image-option">
+          <div class="option-details">
+            <strong data-i18n="mod_img_embedded">Image Intégrée (Extreme)</strong>
+            <span data-i18n="mod_img_embedded_desc">Utiliser "extreme.png"</span>
+          </div>
+        </button>
+        <button id="btn-choice-failed" class="btn secondary image-option">
+          <div class="option-details">
+            <strong data-i18n="mod_img_failed">Image Intégrée (Failed)</strong>
+            <span data-i18n="mod_img_failed_desc">Utiliser "failed.PNG"</span>
+          </div>
+        </button>
+        <button id="btn-choice-local" class="btn secondary image-option">
+          <div class="option-details">
+            <strong data-i18n="mod_img_local">Image Locale</strong>
+            <span data-i18n="mod_img_local_desc">Choisir un fichier sur mon PC</span>
+          </div>
+        </button>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-choice-cancel" class="btn secondary" data-i18n="mod_cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals for manual action input -->
+  <div id="modal-container">
+    <!-- Key Modal -->
+    <div id="modal-key" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3 data-i18n="mod_add_key">Ajouter Touche</h3>
+        <p id="key-modal-text" data-i18n="mod_press_key">Appuyez sur une touche de votre clavier...</p>
+        <div class="key-display-box" id="key-display">---</div>
+        <input type="hidden" id="input-key-name">
         <div class="modal-actions">
-          <button id="modal-btn-cancel" class="btn secondary">Annuler</button>
-          <button id="modal-btn-ok" class="btn primary">OK</button>
+          <button id="btn-key-cancel" class="btn secondary" data-i18n="mod_cancel">Annuler</button>
         </div>
       </div>
     </div>
 
-    <!-- Modal Edit Multi (Coordonnées + Délai) -->
-    <div id="edit-modal" class="modal-overlay hidden">
-      <div class="modal-content glass-panel" style="width: 340px;">
-        <h3 id="edit-title">Modifier l'action</h3>
-        <div class="edit-fields-stack">
-          <div class="field-row" id="field-row-1">
-            <label id="label-1">Valeur 1</label>
-            <input type="number" id="edit-input-1" class="modal-input" />
-          </div>
-          <div class="field-row" id="field-row-2">
-            <label id="label-2">Valeur 2</label>
-            <input type="number" id="edit-input-2" class="modal-input" />
-          </div>
-          <div class="field-row" id="field-row-3">
-            <label id="label-3">Attente (ms)</label>
-            <input type="number" id="edit-input-3" class="modal-input" placeholder="0"/>
-          </div>
+    <!-- Mouse Modal -->
+    <div id="modal-mouse" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3 data-i18n="mod_add_click">Ajouter Clic</h3>
+        <p data-i18n="mod_coord">Coordonnées X, Y</p>
+        <div style="display: flex; gap: 8px;">
+          <input type="number" id="input-mouse-x" class="modal-input" placeholder="X" style="width: 50%;">
+          <input type="number" id="input-mouse-y" class="modal-input" placeholder="Y" style="width: 50%;">
         </div>
         <div class="modal-actions">
-          <button id="edit-btn-cancel" class="btn secondary">Annuler</button>
-          <button id="edit-btn-ok" class="btn primary">Sauvegarder</button>
+          <button id="btn-mouse-cancel" class="btn secondary" data-i18n="mod_cancel">Annuler</button>
+          <button id="btn-mouse-confirm" class="btn primary" data-i18n="mod_add">Ajouter</button>
         </div>
       </div>
     </div>
-    <!-- Modal Image Choice -->
-    <div id="modal-image-choice" class="modal-overlay hidden">
-      <div class="modal-content glass-panel" style="width: 380px;">
-        <h3>Configuration de l'image</h3>
-        <p>Souhaitez-vous utiliser une image de votre PC ou l'image de référence intégrée ?</p>
-        
-        <div class="warning-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-warning"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span>Si vous utilisez une image locale, votre macro ne fonctionnera pas sur un autre PC sans cette image.</span>
-        </div>
 
-        <div class="image-options-stack">
-          <button id="btn-choice-embedded" class="btn secondary image-option">
-            <div class="option-details">
-              <strong>Image Intégrée</strong>
-              <span>Utiliser "extreme.png" (Portabilité max)</span>
-            </div>
-          </button>
-          <button id="btn-choice-local" class="btn secondary image-option">
-            <div class="option-details">
-              <strong>Image Locale</strong>
-              <span>Choisir un fichier sur mon PC</span>
-            </div>
-          </button>
-        </div>
-
+    <!-- Wait Modal -->
+    <div id="modal-wait" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3 data-i18n="mod_add_pause">Ajouter Pause</h3>
+        <p data-i18n="mod_duration">Durée en millisecondes</p>
+        <input type="number" id="input-wait-ms" class="modal-input" placeholder="500">
         <div class="modal-actions">
-          <button id="btn-choice-cancel" class="btn secondary">Annuler</button>
+          <button id="btn-wait-cancel" class="btn secondary" data-i18n="mod_cancel">Annuler</button>
+          <button id="btn-wait-confirm" class="btn primary" data-i18n="mod_add">Ajouter</button>
         </div>
       </div>
     </div>
-
-    <!-- Modals for manual action input -->
-    <div id="modal-container">
-      <!-- Key Modal -->
-      <div id="modal-key" class="modal-overlay hidden">
-        <div class="modal-content">
-          <h3>Ajouter Touche</h3>
-          <p id="key-modal-text">Appuyez sur une touche de votre clavier...</p>
-          <div class="key-display-box" id="key-display">---</div>
-          <input type="hidden" id="input-key-name">
-          <div class="modal-actions">
-            <button id="btn-key-cancel" class="btn secondary">Annuler</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Mouse Modal -->
-      <div id="modal-mouse" class="modal-overlay hidden">
-        <div class="modal-content">
-          <h3>Ajouter Clic</h3>
-          <p>Coordonnées X, Y</p>
-          <div style="display: flex; gap: 8px;">
-            <input type="number" id="input-mouse-x" class="modal-input" placeholder="X" style="width: 50%;">
-            <input type="number" id="input-mouse-y" class="modal-input" placeholder="Y" style="width: 50%;">
-          </div>
-          <div class="modal-actions">
-            <button id="btn-mouse-cancel" class="btn secondary">Annuler</button>
-            <button id="btn-mouse-confirm" class="btn primary">Ajouter</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wait Modal -->
-      <div id="modal-wait" class="modal-overlay hidden">
-        <div class="modal-content">
-          <h3>Ajouter Pause</h3>
-          <p>Durée en millisecondes</p>
-          <input type="number" id="input-wait-ms" class="modal-input" placeholder="500">
-          <div class="modal-actions">
-            <button id="btn-wait-cancel" class="btn secondary">Annuler</button>
-            <button id="btn-wait-confirm" class="btn primary">Ajouter</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </body>
+  </div>
+</body>
 </html>

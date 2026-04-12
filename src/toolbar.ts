@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
+import { initGlobalFeatures, t } from "./utils";
 
 const btnRecord = document.getElementById("btn-record") as HTMLButtonElement;
 const btnPlay = document.getElementById("btn-play") as HTMLButtonElement;
@@ -45,11 +46,11 @@ listen<boolean>("recording-state-changed", (event) => {
 listen<boolean>("playback-state-changed", (event) => {
     if (event.payload) {
         btnPlay.style.opacity = "0.5";
-        btnPlay.title = "Macro en cours...";
+        btnPlay.dataset.tooltip = t("btn_playing");
         playbackStatus.classList.add("visible");
     } else {
         btnPlay.style.opacity = "1";
-        btnPlay.title = "Jouer la Macro";
+        btnPlay.dataset.tooltip = t("btn_play").replace(/<[^>]+>/g, "").trim(); // Strip icon for tooltip
         playbackStatus.classList.remove("visible");
         playbackStatus.innerText = "";
     }
@@ -104,4 +105,8 @@ btnEdit.addEventListener("click", async () => {
 
 btnClose.addEventListener("click", async () => {
     await invoke("close_toolbar");
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+    initGlobalFeatures();
 });

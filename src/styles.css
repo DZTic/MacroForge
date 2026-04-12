@@ -956,3 +956,5 @@ html:has(> .toolbar-body),
   font-size: 12px;
   color: var(--text-secondary);
 }
+#custom-tooltip { position: fixed; background: rgba(10, 15, 30, 0.95); color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; pointer-events: none; z-index: 99999; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 4px 6px rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.2s ease; white-space: nowrap; } 
+#custom-tooltip.show { opacity: 1; }

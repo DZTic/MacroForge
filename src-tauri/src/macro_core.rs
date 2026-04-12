@@ -278,6 +278,7 @@ impl MacroState {
 }
 
 const EXTREME_IMAGE_DATA: &[u8] = include_bytes!("../extreme.png");
+const FAILED_IMAGE_DATA: &[u8] = include_bytes!("../failed.PNG");
 
 lazy_static::lazy_static! {
     pub static ref MACRO_STATE: Mutex<MacroState> = Mutex::new(MacroState::new());
@@ -840,9 +841,10 @@ pub fn play_macro() {
                                 if let Some(img) = cache.get(path.as_str()) {
                                     println!("{} WaitImage: image chargée depuis le cache.", ts());
                                     img.clone()
-                                } else if path == "embedded://extreme.png" {
-                                    println!("{} WaitImage: chargement de l'image intégrée extreme.png", ts());
-                                    match image::load_from_memory(EXTREME_IMAGE_DATA) {
+                                } else if path == "embedded://extreme.png" || path == "embedded://failed.PNG" {
+                                    println!("{} WaitImage: chargement de l'image intégrée {}", ts(), path);
+                                    let data = if path == "embedded://extreme.png" { EXTREME_IMAGE_DATA } else { FAILED_IMAGE_DATA };
+                                    match image::load_from_memory(data) {
                                         Ok(img) => {
                                             let rb = Arc::new(img.to_rgba8());
                                             cache.insert(path.clone(), rb.clone());
@@ -1120,8 +1122,9 @@ fn check_image_present(path: &str) -> bool {
         let mut cache = IMAGE_CACHE.lock().unwrap();
         if let Some(img) = cache.get(path) {
             img.clone()
-        } else if path == "embedded://extreme.png" {
-            match image::load_from_memory(EXTREME_IMAGE_DATA) {
+        } else if path == "embedded://extreme.png" || path == "embedded://failed.PNG" {
+            let data = if path == "embedded://extreme.png" { EXTREME_IMAGE_DATA } else { FAILED_IMAGE_DATA };
+            match image::load_from_memory(data) {
                 Ok(img) => {
                     let rb = Arc::new(img.to_rgba8());
                     cache.insert(path.to_string(), rb.clone());

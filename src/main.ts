@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save, message } from "@tauri-apps/plugin-dialog";
+import { initGlobalFeatures, setLanguage, applyTranslations, getLanguage, t } from "./utils";
 
 let btnRecord: HTMLButtonElement;
 let btnPlay: HTMLButtonElement;
@@ -360,6 +361,8 @@ async function addImageAction() {
     let path: string | null = null;
     if (choice === "embedded") {
         path = "embedded://extreme.png";
+    } else if (choice === "failed") {
+        path = "embedded://failed.PNG";
     } else {
         path = await open({
             multiple: false,
@@ -382,10 +385,10 @@ async function addImageAction() {
 function updateMainRecordingUI(recording: boolean) {
     isRecording = recording;
     if (recording) {
-        btnRecord.innerHTML = '<div class="square white"></div> Arrêter (F9)';
+        btnRecord.innerHTML = `<div class="square white"></div> ${t("btn_stop_rec")}`;
         btnRecord.classList.replace("record", "danger");
     } else {
-        btnRecord.innerHTML = '<div class="circle red"></div> Enregistrer (F8)';
+        btnRecord.innerHTML = `<div class="circle red"></div> ${t("btn_record")}`;
         btnRecord.classList.replace("danger", "record");
     }
     refreshActions();
@@ -398,11 +401,11 @@ listen<boolean>("recording-state-changed", (event) => {
 listen<boolean>("playback-state-changed", (event) => {
     const badgeCurrent = document.getElementById("badge-current") as HTMLElement;
     if (event.payload) {
-        btnPlay.innerText = "Lecture en cours... (F10 stop)";
+        btnPlay.innerText = t("btn_playing");
         btnPlay.classList.add("playing-active");
         if (badgeCurrent) badgeCurrent.style.display = '';
     } else {
-        btnPlay.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"></path></svg> Jouer la Macro';
+        btnPlay.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"></path></svg> ${t("btn_play")}`;
         btnPlay.classList.remove("playing-active");
         if (badgeCurrent) { badgeCurrent.style.display = 'none'; badgeCurrent.textContent = '\u25b6 #\u2014'; }
         // Retirer le surlignage en cours
@@ -447,6 +450,8 @@ function setupStopImageListeners() {
         let path: string | null = null;
         if (choice === "embedded") {
             path = "embedded://extreme.png";
+        } else if (choice === "failed") {
+            path = "embedded://failed.PNG";
         } else {
             path = await open({
                 multiple: false,
@@ -580,10 +585,11 @@ function updateStopImageUI(path: string | null) {
     renderActions(currentActions);
 };
 
-function promptImageChoice(): Promise<"embedded" | "local" | null> {
+function promptImageChoice(): Promise<"embedded" | "failed" | "local" | null> {
     return new Promise((resolve) => {
         const modal = document.getElementById("modal-image-choice") as HTMLDivElement;
         const btnEmbedded = document.getElementById("btn-choice-embedded") as HTMLButtonElement;
+        const btnFailed = document.getElementById("btn-choice-failed") as HTMLButtonElement;
         const btnLocal = document.getElementById("btn-choice-local") as HTMLButtonElement;
         const btnCancel = document.getElementById("btn-choice-cancel") as HTMLButtonElement;
 
@@ -592,15 +598,18 @@ function promptImageChoice(): Promise<"embedded" | "local" | null> {
         const cleanup = () => {
             modal.classList.add("hidden");
             btnEmbedded.removeEventListener("click", onEmbedded);
+            btnFailed.removeEventListener("click", onFailed);
             btnLocal.removeEventListener("click", onLocal);
             btnCancel.removeEventListener("click", onCancel);
         };
 
         const onEmbedded = () => { cleanup(); resolve("embedded"); };
+        const onFailed = () => { cleanup(); resolve("failed"); };
         const onLocal = () => { cleanup(); resolve("local"); };
         const onCancel = () => { cleanup(); resolve(null); };
 
         btnEmbedded.addEventListener("click", onEmbedded);
+        btnFailed.addEventListener("click", onFailed);
         btnLocal.addEventListener("click", onLocal);
         btnCancel.addEventListener("click", onCancel);
     });
@@ -695,14 +704,13 @@ function renderActions(actions: any[]) {
         ? actions 
         : actions.filter(a => !a.action_type.MouseMove && !a.action_type.MouseMoveRelative);
 
-    badgeCountEl.textContent = `${actions.length} action(s) (${visibleActions.length} visibles)`;
+    badgeCountEl.textContent = `${actions.length} action(s) (${visibleActions.length} ${t("lbl_visible")})`;
 
     if (visibleActions.length === 0) {
         actionListEl.innerHTML = `
         <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none"><path d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <p>Aucune action visibleifiée.</p>
-            <span>${actions.length > 0 ? "Activez 'Mouvements Souris' pour les voir." : "Enregistrez une macro en appuyant sur F8."}</span>
+            <p data-i18n="tb_no_actions">${t("tb_no_actions")}</p>
         </div>`;
         return;
     }
@@ -725,50 +733,53 @@ function renderActions(actions: any[]) {
             details = `dX: ${a.action_type.MouseMoveRelative[0]}, dY: ${a.action_type.MouseMoveRelative[1]}`;
         } else if (a.action_type.MousePress !== undefined) {
             typeStr = 'Click Down';
-            details = `Bouton ${a.action_type.MousePress}`;
+            details = `${t("act_btn")} ${a.action_type.MousePress}`;
         } else if (a.action_type.MouseRelease !== undefined) {
             typeStr = 'Click Up';
-            details = `Bouton ${a.action_type.MouseRelease}`;
+            details = `${t("act_btn")} ${a.action_type.MouseRelease}`;
         } else if (a.action_type.KeyPress !== undefined) {
             typeStr = 'Key Down';
-            details = `Touche ${Array.isArray(a.action_type.KeyPress) ? a.action_type.KeyPress[0] : a.action_type.KeyPress}`;
+            details = `${t("act_key")} ${Array.isArray(a.action_type.KeyPress) ? a.action_type.KeyPress[0] : a.action_type.KeyPress}`;
         } else if (a.action_type.KeyRelease !== undefined) {
             typeStr = 'Key Up';
-            details = `Touche ${Array.isArray(a.action_type.KeyRelease) ? a.action_type.KeyRelease[0] : a.action_type.KeyRelease}`;
+            details = `${t("act_key")} ${Array.isArray(a.action_type.KeyRelease) ? a.action_type.KeyRelease[0] : a.action_type.KeyRelease}`;
         } else if (a.action_type.Scroll) {
             typeStr = 'Scroll';
             details = `dx: ${a.action_type.Scroll[0]}, dy: ${a.action_type.Scroll[1]}`;
         } else if (a.action_type.WaitImage) {
             typeStr = 'Wait Image';
-            details = `Path: ${a.action_type.WaitImage[0]}, Timeout: ${a.action_type.WaitImage[1]}ms`;
+            details = `${t("lbl_path")}: ${a.action_type.WaitImage[0]}, ${t("lbl_timeout")}: ${a.action_type.WaitImage[1]}ms`;
         } else if (a.action_type.Wait !== undefined) {
             typeStr = 'Pause';
-            details = `Durée: ${a.action_type.Wait}ms`;
+            details = `${t("act_duration")}: ${a.action_type.Wait}ms`;
         }
 
         html += `
         <div class="action-item" data-index="${originalIndex}">
-            <div class="drag-icon" style="cursor:grab">
+            <div class="drag-icon" style="cursor:grab" data-tooltip-id="title_move_action">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9h8M8 15h8"/></svg>
             </div>
             <div class="action-line-num">${originalIndex + 1}</div>
-            <div class="action-delay">${a.delay_ms} ms</div>
-            <div class="action-type">${typeStr}</div>
+            <div class="action-delay" data-tooltip-id="title_delay_before">${a.delay_ms} ms</div>
+            <div class="action-type" data-i18n-dyn="${typeStr}">${typeStr}</div>
             <div class="action-details">${details}</div>
             <div class="action-controls">
-                <button class="edit-btn" onclick="window.editAction(${originalIndex})">
+                <button class="edit-btn" onclick="window.editAction(${originalIndex})" data-tooltip-id="title_edit_action">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </button>
-                <button class="danger-text" onclick="window.deleteAction(${originalIndex})">✕</button>
+                <button class="danger-text" onclick="window.deleteAction(${originalIndex})" data-tooltip-id="title_del_action">✕</button>
             </div>
         </div>`;
     });
 
     if (visibleActions.length > 1000) {
-        html += `<div style="text-align:center; padding:10px; color:var(--text-secondary); font-size:12px;">+ ${visibleActions.length - 1000} autres actions non affichées pour les performances</div>`;
+        html += `<div style="text-align:center; padding:10px; color:var(--text-secondary); font-size:12px;">
+            <span data-i18n="lbl_hidden_actions"></span> (${visibleActions.length - 1000})
+        </div>`;
     }
 
     actionListEl.innerHTML = html;
+    applyTranslations();
 }
 
 function refreshActions() {
@@ -790,5 +801,16 @@ if (btnOpenToolbar) {
     });
 }
 
+// Ensure lang selector matches state
+const langSelect = document.getElementById("lang-select") as HTMLSelectElement;
+if (langSelect) {
+    langSelect.value = getLanguage();
+    langSelect.addEventListener("change", (e) => {
+        setLanguage((e.target as HTMLSelectElement).value);
+        refreshActions();
+    });
+}
+
 window.addEventListener("focus", refreshActions);
+initGlobalFeatures();
 refreshActions();
