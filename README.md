@@ -71,6 +71,3 @@ npm run tauri build
 
 MacroForge est un outil puissant. Veillez à l'utiliser de manière responsable. L'automatisation dans certains jeux peut être à l'encontre de leurs conditions d'utilisation.
 
----
-
-Développé avec ❤️ par [DZTic](https://github.com/DZTic)
