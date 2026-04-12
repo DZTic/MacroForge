@@ -718,6 +718,43 @@ html:has(> .toolbar-body),
   color: var(--text-secondary);
 }
 
+/* ─── Stop Image Control ─── */
+.stop-image-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-left: 1px solid var(--panel-border);
+}
+
+.status-text {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.status-text.active {
+  color: var(--success);
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+  text-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+}
+
+.danger-text {
+  color: var(--danger) !important;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .modal-input {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--panel-border);

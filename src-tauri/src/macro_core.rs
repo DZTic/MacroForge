@@ -248,6 +248,8 @@ pub struct MacroState {
     pub loop_playback: bool,
     pub pending_dx: i32,
     pub pending_dy: i32,
+    pub stop_image_path: Option<String>,
+    pub stop_image_timeout: u64,
 }
 
 impl MacroState {
@@ -269,6 +271,8 @@ impl MacroState {
             loop_playback: false,
             pending_dx: 0,
             pending_dy: 0,
+            stop_image_path: None,
+            stop_image_timeout: 5000,
         }
     }
 }
@@ -693,7 +697,13 @@ pub fn play_macro() {
         set_overlay_visible(true);
 
         let mut iteration = 0u32;
+        let stop_image_config: Option<String> = {
+            let state = MACRO_STATE.lock().unwrap();
+            state.stop_image_path.clone()
+        };
 
+        let mut last_stop_check = Instant::now();
+        let mut stop_blackout_until: Option<Instant> = None;
         'main_loop: loop {
             iteration += 1;
             println!("{} --- Itération #{} démarrée ---", ts(), iteration);
@@ -714,9 +724,29 @@ pub fn play_macro() {
                     println!("{} [STOP] stop_flag détecté avant action #{} — arrêt.", ts(), action_index);
                     break 'main_loop;
                 }
-
+                
                 // Crédit de temps enregistré pour cette action
                 total_recorded_delay += action.delay_ms;
+
+                // --- VÉRIFICATION DE L'IMAGE D'ARRÊT (TOUTES LES 3 SECONDES + BLACKOUT) ---
+                if let Some(ref path) = stop_image_config {
+                    let now = Instant::now();
+                    let in_blackout = stop_blackout_until.map(|t| now < t).unwrap_or(false);
+
+                    if !in_blackout && last_stop_check.elapsed() >= Duration::from_secs(3) {
+                        last_stop_check = now;
+                        if check_image_present(path) {
+                            if MACRO_STATE.lock().unwrap().loop_playback {
+                                println!("{} [STOP IMAGE] Détectée ! Redémarrage (Blackout 15s activé).", ts());
+                                stop_blackout_until = Some(now + Duration::from_secs(15));
+                                continue 'main_loop;
+                            } else {
+                                println!("{} [STOP IMAGE] Détectée ! Arrêt définitif.", ts());
+                                break 'main_loop;
+                            }
+                        }
+                    }
+                }
 
                 // Attente de haute précision jusqu'au moment cible
                 let target_time = timeline_origin + Duration::from_millis(total_recorded_delay);
@@ -734,6 +764,25 @@ pub fn play_macro() {
                     }
                     
                     if *stop_flag.lock().unwrap() { break 'main_loop; }
+
+                    // --- VÉRIFICATION DE L'IMAGE D'ARRÊT (DANS LA BOUCLE D'ATTENTE) ---
+                    if let Some(ref path) = stop_image_config {
+                        let now = Instant::now();
+                        let in_blackout = stop_blackout_until.map(|t| now < t).unwrap_or(false);
+                        
+                        if !in_blackout && last_stop_check.elapsed() >= Duration::from_secs(3) {
+                            last_stop_check = now;
+                            if check_image_present(path) {
+                                if MACRO_STATE.lock().unwrap().loop_playback {
+                                    println!("{} [STOP IMAGE] Détectée pendant attente ! Redémarrage (Blackout 15s).", ts());
+                                    stop_blackout_until = Some(now + Duration::from_secs(15));
+                                    continue 'main_loop;
+                                } else {
+                                    break 'main_loop;
+                                }
+                            }
+                        }
+                    }
                 }
 
                 #[cfg(windows)]
@@ -920,6 +969,25 @@ pub fn play_macro() {
                                     }
 
                                     thread::sleep(Duration::from_millis(33));
+
+                                    // --- VÉRIFICATION DE L'IMAGE D'ARRÊT (DANS WAITIMAGE) ---
+                                    if let Some(ref path) = stop_image_config {
+                                        let now = Instant::now();
+                                        let in_blackout = stop_blackout_until.map(|t| now < t).unwrap_or(false);
+
+                                        if !in_blackout && last_stop_check.elapsed() >= Duration::from_secs(3) {
+                                            last_stop_check = now;
+                                            if check_image_present(path) {
+                                                if MACRO_STATE.lock().unwrap().loop_playback {
+                                                    println!("{} [STOP IMAGE] Détectée dans WaitImage ! Redémarrage (Blackout 15s).", ts());
+                                                    stop_blackout_until = Some(now + Duration::from_secs(15));
+                                                    continue 'main_loop;
+                                                } else {
+                                                    break 'main_loop;
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
 
                                 if found {
@@ -952,7 +1020,31 @@ pub fn play_macro() {
                         }
                         ActionType::Wait(ms) => {
                             println!("{} [#{}/{}] Wait {}ms", ts(), action_index, total_actions, ms);
-                            thread::sleep(Duration::from_millis(ms));
+                            let start_wait = Instant::now();
+                            while start_wait.elapsed().as_millis() < ms as u128 {
+                                if *stop_flag.lock().unwrap() { break 'main_loop; }
+                                
+                                // --- VÉRIFICATION DE L'IMAGE D'ARRÊT (DANS WAIT) ---
+                                if let Some(ref path) = stop_image_config {
+                                    let now = Instant::now();
+                                    let in_blackout = stop_blackout_until.map(|t| now < t).unwrap_or(false);
+
+                                    if !in_blackout && last_stop_check.elapsed() >= Duration::from_secs(3) {
+                                        last_stop_check = now;
+                                        if check_image_present(path) {
+                                            if MACRO_STATE.lock().unwrap().loop_playback {
+                                                println!("{} [STOP IMAGE] Détectée dans Wait ! Redémarrage (Blackout 15s).", ts());
+                                                stop_blackout_until = Some(now + Duration::from_secs(15));
+                                                continue 'main_loop;
+                                            } else {
+                                                break 'main_loop;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                thread::sleep(Duration::from_millis(100));
+                            }
                             // RE-SYNCHRONISATION après une pause manuelle
                             timeline_origin = Instant::now();
                             total_recorded_delay = 0;
@@ -1008,6 +1100,103 @@ pub fn set_loop_playback(looping: bool) {
 pub fn stop_playback() {
     let state = MACRO_STATE.lock().unwrap();
     *state.stop_playback_flag.lock().unwrap() = true;
+}
+
+pub fn get_stop_image() -> (Option<String>, u64) {
+    let state = MACRO_STATE.lock().unwrap();
+    (state.stop_image_path.clone(), state.stop_image_timeout)
+}
+
+pub fn set_stop_image(path: Option<String>, timeout: u64) {
+    let mut state = MACRO_STATE.lock().unwrap();
+    state.stop_image_path = path;
+    state.stop_image_timeout = timeout;
+}
+
+/// Helper function to check if an image is currently on screen
+fn check_image_present(path: &str) -> bool {
+    // Basic reuse of the existing detection logic, but returning bool
+    let template_arc = {
+        let mut cache = IMAGE_CACHE.lock().unwrap();
+        if let Some(img) = cache.get(path) {
+            img.clone()
+        } else if path == "embedded://extreme.png" {
+            match image::load_from_memory(EXTREME_IMAGE_DATA) {
+                Ok(img) => {
+                    let rb = Arc::new(img.to_rgba8());
+                    cache.insert(path.to_string(), rb.clone());
+                    rb
+                }
+                Err(_) => return false,
+            }
+        } else {
+            match image::open(path) {
+                Ok(img) => {
+                    let rb = Arc::new(img.to_rgba8());
+                    cache.insert(path.to_string(), rb.clone());
+                    rb
+                }
+                Err(_) => return false,
+            }
+        }
+    };
+
+    let (tw, th) = template_arc.dimensions();
+    let tw = tw as usize;
+    let th = th as usize;
+    let template_raw = template_arc.as_raw();
+
+    #[cfg(windows)]
+    {
+        use winapi::um::winuser::GetSystemMetrics;
+        let vx = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
+        let vy = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
+        let vw = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
+        let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
+
+        if let Some(screen_raw) = capture_screen_gdi(vx, vy, vw, vh) {
+            let mw_usize = vw as usize;
+            let mh_usize = vh as usize;
+
+            if th > mh_usize || tw > mw_usize { return false; }
+
+            let res = (0..=(mh_usize - th)).into_par_iter().find_map_any(|sy| {
+                let monitor_row_start = sy * mw_usize * 4;
+                for sx in 0..=(mw_usize - tw) {
+                    let monitor_pixel_idx = monitor_row_start + sx * 4;
+                    let (sr, sg, sb) = (screen_raw[monitor_pixel_idx + 2], screen_raw[monitor_pixel_idx + 1], screen_raw[monitor_pixel_idx + 0]);
+
+                    // Point 1 : Coin Haut-Gauche
+                    if !pixels_match(sr, sg, sb, template_raw[0], template_raw[1], template_raw[2], 25) {
+                        continue;
+                    }
+
+                    // Point 2 : Centre
+                    let t_mid_y = th / 2;
+                    let t_mid_x = tw / 2;
+                    let s_mid_idx = ((sy + t_mid_y) * mw_usize + (sx + t_mid_x)) * 4;
+                    let t_mid_idx = (t_mid_y * tw + t_mid_x) * 4;
+                    let (smr, smg, smb) = (screen_raw[s_mid_idx + 2], screen_raw[s_mid_idx + 1], screen_raw[s_mid_idx + 0]);
+                    if !pixels_match(smr, smg, smb, template_raw[t_mid_idx], template_raw[t_mid_idx + 1], template_raw[t_mid_idx + 2], 25) {
+                        continue;
+                    }
+
+                    // Point 3 : Coin Bas-Droite
+                    let t_last_y = th - 1;
+                    let t_last_x = tw - 1;
+                    let s_last_idx = ((sy + t_last_y) * mw_usize + (sx + t_last_x)) * 4;
+                    let t_last_idx = (t_last_y * tw + t_last_x) * 4;
+                    let (slr, slg, slb) = (screen_raw[s_last_idx + 2], screen_raw[s_last_idx + 1], screen_raw[s_last_idx + 0]);
+                    if pixels_match(slr, slg, slb, template_raw[t_last_idx], template_raw[t_last_idx + 1], template_raw[t_last_idx + 2], 25) {
+                        return Some((sx, sy));
+                    }
+                }
+                None
+            });
+            return res.is_some();
+        }
+    }
+    false
 }
 
 pub fn handle_rdev_event(event: Event) {

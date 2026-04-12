@@ -90,6 +90,15 @@
           </label>
           <span>Mouvements Souris</span>
         </div>
+        <div class="divider-v" style="height: 30px;"></div>
+        <div class="stop-image-control">
+          <button id="btn-set-stop-image" class="btn secondary sm" title="Définir une image d'arrêt d'urgence">
+            <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            Image d'arrêt
+          </button>
+          <span id="stop-image-status" class="status-text">Inactif</span>
+          <button id="btn-clear-stop-image" class="btn secondary sm danger-text hidden" title="Supprimer l'image d'arrêt">✕</button>
+        </div>
         <button id="btn-record" class="btn primary record">
           <div class="circle red"></div> Enregistrer (F8)
         </button>

@@ -221,6 +221,12 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         }
     });
+    
+    // Initialisation Image d'arrêt
+    const [stopPath, _stopTimeout] = await invoke<[string | null, number]>("get_stop_image");
+    updateStopImageUI(stopPath);
+
+    setupStopImageListeners();
 
     await refreshActions();
 
@@ -429,6 +435,52 @@ setInterval(async () => {
         await refreshActions();
     }
 }, 500);
+
+function setupStopImageListeners() {
+    const btnSetStop = document.getElementById("btn-set-stop-image");
+    const btnClearStop = document.getElementById("btn-clear-stop-image");
+
+    btnSetStop?.addEventListener("click", async () => {
+        const choice = await promptImageChoice();
+        if (!choice) return;
+
+        let path: string | null = null;
+        if (choice === "embedded") {
+            path = "embedded://extreme.png";
+        } else {
+            path = await open({
+                multiple: false,
+                filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg'] }]
+            }) as string | null;
+            if (!path || typeof path !== "string") return;
+        }
+
+        await invoke("set_stop_image", { path, timeout: 0 });
+        updateStopImageUI(path);
+    });
+
+    btnClearStop?.addEventListener("click", async () => {
+        await invoke("set_stop_image", { path: null, timeout: 5000 });
+        updateStopImageUI(null);
+    });
+}
+
+function updateStopImageUI(path: string | null) {
+    const status = document.getElementById("stop-image-status");
+    const btnClear = document.getElementById("btn-clear-stop-image");
+    if (!status || !btnClear) return;
+
+    if (path) {
+        const fileName = path.split(/[/\\]/).pop();
+        status.textContent = fileName || "Actif";
+        status.classList.add("active");
+        btnClear.classList.remove("hidden");
+    } else {
+        status.textContent = "Inactif";
+        status.classList.remove("active");
+        btnClear.classList.add("hidden");
+    }
+}
 
 (window as any).deleteAction = async (idx: number) => {
     currentActions.splice(idx, 1);

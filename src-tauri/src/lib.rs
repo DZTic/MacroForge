@@ -48,6 +48,16 @@ fn get_loop_playback() -> bool {
 }
 
 #[tauri::command]
+fn set_stop_image(path: Option<String>, timeout: u64) {
+    macro_core::set_stop_image(path, timeout);
+}
+
+#[tauri::command]
+fn get_stop_image() -> (Option<String>, u64) {
+    macro_core::get_stop_image()
+}
+
+#[tauri::command]
 fn save_macro(path: String) -> Result<String, String> {
     let state = macro_core::MACRO_STATE.lock().unwrap();
     let json = serde_json::to_string(&state.actions).map_err(|e| e.to_string())?;
@@ -132,7 +142,9 @@ pub fn run() {
             open_toolbar,
             show_main_window,
             set_loop_playback,
-            get_loop_playback
+            get_loop_playback,
+            set_stop_image,
+            get_stop_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
