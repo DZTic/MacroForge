@@ -56,7 +56,7 @@ npm run tauri build
 
 - **F8** : Démarrer / Arrêter l'enregistrement.
 - **F9** : Arrêt forcé de l'enregistrement.
-- **F10** : Arrêt d'urgence de la macro en cours de lecture.
+- **F4** : Arrêt d'urgence de la macro en cours de lecture.
 
 ## 📖 Utilisation
 
