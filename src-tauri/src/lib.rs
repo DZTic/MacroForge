@@ -78,7 +78,13 @@ fn load_macro(path: String) -> Result<String, String> {
 #[tauri::command]
 fn close_toolbar(app: tauri::AppHandle) {
     use tauri::Manager;
-    if let Some(window) = app.get_webview_window("toolbar") {
+    let main_window = app.get_webview_window("main");
+    let main_visible = main_window.map(|w| w.is_visible().unwrap_or(false)).unwrap_or(false);
+
+    if !main_visible {
+        // Si la fenêtre principale est déjà cachée/fermée, on quitte l'app
+        app.exit(0);
+    } else if let Some(window) = app.get_webview_window("toolbar") {
         let _ = window.hide();
     }
 }
@@ -110,8 +116,18 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
-                    api.prevent_close();
-                    let _ = window.hide();
+                    use tauri::Manager;
+                    let app = window.app_handle();
+                    let toolbar = app.get_webview_window("toolbar");
+                    let toolbar_visible = toolbar.map(|w| w.is_visible().unwrap_or(false)).unwrap_or(false);
+
+                    if !toolbar_visible {
+                        // Si la toolbar est déjà cachée/fermée, on quitte l'app au lieu de juste cacher
+                        app.exit(0);
+                    } else {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
             }
         })
