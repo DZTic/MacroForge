@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { open, save, message } from "@tauri-apps/plugin-dialog";
 import { initGlobalFeatures, setLanguage, applyTranslations, getLanguage, t } from "./utils";
 
@@ -228,6 +228,20 @@ window.addEventListener('DOMContentLoaded', async () => {
     updateStopImageUI(stopPath);
 
     setupStopImageListeners();
+
+    // Initialisation des paramètres
+    const checkShowProgress = document.getElementById("check-show-progress") as HTMLInputElement;
+    const showProgress = localStorage.getItem("show-action-progress") !== "false";
+    checkShowProgress.checked = showProgress;
+
+    checkShowProgress.addEventListener("change", async () => {
+        localStorage.setItem("show-action-progress", checkShowProgress.checked.toString());
+        await emit("settings-changed", { showProgress: checkShowProgress.checked });
+    });
+
+    const btnSettings = document.getElementById("btn-settings");
+    btnSettings?.addEventListener("click", () => showModal("settings-modal"));
+    document.getElementById("settings-btn-ok")?.addEventListener("click", () => hideModal("settings-modal"));
 
     await refreshActions();
 

@@ -80,6 +80,12 @@
           </svg>
           <span data-i18n="btn_toolbar">Toolbar</span>
         </button>
+        <button id="btn-settings" class="btn secondary sm" data-tooltip-id="title_settings">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:0">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -164,6 +170,25 @@
       <div class="modal-actions">
         <button id="modal-btn-cancel" class="btn secondary" data-i18n="mod_cancel">Annuler</button>
         <button id="modal-btn-ok" class="btn primary" data-i18n="mod_ok">OK</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Modal Paramètres -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-panel" style="width: 350px;">
+      <h3 data-i18n="mod_settings_title">Paramètres</h3>
+      <div class="settings-stack">
+          <div class="setting-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+              <span data-i18n="lbl_show_progress">Afficher le défilement des actions</span>
+              <label class="switch">
+                <input type="checkbox" id="check-show-progress" checked>
+                <span class="slider round"></span>
+              </label>
+          </div>
+      </div>
+      <div class="modal-actions">
+        <button id="settings-btn-ok" class="btn primary" data-i18n="mod_close">Fermer</button>
       </div>
     </div>
   </div>

@@ -98,7 +98,13 @@ export const translations: Record<string, Record<string, string>> = {
     "Wait Image": "Attente Image",
     "Pause": "Pause",
     "lbl_path": "Chemin",
-    "lbl_timeout": "Délai"
+    "lbl_timeout": "Délai",
+    "lbl_action": "Action",
+    "btn_settings": "Paramètres",
+    "mod_settings_title": "Paramètres",
+    "lbl_show_progress": "Afficher le défilement des actions",
+    "mod_close": "Fermer",
+    "title_settings": "Ouvrir les paramètres de l'application"
   },
   en: {
     "btn_keyboard": "Keyboard",
@@ -196,7 +202,13 @@ export const translations: Record<string, Record<string, string>> = {
     "Wait Image": "Wait Image",
     "Pause": "Pause",
     "lbl_path": "Path",
-    "lbl_timeout": "Timeout"
+    "lbl_timeout": "Timeout",
+    "lbl_action": "Action",
+    "btn_settings": "Settings",
+    "mod_settings_title": "Settings",
+    "lbl_show_progress": "Show action scrolling",
+    "mod_close": "Close",
+    "title_settings": "Open application settings"
   }
 };
 

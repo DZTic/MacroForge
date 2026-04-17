@@ -802,22 +802,64 @@ pub fn play_macro() {
                         }
                         ActionType::KeyRelease(ref name, vk, is_ext) => {
                             println!("{} [#{}/{}] KeyRelease '{}' delay={}ms", ts(), action_index, actions_to_play.len(), name, action.delay_ms);
+                            emit_playback_action(PlaybackActionPayload {
+                                index: action_index,
+                                total: total_actions,
+                                action_type: "KeyRelease".into(),
+                                x: 0.0, y: 0.0,
+                                detail: format!("{} +{}ms", name, action.delay_ms),
+                            });
                             send_key(vk, true, is_ext);
                         }
                         ActionType::MouseMoveRelative(dx, dy) => {
+                            emit_playback_action(PlaybackActionPayload {
+                                index: action_index,
+                                total: total_actions,
+                                action_type: "MoveRel".into(),
+                                x: dx as f64, y: dy as f64,
+                                detail: format!("Relative {}x{}", dx, dy),
+                            });
                             send_mouse_relative(dx, dy);
                         }
                         ActionType::MouseMove(x, y) => {
+                            emit_playback_action(PlaybackActionPayload {
+                                index: action_index,
+                                total: total_actions,
+                                action_type: "Move".into(),
+                                x, y,
+                                detail: format!("Pos {}x{}", x, y),
+                            });
                             send_mouse_move(x as i32, y as i32);
                         }
-                        ActionType::MousePress(u, _x, _y) => {
+                        ActionType::MousePress(u, x, y) => {
+                            emit_playback_action(PlaybackActionPayload {
+                                index: action_index,
+                                total: total_actions,
+                                action_type: "MousePress".into(),
+                                x, y,
+                                detail: format!("Button {}", u),
+                            });
                             // On ne force plus le mouvement absolu ici pour éviter les "sauts" de caméra en FPS
                             send_mouse_button(u, true, 0, 0);
                         }
-                        ActionType::MouseRelease(u, _x, _y) => {
+                        ActionType::MouseRelease(u, x, y) => {
+                            emit_playback_action(PlaybackActionPayload {
+                                index: action_index,
+                                total: total_actions,
+                                action_type: "MouseRelease".into(),
+                                x, y,
+                                detail: format!("Button {}", u),
+                            });
                             send_mouse_button(u, false, 0, 0);
                         }
-                        ActionType::Scroll(_x, y) => {
+                        ActionType::Scroll(x, y) => {
+                            emit_playback_action(PlaybackActionPayload {
+                                index: action_index,
+                                total: total_actions,
+                                action_type: "Scroll".into(),
+                                x, y,
+                                detail: format!("Vector {}x{}", x, y),
+                            });
                             unsafe {
                                 use winapi::um::winuser::{mouse_event, MOUSEEVENTF_WHEEL};
                                 let delta = (y * 120.0) as i32;
@@ -1022,6 +1064,13 @@ pub fn play_macro() {
                         }
                         ActionType::Wait(ms) => {
                             println!("{} [#{}/{}] Wait {}ms", ts(), action_index, total_actions, ms);
+                            emit_playback_action(PlaybackActionPayload {
+                                index: action_index,
+                                total: total_actions,
+                                action_type: "Wait".into(),
+                                x: 0.0, y: 0.0,
+                                detail: format!("Attente {}ms", ms),
+                            });
                             let start_wait = Instant::now();
                             while start_wait.elapsed().as_millis() < ms as u128 {
                                 if *stop_flag.lock().unwrap() { break 'main_loop; }

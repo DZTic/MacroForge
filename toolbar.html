@@ -24,7 +24,12 @@
         <div class="rec-dot"></div>
         REC
       </div>
-      <div id="playback-status" class="playback-status">Action 1 / 10</div>
+      <div id="playback-status" class="playback-status">
+        <span data-i18n="lbl_action" class="playback-label">Action</span>
+        <span id="playback-index" class="playback-number">1</span>
+        <span class="playback-divider">/</span>
+        <span id="playback-total" class="playback-total">10</span>
+      </div>
       <button id="btn-record" class="t-btn danger" data-tooltip-id="title_record">
         <div class="circle red"></div>
       </button>

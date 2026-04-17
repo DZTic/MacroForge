@@ -13,6 +13,7 @@ const recBadge = document.getElementById("rec-badge") as HTMLDivElement;
 const playbackStatus = document.getElementById("playback-status") as HTMLDivElement;
 
 let isRecording = false;
+let showProgressSetting = localStorage.getItem("show-action-progress") !== "false";
 
 interface PlaybackActionPayload {
     index: number;
@@ -43,22 +44,48 @@ listen<boolean>("recording-state-changed", (event) => {
     updateRecordingUI(event.payload);
 });
 
+listen<{ showProgress: boolean }>("settings-changed", (event) => {
+    showProgressSetting = event.payload.showProgress;
+    const playbackStatus = document.getElementById("playback-status");
+    if (playbackStatus) {
+        if (!showProgressSetting) {
+            playbackStatus.classList.remove("visible");
+        }
+    }
+});
+
 listen<boolean>("playback-state-changed", (event) => {
     if (event.payload) {
         btnPlay.style.opacity = "0.5";
         btnPlay.dataset.tooltip = t("btn_playing");
-        playbackStatus.classList.add("visible");
+        if (showProgressSetting) {
+            playbackStatus.classList.add("visible");
+        }
+        const idxEl = document.getElementById("playback-index");
+        if (idxEl) idxEl.innerText = "1";
     } else {
         btnPlay.style.opacity = "1";
         btnPlay.dataset.tooltip = t("btn_play").replace(/<[^>]+>/g, "").trim(); // Strip icon for tooltip
         playbackStatus.classList.remove("visible");
-        playbackStatus.innerText = "";
     }
 });
 
 listen<PlaybackActionPayload>("playback-action", (event) => {
     const { index, total } = event.payload;
-    playbackStatus.innerText = `Action ${index} / ${total}`;
+    const playbackIndex = document.getElementById("playback-index");
+    const playbackTotal = document.getElementById("playback-total");
+    
+    if (playbackIndex && playbackIndex.innerText !== index.toString()) {
+        playbackIndex.innerText = index.toString();
+        // Trigger animation
+        playbackIndex.classList.remove("animating");
+        void playbackIndex.offsetWidth; // Trigger reflow
+        playbackIndex.classList.add("animating");
+    }
+    
+    if (playbackTotal && playbackTotal.innerText !== total.toString()) {
+        playbackTotal.innerText = total.toString();
+    }
 });
 
 // Enable robust native window dragging for the custom toolbar
