@@ -58,3 +58,4 @@ test_*
 .gemini/
 .claude/
 .cursor/
+web_legacy/
