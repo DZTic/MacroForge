@@ -34,28 +34,28 @@ impl<'a> Widget for StatusBadge<'a> {
                 colors::ACCENT_DANGER,
                 Color32::from_rgba_premultiplied(239, 68, 68, 80),
                 Color32::from_rgba_premultiplied(239, 68, 68, 30),
-                Stroke::new(1.0, Color32::from_rgba_premultiplied(239, 68, 68, 120)),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(239, 68, 68, 120)),
                 "ENREGISTREMENT EN COURS",
             ),
             StatusKind::Playing => (
                 colors::ACCENT_SUCCESS,
                 Color32::from_rgba_premultiplied(16, 185, 129, 80),
                 Color32::from_rgba_premultiplied(16, 185, 129, 30),
-                Stroke::new(1.0, Color32::from_rgba_premultiplied(16, 185, 129, 120)),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(16, 185, 129, 120)),
                 "LECTURE ACTIVE",
             ),
             StatusKind::Paused => (
                 colors::ACCENT_WARNING,
                 Color32::from_rgba_premultiplied(245, 158, 11, 80),
                 Color32::from_rgba_premultiplied(245, 158, 11, 30),
-                Stroke::new(1.0, Color32::from_rgba_premultiplied(245, 158, 11, 120)),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(245, 158, 11, 120)),
                 "EN PAUSE",
             ),
             StatusKind::Idle => (
                 colors::TEXT_MUTED,
                 Color32::from_rgba_premultiplied(110, 118, 129, 40),
                 Color32::from_rgba_premultiplied(30, 41, 59, 120),
-                Stroke::new(1.0, colors::BORDER_SUBTLE),
+                Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
                 "PRÊT / INACTIF",
             ),
         };
@@ -92,14 +92,13 @@ impl<'a> Widget for StatusBadge<'a> {
             ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
             // Halo lumineux (glow)
-            let dot_center = Pos2::new(
-                rect.min.x + padding.x + glow_radius,
-                rect.center().y,
-            );
-            ui.painter().circle_filled(dot_center, glow_radius, glow_color);
+            let dot_center = Pos2::new(rect.min.x + padding.x + glow_radius, rect.center().y);
+            ui.painter()
+                .circle_filled(dot_center, glow_radius, glow_color);
 
             // Pastille centrale solide
-            ui.painter().circle_filled(dot_center, dot_radius, dot_color);
+            ui.painter()
+                .circle_filled(dot_center, dot_radius, dot_color);
 
             // Texte d'état
             let text_pos = Pos2::new(

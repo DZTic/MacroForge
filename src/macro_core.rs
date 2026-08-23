@@ -13,14 +13,13 @@ use winapi::um::libloaderapi::GetModuleHandleW;
 #[cfg(windows)]
 use winapi::um::winuser::{
     CreateWindowExW, DefWindowProcW, GetForegroundWindow, GetMessageW, GetRawInputData,
-    GetWindowTextW, IsWindowVisible, RegisterClassW, RegisterRawInputDevices, SendInput,
-    CW_USEDEFAULT, INPUT, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
-    KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC_EX, MAPVK_VSC_TO_VK_EX, MapVirtualKeyW,
+    GetWindowTextW, IsWindowVisible, MapVirtualKeyW, RegisterClassW, RegisterRawInputDevices,
+    SendInput, CW_USEDEFAULT, INPUT, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT,
+    KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC_EX, MAPVK_VSC_TO_VK_EX,
     MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN,
     MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEINPUT,
-    MSG, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT,
-    SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WM_INPUT,
-    WNDCLASSW,
+    MSG, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT, SM_CXVIRTUALSCREEN,
+    SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WM_INPUT, WNDCLASSW,
 };
 
 /// Call once at startup — polls foreground window every 200ms and stores
@@ -703,7 +702,11 @@ pub fn play_macro() {
         let ts = || format!("[+{:.2}s]", playback_start.elapsed().as_secs_f64());
         let total_actions = actions_to_play.len();
 
-        println!("{} === PLAYBACK DÉMARRÉ ({} actions) ===", ts(), total_actions);
+        println!(
+            "{} === PLAYBACK DÉMARRÉ ({} actions) ===",
+            ts(),
+            total_actions
+        );
 
         let mut iteration = 0u32;
         let stop_image_config: Option<String> = {
@@ -725,7 +728,11 @@ pub fn play_macro() {
                 action_index += 1;
 
                 if *stop_flag.lock().unwrap() {
-                    println!("{} [STOP] stop_flag détecté avant action #{} — arrêt.", ts(), action_index);
+                    println!(
+                        "{} [STOP] stop_flag détecté avant action #{} — arrêt.",
+                        ts(),
+                        action_index
+                    );
                     break 'main_loop;
                 }
 
@@ -739,7 +746,10 @@ pub fn play_macro() {
                         last_stop_check = now;
                         if check_image_present(path) {
                             if MACRO_STATE.lock().unwrap().loop_playback {
-                                println!("{} [STOP IMAGE] Détectée ! Redémarrage (Blackout 15s activé).", ts());
+                                println!(
+                                    "{} [STOP IMAGE] Détectée ! Redémarrage (Blackout 15s activé).",
+                                    ts()
+                                );
                                 stop_blackout_until = Some(now + Duration::from_secs(15));
                                 continue 'main_loop;
                             } else {
@@ -793,7 +803,14 @@ pub fn play_macro() {
                 {
                     match action.action_type.clone() {
                         ActionType::KeyPress(ref name, vk, is_ext) => {
-                            println!("{} [#{}/{}] KeyPress '{}' delay={}ms", ts(), action_index, total_actions, name, action.delay_ms);
+                            println!(
+                                "{} [#{}/{}] KeyPress '{}' delay={}ms",
+                                ts(),
+                                action_index,
+                                total_actions,
+                                name,
+                                action.delay_ms
+                            );
                             emit_playback_action(PlaybackActionPayload {
                                 index: action_index,
                                 total: total_actions,
@@ -805,7 +822,14 @@ pub fn play_macro() {
                             send_key(vk, false, is_ext);
                         }
                         ActionType::KeyRelease(ref name, vk, is_ext) => {
-                            println!("{} [#{}/{}] KeyRelease '{}' delay={}ms", ts(), action_index, actions_to_play.len(), name, action.delay_ms);
+                            println!(
+                                "{} [#{}/{}] KeyRelease '{}' delay={}ms",
+                                ts(),
+                                action_index,
+                                actions_to_play.len(),
+                                name,
+                                action.delay_ms
+                            );
                             emit_playback_action(PlaybackActionPayload {
                                 index: action_index,
                                 total: total_actions,
@@ -876,7 +900,14 @@ pub fn play_macro() {
                             }
                         }
                         ActionType::WaitImage(ref path, timeout) => {
-                            println!("{} [#{}/{}] WaitImage '{}' timeout={}ms", ts(), action_index, actions_to_play.len(), path, timeout);
+                            println!(
+                                "{} [#{}/{}] WaitImage '{}' timeout={}ms",
+                                ts(),
+                                action_index,
+                                actions_to_play.len(),
+                                path,
+                                timeout
+                            );
                             emit_playback_action(PlaybackActionPayload {
                                 index: action_index,
                                 total: total_actions,
@@ -949,7 +980,8 @@ pub fn play_macro() {
                                         let vw = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
                                         let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
 
-                                        if let Some(screen_raw) = capture_screen_gdi(vx, vy, vw, vh) {
+                                        if let Some(screen_raw) = capture_screen_gdi(vx, vy, vw, vh)
+                                        {
                                             let mw_usize = vw as usize;
                                             let mh_usize = vh as usize;
 
@@ -984,7 +1016,8 @@ pub fn play_macro() {
                                                         let s_mid_idx = ((sy + t_mid_y) * mw_usize
                                                             + (sx + t_mid_x))
                                                             * 4;
-                                                        let t_mid_idx = (t_mid_y * tw + t_mid_x) * 4;
+                                                        let t_mid_idx =
+                                                            (t_mid_y * tw + t_mid_x) * 4;
                                                         let (smr, smg, smb) = (
                                                             screen_raw[s_mid_idx + 2],
                                                             screen_raw[s_mid_idx + 1],
@@ -1004,7 +1037,8 @@ pub fn play_macro() {
 
                                                         let t_last_y = th - 1;
                                                         let t_last_x = tw - 1;
-                                                        let s_last_idx = ((sy + t_last_y) * mw_usize
+                                                        let s_last_idx = ((sy + t_last_y)
+                                                            * mw_usize
                                                             + (sx + t_last_x))
                                                             * 4;
                                                         let t_last_idx =
@@ -1110,7 +1144,13 @@ pub fn play_macro() {
                             }
                         }
                         ActionType::Wait(ms) => {
-                            println!("{} [#{}/{}] Wait {}ms", ts(), action_index, total_actions, ms);
+                            println!(
+                                "{} [#{}/{}] Wait {}ms",
+                                ts(),
+                                action_index,
+                                total_actions,
+                                ms
+                            );
                             emit_playback_action(PlaybackActionPayload {
                                 index: action_index,
                                 total: total_actions,
@@ -1388,7 +1428,9 @@ pub fn handle_rdev_event(event: Event) {
             let (name, vk, is_ext) = rdev_key_to_name_and_scan(key);
             if vk == 0 {
                 None
-            } else if let std::collections::hash_map::Entry::Vacant(e) = state.key_press_times.entry(vk) {
+            } else if let std::collections::hash_map::Entry::Vacant(e) =
+                state.key_press_times.entry(vk)
+            {
                 e.insert(Instant::now());
                 Some(ActionType::KeyPress(name, vk, is_ext))
             } else {

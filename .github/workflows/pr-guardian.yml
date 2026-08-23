@@ -1,0 +1,33 @@
+name: PR Guardian
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-mergeability:
+    name: Check Clean Merge & Conflict Guardian
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch target base branch
+        run: |
+          git fetch origin ${{ github.base_ref }}:${{ github.base_ref }}
+
+      - name: Simulate 3-way merge using git merge-tree
+        run: |
+          echo "Simulating merge between HEAD (${{ github.head_ref }}) and base (${{ github.base_ref }})..."
+          MERGE_RESULT=$(git merge-tree --write-tree HEAD ${{ github.base_ref }} 2>&1) || {
+            echo "::error::Merge conflicts detected between PR branch and base branch!"
+            echo "$MERGE_RESULT"
+            exit 1
+          }
+          echo "Clean merge simulation succeeded without conflicts: $MERGE_RESULT"

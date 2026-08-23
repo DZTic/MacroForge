@@ -1,5 +1,7 @@
 use crate::ui::theme::colors;
-use eframe::egui::{Color32, Pos2, Rect, Response, Rounding, Sense, Stroke, TextStyle, Ui, Vec2, Widget};
+use eframe::egui::{
+    Color32, Pos2, Rect, Response, Rounding, Sense, Stroke, TextStyle, Ui, Vec2, Widget,
+};
 
 /// Interrupteur à bascule fluide et moderne (Glassmorphism Toggle Switch)
 pub struct CustomToggleSwitch<'a> {
@@ -26,11 +28,8 @@ impl<'a> Widget for CustomToggleSwitch<'a> {
 
         let font_id = TextStyle::Body.resolve(ui.style());
         let label_galley = self.label.map(|lbl| {
-            ui.painter().layout_no_wrap(
-                lbl.to_string(),
-                font_id,
-                colors::TEXT_PRIMARY,
-            )
+            ui.painter()
+                .layout_no_wrap(lbl.to_string(), font_id, colors::TEXT_PRIMARY)
         });
 
         let mut desired_width = switch_width;
@@ -60,23 +59,23 @@ impl<'a> Widget for CustomToggleSwitch<'a> {
                 if is_hovered {
                     (
                         colors::ACCENT_PRIMARY_HOVER,
-                        Stroke::new(1.0, colors::ACCENT_PRIMARY),
+                        Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                     )
                 } else {
                     (
                         colors::ACCENT_PRIMARY,
-                        Stroke::new(1.0, Color32::from_rgb(29, 78, 216)),
+                        Stroke::new(1.0_f32, Color32::from_rgb(29, 78, 216)),
                     )
                 }
             } else if is_hovered {
                 (
                     colors::BG_CARD_HOVER,
-                    Stroke::new(1.0, colors::BORDER_HOVER),
+                    Stroke::new(1.0_f32, colors::BORDER_HOVER),
                 )
             } else {
                 (
                     colors::BG_INPUT,
-                    Stroke::new(1.0, colors::BORDER_SUBTLE),
+                    Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
                 )
             };
 
@@ -104,18 +103,13 @@ impl<'a> Widget for CustomToggleSwitch<'a> {
             );
 
             // Curseur blanc
-            ui.painter().circle_filled(
-                thumb_center,
-                thumb_radius,
-                colors::TEXT_WHITE,
-            );
+            ui.painter()
+                .circle_filled(thumb_center, thumb_radius, colors::TEXT_WHITE);
 
             // Libellé optionnel
             if let Some(lg) = label_galley {
-                let text_pos = Pos2::new(
-                    switch_rect.max.x + 8.0,
-                    rect.center().y - lg.size().y * 0.5,
-                );
+                let text_pos =
+                    Pos2::new(switch_rect.max.x + 8.0, rect.center().y - lg.size().y * 0.5);
                 ui.painter().galley(text_pos, lg, colors::TEXT_PRIMARY);
             }
         }

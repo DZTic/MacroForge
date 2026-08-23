@@ -1,5 +1,7 @@
 use crate::ui::theme::colors;
-use eframe::egui::{Color32, Pos2, Rect, Response, Rounding, Sense, Stroke, TextStyle, Ui, Vec2, Widget};
+use eframe::egui::{
+    Color32, Pos2, Rect, Response, Rounding, Sense, Stroke, TextStyle, Ui, Vec2, Widget,
+};
 
 /// Variantes de style pour les boutons Glassmorphism
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,11 +84,9 @@ impl<'a> Widget for GlassButton<'a> {
         }
         full_text.push_str(self.text);
 
-        let galley = ui.painter().layout_no_wrap(
-            full_text.clone(),
-            font_id.clone(),
-            colors::TEXT_PRIMARY,
-        );
+        let galley =
+            ui.painter()
+                .layout_no_wrap(full_text.clone(), font_id.clone(), colors::TEXT_PRIMARY);
         text_width += galley.size().x;
 
         let shortcut_galley = self.shortcut.map(|sc| {
@@ -108,7 +108,11 @@ impl<'a> Widget for GlassButton<'a> {
 
         let (rect, response) = ui.allocate_exact_size(
             desired_size,
-            if self.enabled { Sense::click() } else { Sense::hover() },
+            if self.enabled {
+                Sense::click()
+            } else {
+                Sense::hover()
+            },
         );
 
         if ui.is_rect_visible(rect) {
@@ -121,19 +125,19 @@ impl<'a> Widget for GlassButton<'a> {
                     if is_clicked || self.selected {
                         (
                             Color32::from_rgb(29, 78, 216),
-                            Stroke::new(1.5, colors::ACCENT_PRIMARY_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_PRIMARY_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
                             Color32::from_rgb(37, 99, 235),
-                            Stroke::new(1.5, colors::ACCENT_PRIMARY_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_PRIMARY_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else {
                         (
                             Color32::from_rgba_premultiplied(37, 99, 235, 200),
-                            Stroke::new(1.0, colors::ACCENT_PRIMARY),
+                            Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                             colors::TEXT_PRIMARY,
                         )
                     }
@@ -142,19 +146,19 @@ impl<'a> Widget for GlassButton<'a> {
                     if is_clicked || self.selected {
                         (
                             Color32::from_rgb(4, 120, 87),
-                            Stroke::new(1.5, colors::ACCENT_SUCCESS_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_SUCCESS_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
                             Color32::from_rgb(5, 150, 105),
-                            Stroke::new(1.5, colors::ACCENT_SUCCESS_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_SUCCESS_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else {
                         (
                             Color32::from_rgba_premultiplied(16, 185, 129, 180),
-                            Stroke::new(1.0, colors::ACCENT_SUCCESS),
+                            Stroke::new(1.0_f32, colors::ACCENT_SUCCESS),
                             colors::TEXT_WHITE,
                         )
                     }
@@ -163,19 +167,19 @@ impl<'a> Widget for GlassButton<'a> {
                     if is_clicked || self.selected {
                         (
                             Color32::from_rgb(185, 28, 28),
-                            Stroke::new(1.5, colors::ACCENT_DANGER_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_DANGER_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
                             Color32::from_rgb(220, 38, 38),
-                            Stroke::new(1.5, colors::ACCENT_DANGER_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_DANGER_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else {
                         (
                             Color32::from_rgba_premultiplied(239, 68, 68, 180),
-                            Stroke::new(1.0, colors::ACCENT_DANGER),
+                            Stroke::new(1.0_f32, colors::ACCENT_DANGER),
                             colors::TEXT_WHITE,
                         )
                     }
@@ -184,19 +188,19 @@ impl<'a> Widget for GlassButton<'a> {
                     if is_clicked || self.selected {
                         (
                             Color32::from_rgb(180, 83, 9),
-                            Stroke::new(1.5, colors::ACCENT_WARNING_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_WARNING_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
                             Color32::from_rgb(217, 119, 6),
-                            Stroke::new(1.5, colors::ACCENT_WARNING_HOVER),
+                            Stroke::new(1.5_f32, colors::ACCENT_WARNING_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else {
                         (
                             Color32::from_rgba_premultiplied(245, 158, 11, 180),
-                            Stroke::new(1.0, colors::ACCENT_WARNING),
+                            Stroke::new(1.0_f32, colors::ACCENT_WARNING),
                             colors::TEXT_WHITE,
                         )
                     }
@@ -205,19 +209,19 @@ impl<'a> Widget for GlassButton<'a> {
                     if is_clicked || self.selected {
                         (
                             colors::BG_CARD_ACTIVE,
-                            Stroke::new(1.5, colors::ACCENT_PRIMARY),
+                            Stroke::new(1.5_f32, colors::ACCENT_PRIMARY),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
                             colors::BG_CARD_HOVER,
-                            Stroke::new(1.0, colors::BORDER_HOVER),
+                            Stroke::new(1.0_f32, colors::BORDER_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else {
                         (
                             colors::BG_CARD,
-                            Stroke::new(1.0, colors::BORDER_SUBTLE),
+                            Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
                             colors::TEXT_PRIMARY,
                         )
                     }
@@ -226,21 +230,17 @@ impl<'a> Widget for GlassButton<'a> {
                     if is_clicked || self.selected {
                         (
                             Color32::from_rgba_premultiplied(59, 130, 246, 60),
-                            Stroke::new(1.0, colors::ACCENT_PRIMARY),
+                            Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
                             Color32::from_rgba_premultiplied(255, 255, 255, 20),
-                            Stroke::new(1.0, colors::BORDER_SUBTLE),
+                            Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
                             colors::TEXT_WHITE,
                         )
                     } else {
-                        (
-                            Color32::TRANSPARENT,
-                            Stroke::NONE,
-                            colors::TEXT_SECONDARY,
-                        )
+                        (Color32::TRANSPARENT, Stroke::NONE, colors::TEXT_SECONDARY)
                     }
                 }
             };
@@ -274,7 +274,7 @@ impl<'a> Widget for GlassButton<'a> {
                     sc_rect,
                     Rounding::same(4.0),
                     Color32::from_rgba_premultiplied(0, 0, 0, 80),
-                    Stroke::new(1.0, Color32::from_white_alpha(30)),
+                    Stroke::new(1.0_f32, Color32::from_white_alpha(30)),
                 );
 
                 let sc_pos = Pos2::new(

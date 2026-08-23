@@ -90,9 +90,9 @@ impl<'a> Widget for ActionCard<'a> {
                 colors::BG_CARD
             })
             .stroke(if self.selected {
-                Stroke::new(1.5, colors::ACCENT_PRIMARY)
+                Stroke::new(1.5_f32, colors::ACCENT_PRIMARY)
             } else {
-                Stroke::new(1.0, colors::BORDER_SUBTLE)
+                Stroke::new(1.0_f32, colors::BORDER_SUBTLE)
             })
             .rounding(Rounding::same(8.0))
             .inner_margin(Margin::symmetric(10.0, 7.0));
@@ -120,7 +120,7 @@ impl<'a> Widget for ActionCard<'a> {
                             35,
                         ))
                         .stroke(Stroke::new(
-                            1.0,
+                            1.0_f32,
                             Color32::from_rgba_premultiplied(
                                 type_color.r(),
                                 type_color.g(),
@@ -157,7 +157,7 @@ impl<'a> Widget for ActionCard<'a> {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let delay_badge_frame = Frame::none()
                             .fill(Color32::from_rgba_premultiplied(15, 23, 42, 160))
-                            .stroke(Stroke::new(1.0, colors::BORDER_SUBTLE))
+                            .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
                             .rounding(Rounding::same(4.0))
                             .inner_margin(Margin::symmetric(6.0, 2.0));
 
