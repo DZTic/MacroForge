@@ -43,7 +43,8 @@ impl MacroForgeApp {
                 EngineEvent::RecordingStateChanged(rec) => {
                     self.is_recording = rec;
                     if rec {
-                        self.status_message = "🔴 Enregistrement en cours (F9 pour arrêter)...".to_string();
+                        self.status_message =
+                            "🔴 Enregistrement en cours (F9 pour arrêter)...".to_string();
                     } else {
                         self.refresh_actions();
                         self.status_message = format!(
@@ -55,7 +56,8 @@ impl MacroForgeApp {
                 EngineEvent::PlaybackStateChanged(play) => {
                     self.is_playing = play;
                     if play {
-                        self.status_message = "▶️ Lecture en cours (F4 pour arrêt d'urgence)...".to_string();
+                        self.status_message =
+                            "▶️ Lecture en cours (F4 pour arrêt d'urgence)...".to_string();
                     } else {
                         self.status_message = "⏹️ Lecture terminée.".to_string();
                     }
@@ -136,7 +138,11 @@ impl eframe::App for MacroForgeApp {
                             .icon("🔴")
                             .shortcut("F8")
                             .variant(ButtonVariant::Danger);
-                        if ui.add(btn).on_hover_text("Démarrer l'enregistrement global des entrées (F8)").clicked() {
+                        if ui
+                            .add(btn)
+                            .on_hover_text("Démarrer l'enregistrement global des entrées (F8)")
+                            .clicked()
+                        {
                             macro_core::start_recording();
                         }
                     } else {
@@ -144,7 +150,11 @@ impl eframe::App for MacroForgeApp {
                             .icon("⏹️")
                             .shortcut("F9")
                             .variant(ButtonVariant::Secondary);
-                        if ui.add(btn).on_hover_text("Arrêter l'enregistrement en cours (F9)").clicked() {
+                        if ui
+                            .add(btn)
+                            .on_hover_text("Arrêter l'enregistrement en cours (F9)")
+                            .clicked()
+                        {
                             macro_core::stop_recording();
                         }
                     }
@@ -155,7 +165,11 @@ impl eframe::App for MacroForgeApp {
                             .icon("▶️")
                             .shortcut("F4 stop")
                             .variant(ButtonVariant::Success);
-                        if ui.add(btn).on_hover_text("Exécuter la séquence de macro enregistrée").clicked() {
+                        if ui
+                            .add(btn)
+                            .on_hover_text("Exécuter la séquence de macro enregistrée")
+                            .clicked()
+                        {
                             macro_core::play_macro();
                         }
                     } else {
@@ -163,7 +177,11 @@ impl eframe::App for MacroForgeApp {
                             .icon("⏹️")
                             .shortcut("F4")
                             .variant(ButtonVariant::Warning);
-                        if ui.add(btn).on_hover_text("Arrêter immédiatement la relecture (F4)").clicked() {
+                        if ui
+                            .add(btn)
+                            .on_hover_text("Arrêter immédiatement la relecture (F4)")
+                            .clicked()
+                        {
                             macro_core::stop_playback();
                         }
                     }
@@ -173,8 +191,13 @@ impl eframe::App for MacroForgeApp {
                     ui.add_space(8.0);
 
                     // Switch Mode Boucle
-                    let toggle = CustomToggleSwitch::new(&mut self.loop_playback).label("🔁 Mode Boucle");
-                    if ui.add(toggle).on_hover_text("Répéter la macro indéfiniment jusqu'à l'arrêt d'urgence F4").changed() {
+                    let toggle =
+                        CustomToggleSwitch::new(&mut self.loop_playback).label("🔁 Mode Boucle");
+                    if ui
+                        .add(toggle)
+                        .on_hover_text("Répéter la macro indéfiniment jusqu'à l'arrêt d'urgence F4")
+                        .changed()
+                    {
                         macro_core::set_loop_playback(self.loop_playback);
                     }
 
@@ -186,7 +209,11 @@ impl eframe::App for MacroForgeApp {
                     let save_btn = GlassButton::new("Sauvegarder")
                         .icon("💾")
                         .variant(ButtonVariant::Secondary);
-                    if ui.add(save_btn).on_hover_text("Exporter le profil de macro (.mforge)").clicked() {
+                    if ui
+                        .add(save_btn)
+                        .on_hover_text("Exporter le profil de macro (.mforge)")
+                        .clicked()
+                    {
                         if let Some(path) = rfd::FileDialog::new()
                             .add_filter("MacroForge Profile", &["mforge", "json"])
                             .save_file()
@@ -195,7 +222,8 @@ impl eframe::App for MacroForgeApp {
                                 if let Err(e) = macro_core::save_macro_to_file(path_str) {
                                     self.status_message = format!("❌ Erreur sauvegarde: {}", e);
                                 } else {
-                                    self.status_message = "✅ Profil sauvegardé avec succès!".to_string();
+                                    self.status_message =
+                                        "✅ Profil sauvegardé avec succès!".to_string();
                                 }
                             }
                         }
@@ -205,7 +233,11 @@ impl eframe::App for MacroForgeApp {
                     let open_btn = GlassButton::new("Ouvrir")
                         .icon("📂")
                         .variant(ButtonVariant::Secondary);
-                    if ui.add(open_btn).on_hover_text("Importer un profil de macro (.mforge)").clicked() {
+                    if ui
+                        .add(open_btn)
+                        .on_hover_text("Importer un profil de macro (.mforge)")
+                        .clicked()
+                    {
                         if let Some(path) = rfd::FileDialog::new()
                             .add_filter("MacroForge Profile", &["mforge", "json"])
                             .pick_file()
@@ -214,10 +246,12 @@ impl eframe::App for MacroForgeApp {
                                 match macro_core::load_macro_from_file(path_str) {
                                     Ok(count) => {
                                         self.refresh_actions();
-                                        self.status_message = format!("✅ {} actions chargées.", count);
+                                        self.status_message =
+                                            format!("✅ {} actions chargées.", count);
                                     }
                                     Err(e) => {
-                                        self.status_message = format!("❌ Erreur chargement: {}", e);
+                                        self.status_message =
+                                            format!("❌ Erreur chargement: {}", e);
                                     }
                                 }
                             }
@@ -228,7 +262,11 @@ impl eframe::App for MacroForgeApp {
                     let clear_btn = GlassButton::new("Vider")
                         .icon("🗑️")
                         .variant(ButtonVariant::Ghost);
-                    if ui.add(clear_btn).on_hover_text("Effacer toutes les actions enregistrées").clicked() {
+                    if ui
+                        .add(clear_btn)
+                        .on_hover_text("Effacer toutes les actions enregistrées")
+                        .clicked()
+                    {
                         let mut state = MACRO_STATE.lock().unwrap();
                         state.actions.clear();
                         self.actions_cache.clear();

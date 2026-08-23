@@ -1,4 +1,7 @@
-use eframe::egui::{self, epaint::Shadow, Color32, Context, FontFamily, FontId, Frame, Margin, Rounding, Stroke, TextStyle, Vec2, Visuals};
+use eframe::egui::{
+    self, epaint::Shadow, Color32, Context, FontFamily, FontId, Frame, Margin, Rounding, Stroke,
+    TextStyle, Vec2, Visuals,
+};
 
 /// Palette de couleurs du Design System MacroForge (Dark UI / Glassmorphism)
 pub mod colors {
@@ -109,10 +112,7 @@ pub fn apply_theme(ctx: &Context) {
             TextStyle::Name("Subheading".into()),
             FontId::new(15.0, FontFamily::Proportional),
         ),
-        (
-            TextStyle::Body,
-            FontId::new(13.5, FontFamily::Proportional),
-        ),
+        (TextStyle::Body, FontId::new(13.5, FontFamily::Proportional)),
         (
             TextStyle::Button,
             FontId::new(13.0, FontFamily::Proportional),

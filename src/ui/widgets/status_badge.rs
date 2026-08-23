@@ -92,14 +92,13 @@ impl<'a> Widget for StatusBadge<'a> {
             ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
             // Halo lumineux (glow)
-            let dot_center = Pos2::new(
-                rect.min.x + padding.x + glow_radius,
-                rect.center().y,
-            );
-            ui.painter().circle_filled(dot_center, glow_radius, glow_color);
+            let dot_center = Pos2::new(rect.min.x + padding.x + glow_radius, rect.center().y);
+            ui.painter()
+                .circle_filled(dot_center, glow_radius, glow_color);
 
             // Pastille centrale solide
-            ui.painter().circle_filled(dot_center, dot_radius, dot_color);
+            ui.painter()
+                .circle_filled(dot_center, dot_radius, dot_color);
 
             // Texte d'état
             let text_pos = Pos2::new(

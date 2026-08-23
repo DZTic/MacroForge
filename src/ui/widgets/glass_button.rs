@@ -1,5 +1,7 @@
 use crate::ui::theme::colors;
-use eframe::egui::{Color32, Pos2, Rect, Response, Rounding, Sense, Stroke, TextStyle, Ui, Vec2, Widget};
+use eframe::egui::{
+    Color32, Pos2, Rect, Response, Rounding, Sense, Stroke, TextStyle, Ui, Vec2, Widget,
+};
 
 /// Variantes de style pour les boutons Glassmorphism
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,11 +84,9 @@ impl<'a> Widget for GlassButton<'a> {
         }
         full_text.push_str(self.text);
 
-        let galley = ui.painter().layout_no_wrap(
-            full_text.clone(),
-            font_id.clone(),
-            colors::TEXT_PRIMARY,
-        );
+        let galley =
+            ui.painter()
+                .layout_no_wrap(full_text.clone(), font_id.clone(), colors::TEXT_PRIMARY);
         text_width += galley.size().x;
 
         let shortcut_galley = self.shortcut.map(|sc| {
@@ -108,7 +108,11 @@ impl<'a> Widget for GlassButton<'a> {
 
         let (rect, response) = ui.allocate_exact_size(
             desired_size,
-            if self.enabled { Sense::click() } else { Sense::hover() },
+            if self.enabled {
+                Sense::click()
+            } else {
+                Sense::hover()
+            },
         );
 
         if ui.is_rect_visible(rect) {
@@ -236,11 +240,7 @@ impl<'a> Widget for GlassButton<'a> {
                             colors::TEXT_WHITE,
                         )
                     } else {
-                        (
-                            Color32::TRANSPARENT,
-                            Stroke::NONE,
-                            colors::TEXT_SECONDARY,
-                        )
+                        (Color32::TRANSPARENT, Stroke::NONE, colors::TEXT_SECONDARY)
                     }
                 }
             };

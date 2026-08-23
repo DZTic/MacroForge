@@ -10,7 +10,11 @@ pub struct NumericInputWithSlider<'a, T> {
 }
 
 impl<'a> NumericInputWithSlider<'a, u64> {
-    pub fn new_u64(value: &'a mut u64, label: &'a str, range: std::ops::RangeInclusive<u64>) -> Self {
+    pub fn new_u64(
+        value: &'a mut u64,
+        label: &'a str,
+        range: std::ops::RangeInclusive<u64>,
+    ) -> Self {
         Self {
             value,
             label,
