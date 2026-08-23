@@ -70,10 +70,10 @@ impl<'a> Widget for StatusBadge<'a> {
                 if self.compact { "PAUSE" } else { "EN PAUSE" },
             ),
             StatusKind::Idle => (
-                colors::TEXT_MUTED,
-                Color32::from_rgba_premultiplied(100, 116, 139, 40),
-                Color32::from_rgba_premultiplied(30, 41, 59, 120),
-                Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+                colors::ACCENT_PRIMARY_HOVER,
+                Color32::from_rgba_premultiplied(59, 130, 246, 60),
+                colors::BG_CARD,
+                Stroke::new(1.0_f32, colors::BORDER_CARD),
                 if self.compact {
                     "PRÊT"
                 } else {
@@ -88,7 +88,7 @@ impl<'a> Widget for StatusBadge<'a> {
             StatusKind::Recording => colors::ACCENT_DANGER_HOVER,
             StatusKind::Playing => colors::ACCENT_SUCCESS_HOVER,
             StatusKind::Paused => colors::ACCENT_WARNING_HOVER,
-            StatusKind::Idle => colors::TEXT_SECONDARY,
+            StatusKind::Idle => colors::TEXT_PRIMARY,
         };
 
         let text_galley =

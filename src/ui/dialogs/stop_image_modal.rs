@@ -1,6 +1,6 @@
 use crate::macro_core;
 use crate::ui::i18n::Language;
-use crate::ui::theme::colors;
+use crate::ui::theme::{self, colors};
 use crate::ui::widgets::{ButtonVariant, GlassButton};
 use eframe::egui::{self, DragValue, Frame, Margin, Rounding, Stroke, Vec2};
 
@@ -45,16 +45,17 @@ impl StopImageConfigModal {
         let mut changed = false;
 
         egui::Window::new(lang.stop_image_modal_title())
+            .frame(theme::modal_frame())
             .collapsible(false)
             .resizable(false)
-            .default_size(Vec2::new(480.0, 260.0))
+            .default_size(Vec2::new(490.0, 270.0))
             .anchor(egui::Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.add_space(4.0);
+                ui.add_space(2.0);
 
                 Frame::none()
                     .fill(colors::BG_CARD)
-                    .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
+                    .stroke(Stroke::new(1.0_f32, colors::BORDER_CARD))
                     .rounding(Rounding::same(8.0))
                     .inner_margin(Margin::same(12.0))
                     .show(ui, |ui| {
