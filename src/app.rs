@@ -39,6 +39,9 @@ pub struct MacroForgeApp {
     // Toolbar flottante native
     toolbar: crate::ui::FloatingToolbar,
 
+    // Visibilité de la fenêtre principale
+    main_window_visible: bool,
+
     // Overlay transparent click-through
     overlay: crate::ui::TransparentOverlay,
 }
@@ -88,6 +91,8 @@ impl MacroForgeApp {
                 total_actions,
                 action_detail: String::new(),
             },
+
+            main_window_visible: true,
 
             overlay: crate::ui::TransparentOverlay {
                 is_visible: false,
@@ -252,6 +257,15 @@ impl eframe::App for MacroForgeApp {
 
         self.update_from_events();
 
+        // Gestion de la fermeture de la fenêtre principale (ROOT viewport)
+        if ctx.input(|i| i.viewport().close_requested()) && self.toolbar.is_visible {
+            // Si la toolbar flottante est ouverte, on annule la fermeture globale de l'app
+            // et on masque uniquement la fenêtre principale.
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.main_window_visible = false;
+        }
+
         // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F4: Stop Playback)
         if !self.action_modal.is_listening_key {
             if ctx.input(|i| i.key_pressed(egui::Key::F8)) {
@@ -312,6 +326,7 @@ impl eframe::App for MacroForgeApp {
                 macro_core::emergency_stop();
             }
             crate::ui::ToolbarAction::OpenMainWindow => {
+                self.main_window_visible = true;
                 ctx.send_viewport_cmd_to(
                     egui::ViewportId::ROOT,
                     egui::ViewportCommand::Visible(true),
@@ -324,6 +339,10 @@ impl eframe::App for MacroForgeApp {
             }
             crate::ui::ToolbarAction::CloseToolbar => {
                 self.toolbar.is_visible = false;
+                if !self.main_window_visible {
+                    // Si la fenêtre principale était masquée et qu'on ferme la toolbar, quitter l'application
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
+                }
             }
         }
 
@@ -350,19 +369,20 @@ impl eframe::App for MacroForgeApp {
 
                         // Badge de version
                         let version_badge = Frame::none()
-                            .fill(Color32::from_rgba_premultiplied(59, 130, 246, 30))
+                            .fill(Color32::from_rgba_unmultiplied(30, 41, 59, 180))
                             .stroke(Stroke::new(
                                 1.0_f32,
-                                Color32::from_rgba_premultiplied(59, 130, 246, 80),
+                                Color32::from_rgba_unmultiplied(96, 165, 250, 120),
                             ))
                             .rounding(Rounding::same(4.0))
-                            .inner_margin(Margin::symmetric(5.0, 2.0));
+                            .inner_margin(Margin::symmetric(6.0, 2.0));
 
                         version_badge.show(ui, |ui| {
                             ui.label(
-                                egui::RichText::new("v0.2.0")
+                                egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
                                     .monospace()
-                                    .color(colors::ACCENT_PRIMARY_HOVER)
+                                    .strong()
+                                    .color(colors::TEXT_PRIMARY)
                                     .size(10.5),
                             );
                         });
@@ -1167,5 +1187,38 @@ impl eframe::App for MacroForgeApp {
         if self.is_recording || self.is_playing {
             ctx.request_repaint_after(std::time::Duration::from_millis(33));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    #[test]
+    fn test_app_main_window_and_toolbar_visibility_defaults() {
+        let (_tx, rx) = mpsc::channel();
+        let app = MacroForgeApp {
+            rx_events: rx,
+            is_recording: false,
+            is_playing: false,
+            loop_playback: false,
+            actions_cache: Vec::new(),
+            status_message: "Ready".to_string(),
+            lang: Language::Fr,
+            hide_mouse_moves: false,
+            search_query: String::new(),
+            jump_index: 1,
+            scroll_target_index: None,
+            selected_action_index: None,
+            action_modal: ActionEditorModal::new(),
+            stop_image_modal: StopImageConfigModal::new(),
+            toolbar: crate::ui::FloatingToolbar::new(),
+            main_window_visible: true,
+            overlay: crate::ui::TransparentOverlay::new(),
+        };
+
+        assert!(app.main_window_visible);
+        assert!(!app.toolbar.is_visible);
     }
 }
