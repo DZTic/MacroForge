@@ -67,7 +67,10 @@ impl StopImageConfigModal {
                             ui.text_edit_singleline(&mut self.path);
                             if ui.button(lang.browse_file_btn()).clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Images", &["png", "jpg", "jpeg", "bmp"])
+                                    .add_filter(
+                                        "Images (*.png, *.jpg, *.bmp)",
+                                        &["png", "jpg", "jpeg", "bmp"],
+                                    )
                                     .pick_file()
                                 {
                                     if let Some(s) = path.to_str() {
@@ -81,7 +84,7 @@ impl StopImageConfigModal {
 
                         // Presets images intégrées
                         ui.horizontal(|ui| {
-                            ui.label("Images intégrées :");
+                            ui.label(lang.embedded_images_label());
                             if ui.small_button("🎯 extreme.png").clicked() {
                                 self.path = "embedded://extreme.png".to_string();
                             }
@@ -100,6 +103,13 @@ impl StopImageConfigModal {
                                     .speed(100.0)
                                     .suffix(" ms"),
                             );
+
+                            let timeout_presets = [1000, 2000, 5000, 10000];
+                            for t in timeout_presets {
+                                if ui.small_button(format!("{}s", t / 1000)).clicked() {
+                                    self.timeout_ms = t;
+                                }
+                            }
                         });
                     });
 

@@ -443,6 +443,62 @@ impl Language {
         }
     }
 
+    pub fn event_type_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Événement :",
+            Language::En => "Event type:",
+        }
+    }
+
+    pub fn capture_key_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Capturer touche",
+            Language::En => "Capture key",
+        }
+    }
+
+    pub fn key_listening_prompt(&self) -> &'static str {
+        match self {
+            Language::Fr => "Appuyez sur une touche... (Échap pour annuler)",
+            Language::En => "Press any key... (Esc to cancel)",
+        }
+    }
+
+    pub fn extended_key_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Touche étendue (Extended Key)",
+            Language::En => "Extended Key",
+        }
+    }
+
+    pub fn capture_cursor_pos_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Capturer position actuelle",
+            Language::En => "Capture current position",
+        }
+    }
+
+    pub fn wait_duration_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Durée de la pause :",
+            Language::En => "Wait duration:",
+        }
+    }
+
+    pub fn presets_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Préréglages :",
+            Language::En => "Presets:",
+        }
+    }
+
+    pub fn embedded_images_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Images intégrées :",
+            Language::En => "Embedded templates:",
+        }
+    }
+
     pub fn timeout_label(&self) -> &'static str {
         match self {
             Language::Fr => "Délai max de détection (timeout ms) :",
@@ -474,5 +530,7 @@ mod tests {
         assert!(!en.app_title().is_empty());
         assert_ne!(fr.filter_hide_mouse_moves(), en.filter_hide_mouse_moves());
         assert_ne!(fr.quick_add_key(), en.quick_add_key());
+        assert_ne!(fr.capture_key_btn(), en.capture_key_btn());
+        assert_ne!(fr.capture_cursor_pos_btn(), en.capture_cursor_pos_btn());
     }
 }
