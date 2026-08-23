@@ -313,316 +313,569 @@ impl eframe::App for MacroForgeApp {
         // 3. Overlay transparent click-through (HUD temps réel pendant la lecture)
         self.overlay.show(ctx, self.is_playing);
 
-        // 4. En-tête supérieur (Header & Quick Actions)
+        // 4. En-tête supérieur (Header & Quick Actions Responsive)
         egui::TopBottomPanel::top("header_panel")
             .frame(theme::header_frame())
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    // Logo et Titre
-                    ui.label(
-                        egui::RichText::new(self.lang.app_title())
-                            .heading()
-                            .color(colors::TEXT_PRIMARY)
-                            .strong(),
-                    );
+                let avail_w = ui.available_width();
+                let is_compact = avail_w < 780.0;
+                let is_very_compact = avail_w < 650.0;
 
-                    // Badge de version
-                    let version_badge = Frame::none()
-                        .fill(Color32::from_rgba_premultiplied(59, 130, 246, 30))
-                        .stroke(Stroke::new(
-                            1.0_f32,
-                            Color32::from_rgba_premultiplied(59, 130, 246, 80),
-                        ))
-                        .rounding(Rounding::same(4.0))
-                        .inner_margin(Margin::symmetric(6.0, 2.0));
-
-                    version_badge.show(ui, |ui| {
+                if !is_very_compact {
+                    ui.horizontal(|ui| {
+                        // Logo et Titre
                         ui.label(
-                            egui::RichText::new("v0.2.0 Native")
-                                .monospace()
-                                .color(colors::ACCENT_PRIMARY_HOVER)
-                                .size(11.0),
+                            egui::RichText::new(self.lang.app_title())
+                                .heading()
+                                .color(colors::TEXT_PRIMARY)
+                                .strong(),
                         );
-                    });
 
-                    ui.add_space(10.0);
-                    ui.separator();
-                    ui.add_space(10.0);
+                        // Badge de version
+                        let version_badge = Frame::none()
+                            .fill(Color32::from_rgba_premultiplied(59, 130, 246, 30))
+                            .stroke(Stroke::new(
+                                1.0_f32,
+                                Color32::from_rgba_premultiplied(59, 130, 246, 80),
+                            ))
+                            .rounding(Rounding::same(4.0))
+                            .inner_margin(Margin::symmetric(5.0, 2.0));
 
-                    // Boutons d'ajout rapide d'action
-                    let key_btn = GlassButton::new(self.lang.quick_add_key())
-                        .variant(ButtonVariant::Secondary);
-                    if ui.add(key_btn).clicked() {
-                        self.action_modal.open_for_new(ActionModalTab::Keyboard);
-                    }
-
-                    let mouse_btn = GlassButton::new(self.lang.quick_add_mouse())
-                        .variant(ButtonVariant::Secondary);
-                    if ui.add(mouse_btn).clicked() {
-                        self.action_modal.open_for_new(ActionModalTab::Mouse);
-                    }
-
-                    let wait_btn = GlassButton::new(self.lang.quick_add_wait())
-                        .variant(ButtonVariant::Secondary);
-                    if ui.add(wait_btn).clicked() {
-                        self.action_modal.open_for_new(ActionModalTab::Wait);
-                    }
-
-                    let img_btn = GlassButton::new(self.lang.quick_add_image())
-                        .variant(ButtonVariant::Secondary);
-                    if ui.add(img_btn).clicked() {
-                        self.action_modal.open_for_new(ActionModalTab::Image);
-                    }
-
-                    // Commandes alignées à droite
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Badge d'état dynamique
-                        let status_badge = if self.is_recording {
-                            StatusBadge::new(StatusKind::Recording)
-                        } else if self.is_playing {
-                            StatusBadge::new(StatusKind::Playing)
-                        } else {
-                            StatusBadge::new(StatusKind::Idle)
-                        };
-                        ui.add(status_badge).on_hover_text(
-                            "Indicateur temps réel de l'état du moteur (F8: Rec, F9: Stop, F4: Stop Playback)",
-                        );
+                        version_badge.show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new("v0.2.0")
+                                    .monospace()
+                                    .color(colors::ACCENT_PRIMARY_HOVER)
+                                    .size(10.5),
+                            );
+                        });
 
                         ui.add_space(6.0);
                         ui.separator();
                         ui.add_space(6.0);
 
-                        // Sélecteur de langue interactif
-                        let lang_btn = GlassButton::new(match self.lang {
-                            Language::Fr => "🌐 FR",
-                            Language::En => "🌐 EN",
-                        })
-                        .variant(ButtonVariant::Ghost);
+                        // Boutons d'ajout rapide d'action
+                        let key_btn = GlassButton::new(self.lang.quick_add_key())
+                            .compact(is_compact)
+                            .variant(ButtonVariant::Secondary);
                         if ui
-                            .add(lang_btn)
-                            .on_hover_text("Changer de langue (FR / EN)")
+                            .add(key_btn)
+                            .on_hover_text("Ajouter un événement clavier manuellement")
                             .clicked()
                         {
-                            self.lang.toggle();
-                            self.save_current_settings();
+                            self.action_modal.open_for_new(ActionModalTab::Keyboard);
                         }
 
-                        // Bouton Toolbar flottante
-                        let toolbar_btn = GlassButton::new(self.lang.toolbar_window_btn())
-                            .selected(self.toolbar.is_visible)
-                            .variant(if self.toolbar.is_visible {
-                                ButtonVariant::Primary
-                            } else {
-                                ButtonVariant::Ghost
-                            });
+                        let mouse_btn = GlassButton::new(self.lang.quick_add_mouse())
+                            .compact(is_compact)
+                            .variant(ButtonVariant::Secondary);
                         if ui
-                            .add(toolbar_btn)
-                            .on_hover_text("Afficher/Masquer la Toolbar flottante compacte")
+                            .add(mouse_btn)
+                            .on_hover_text("Ajouter un événement souris manuellement")
                             .clicked()
                         {
-                            self.toolbar.is_visible = !self.toolbar.is_visible;
-                            self.toolbar.total_actions = self.actions_cache.len();
-                            self.status_message = if self.toolbar.is_visible {
-                                match self.lang {
-                                    Language::Fr => "🗔 Toolbar flottante affichée.".to_string(),
-                                    Language::En => "🗔 Floating toolbar shown.".to_string(),
-                                }
-                            } else {
-                                match self.lang {
-                                    Language::Fr => "🗔 Toolbar flottante masquée.".to_string(),
-                                    Language::En => "🗔 Floating toolbar hidden.".to_string(),
-                                }
-                            };
+                            self.action_modal.open_for_new(ActionModalTab::Mouse);
                         }
+
+                        let wait_btn = GlassButton::new(self.lang.quick_add_wait())
+                            .compact(is_compact)
+                            .variant(ButtonVariant::Secondary);
+                        if ui
+                            .add(wait_btn)
+                            .on_hover_text("Ajouter un délai de pause")
+                            .clicked()
+                        {
+                            self.action_modal.open_for_new(ActionModalTab::Wait);
+                        }
+
+                        let img_btn = GlassButton::new(self.lang.quick_add_image())
+                            .compact(is_compact)
+                            .variant(ButtonVariant::Secondary);
+                        if ui
+                            .add(img_btn)
+                            .on_hover_text("Ajouter une attente de détection d'image")
+                            .clicked()
+                        {
+                            self.action_modal.open_for_new(ActionModalTab::Image);
+                        }
+
+                        // Commandes alignées à droite sans débordement
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            // Badge d'état dynamique
+                            let status_badge = if self.is_recording {
+                                StatusBadge::new(StatusKind::Recording).compact(is_compact)
+                            } else if self.is_playing {
+                                StatusBadge::new(StatusKind::Playing).compact(is_compact)
+                            } else {
+                                StatusBadge::new(StatusKind::Idle).compact(is_compact)
+                            };
+                            ui.add(status_badge).on_hover_text(
+                                "État du moteur (F8: Rec, F9: Stop, F4: Stop Playback)",
+                            );
+
+                            ui.add_space(4.0);
+                            ui.separator();
+                            ui.add_space(4.0);
+
+                            // Sélecteur de langue interactif
+                            let lang_btn = GlassButton::new(match self.lang {
+                                Language::Fr => "FR",
+                                Language::En => "EN",
+                            })
+                            .icon("🌐")
+                            .compact(is_compact)
+                            .variant(ButtonVariant::Ghost);
+                            if ui
+                                .add(lang_btn)
+                                .on_hover_text("Changer de langue (FR / EN)")
+                                .clicked()
+                            {
+                                self.lang.toggle();
+                                self.save_current_settings();
+                            }
+
+                            // Bouton Toolbar flottante
+                            let toolbar_btn = GlassButton::new(self.lang.toolbar_window_btn())
+                                .icon("🗔")
+                                .compact(is_compact)
+                                .selected(self.toolbar.is_visible)
+                                .variant(if self.toolbar.is_visible {
+                                    ButtonVariant::Primary
+                                } else {
+                                    ButtonVariant::Ghost
+                                });
+                            if ui
+                                .add(toolbar_btn)
+                                .on_hover_text("Afficher/Masquer la toolbar flottante")
+                                .clicked()
+                            {
+                                self.toolbar.is_visible = !self.toolbar.is_visible;
+                                self.toolbar.total_actions = self.actions_cache.len();
+                                self.status_message = if self.toolbar.is_visible {
+                                    match self.lang {
+                                        Language::Fr => "🗔 Toolbar flottante affichée.".to_string(),
+                                        Language::En => "🗔 Floating toolbar shown.".to_string(),
+                                    }
+                                } else {
+                                    match self.lang {
+                                        Language::Fr => "🗔 Toolbar flottante masquée.".to_string(),
+                                        Language::En => "🗔 Floating toolbar hidden.".to_string(),
+                                    }
+                                };
+                            }
+                        });
                     });
-                });
+                } else {
+                    // Disposition 2 rangées pour fenêtres très étroites (< 650px)
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(self.lang.app_title())
+                                    .heading()
+                                    .color(colors::TEXT_PRIMARY)
+                                    .strong(),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let status_badge = if self.is_recording {
+                                        StatusBadge::new(StatusKind::Recording).compact(true)
+                                    } else if self.is_playing {
+                                        StatusBadge::new(StatusKind::Playing).compact(true)
+                                    } else {
+                                        StatusBadge::new(StatusKind::Idle).compact(true)
+                                    };
+                                    ui.add(status_badge);
+
+                                    let lang_btn = GlassButton::new(match self.lang {
+                                        Language::Fr => "FR",
+                                        Language::En => "EN",
+                                    })
+                                    .icon("🌐")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Ghost);
+                                    if ui.add(lang_btn).clicked() {
+                                        self.lang.toggle();
+                                        self.save_current_settings();
+                                    }
+
+                                    let toolbar_btn = GlassButton::new("Toolbar")
+                                        .icon("🗔")
+                                        .compact(true)
+                                        .selected(self.toolbar.is_visible)
+                                        .variant(if self.toolbar.is_visible {
+                                            ButtonVariant::Primary
+                                        } else {
+                                            ButtonVariant::Ghost
+                                        });
+                                    if ui.add(toolbar_btn).clicked() {
+                                        self.toolbar.is_visible = !self.toolbar.is_visible;
+                                    }
+                                },
+                            );
+                        });
+
+                        ui.add_space(3.0);
+
+                        ui.horizontal(|ui| {
+                            let key_btn = GlassButton::new("+ Clavier")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(key_btn).clicked() {
+                                self.action_modal.open_for_new(ActionModalTab::Keyboard);
+                            }
+                            let mouse_btn = GlassButton::new("+ Souris")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(mouse_btn).clicked() {
+                                self.action_modal.open_for_new(ActionModalTab::Mouse);
+                            }
+                            let wait_btn = GlassButton::new("+ Pause")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(wait_btn).clicked() {
+                                self.action_modal.open_for_new(ActionModalTab::Wait);
+                            }
+                            let img_btn = GlassButton::new("+ Image")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(img_btn).clicked() {
+                                self.action_modal.open_for_new(ActionModalTab::Image);
+                            }
+                        });
+                    });
+                }
             });
 
-        // 3. Barre inférieure de contrôle global (Footer)
+        // 3. Barre inférieure de contrôle global (Footer Responsive)
         egui::TopBottomPanel::bottom("footer_panel")
             .frame(theme::footer_frame())
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    // Bouton Enregistrer / Arrêter
-                    if !self.is_recording {
-                        let btn = GlassButton::new(self.lang.record_btn())
-                            .icon("🔴")
-                            .shortcut("F8")
-                            .variant(ButtonVariant::Danger);
+                let avail_w = ui.available_width();
+                let is_compact = avail_w < 820.0;
+
+                if !is_compact {
+                    ui.horizontal(|ui| {
+                        // Bouton Enregistrer / Arrêter
+                        if !self.is_recording {
+                            let btn = GlassButton::new(self.lang.record_btn())
+                                .icon("🔴")
+                                .shortcut("F8")
+                                .variant(ButtonVariant::Danger);
+                            if ui
+                                .add(btn)
+                                .on_hover_text("Démarrer l'enregistrement global des entrées (F8)")
+                                .clicked()
+                            {
+                                macro_core::start_recording();
+                            }
+                        } else {
+                            let btn = GlassButton::new(self.lang.stop_btn())
+                                .icon("⏹")
+                                .shortcut("F9")
+                                .variant(ButtonVariant::Secondary);
+                            if ui
+                                .add(btn)
+                                .on_hover_text("Arrêter l'enregistrement en cours (F9)")
+                                .clicked()
+                            {
+                                macro_core::stop_recording();
+                            }
+                        }
+
+                        // Bouton Jouer / Arrêt Urgence
+                        if !self.is_playing {
+                            let btn = GlassButton::new(self.lang.play_btn())
+                                .icon("▶")
+                                .shortcut("F4 stop")
+                                .variant(ButtonVariant::Success);
+                            if ui
+                                .add(btn)
+                                .on_hover_text("Exécuter la séquence de macro enregistrée")
+                                .clicked()
+                            {
+                                macro_core::play_macro();
+                            }
+                        } else {
+                            let btn = GlassButton::new(self.lang.emergency_stop_btn())
+                                .icon("⏹")
+                                .shortcut("F4")
+                                .variant(ButtonVariant::Warning);
+                            if ui
+                                .add(btn)
+                                .on_hover_text("Arrêter immédiatement la relecture (F4)")
+                                .clicked()
+                            {
+                                macro_core::stop_playback();
+                            }
+                        }
+
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
+                        // Switch Mode Boucle
+                        let toggle = CustomToggleSwitch::new(&mut self.loop_playback)
+                            .label(self.lang.loop_mode_label());
                         if ui
-                            .add(btn)
-                            .on_hover_text("Démarrer l'enregistrement global des entrées (F8)")
+                            .add(toggle)
+                            .on_hover_text(
+                                "Répéter la macro indéfiniment jusqu'à l'arrêt d'urgence F4",
+                            )
+                            .changed()
+                        {
+                            macro_core::set_loop_playback(self.loop_playback);
+                        }
+
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
+                        // Bouton Configuration Image d'arrêt
+                        let (stop_img, _) = macro_core::get_stop_image();
+                        let has_stop_img = stop_img.is_some();
+                        let stop_img_btn = GlassButton::new(self.lang.stop_image_cfg_btn())
+                            .icon("🛑")
+                            .variant(if has_stop_img {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Secondary
+                            });
+                        if ui
+                            .add(stop_img_btn)
+                            .on_hover_text("Configurer l'image de détection d'arrêt d'urgence")
                             .clicked()
                         {
-                            macro_core::start_recording();
+                            self.stop_image_modal.open();
                         }
-                    } else {
-                        let btn = GlassButton::new(self.lang.stop_btn())
-                            .icon("⏹️")
-                            .shortcut("F9")
+
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
+                        // Sauvegarder profil .mforge
+                        let save_btn = GlassButton::new(self.lang.save_profile())
+                            .icon("💾")
                             .variant(ButtonVariant::Secondary);
                         if ui
-                            .add(btn)
-                            .on_hover_text("Arrêter l'enregistrement en cours (F9)")
+                            .add(save_btn)
+                            .on_hover_text("Exporter le profil de macro (.mforge)")
                             .clicked()
                         {
-                            macro_core::stop_recording();
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("MacroForge Profile", &["mforge", "json"])
+                                .save_file()
+                            {
+                                if let Some(path_str) = path.to_str() {
+                                    if let Err(e) = macro_core::save_macro_to_file(path_str) {
+                                        self.status_message =
+                                            format!("❌ Erreur sauvegarde: {}", e);
+                                    } else {
+                                        self.status_message =
+                                            "✅ Profil sauvegardé avec succès!".to_string();
+                                    }
+                                }
+                            }
                         }
-                    }
 
-                    // Bouton Jouer / Arrêt Urgence
-                    if !self.is_playing {
-                        let btn = GlassButton::new(self.lang.play_btn())
-                            .icon("▶️")
-                            .shortcut("F4 stop")
-                            .variant(ButtonVariant::Success);
+                        // Ouvrir profil .mforge
+                        let open_btn = GlassButton::new(self.lang.open_profile())
+                            .icon("📂")
+                            .variant(ButtonVariant::Secondary);
                         if ui
-                            .add(btn)
-                            .on_hover_text("Exécuter la séquence de macro enregistrée")
+                            .add(open_btn)
+                            .on_hover_text("Importer un profil de macro (.mforge)")
                             .clicked()
                         {
-                            macro_core::play_macro();
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("MacroForge Profile", &["mforge", "json"])
+                                .pick_file()
+                            {
+                                if let Some(path_str) = path.to_str() {
+                                    match macro_core::load_macro_from_file(path_str) {
+                                        Ok(count) => {
+                                            self.refresh_actions();
+                                            self.status_message =
+                                                format!("✅ {} actions chargées.", count);
+                                        }
+                                        Err(e) => {
+                                            self.status_message =
+                                                format!("❌ Erreur chargement: {}", e);
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    } else {
-                        let btn = GlassButton::new(self.lang.emergency_stop_btn())
-                            .icon("⏹️")
-                            .shortcut("F4")
-                            .variant(ButtonVariant::Warning);
+
+                        // Vider
+                        let clear_btn = GlassButton::new(self.lang.clear_actions())
+                            .icon("🗑")
+                            .variant(ButtonVariant::Ghost);
                         if ui
-                            .add(btn)
-                            .on_hover_text("Arrêter immédiatement la relecture (F4)")
+                            .add(clear_btn)
+                            .on_hover_text("Effacer toutes les actions enregistrées")
                             .clicked()
                         {
-                            macro_core::stop_playback();
+                            macro_core::clear_actions();
+                            self.actions_cache.clear();
+                            self.status_message = match self.lang {
+                                Language::Fr => "Toutes les actions ont été effacées.".to_string(),
+                                Language::En => "All actions have been cleared.".to_string(),
+                            };
                         }
-                    }
+                    });
+                } else {
+                    // Disposition 2 rangées responsive pour fenêtres compactes
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            if !self.is_recording {
+                                let btn = GlassButton::new(self.lang.record_btn())
+                                    .icon("🔴")
+                                    .shortcut("F8")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Danger);
+                                if ui.add(btn).clicked() {
+                                    macro_core::start_recording();
+                                }
+                            } else {
+                                let btn = GlassButton::new(self.lang.stop_btn())
+                                    .icon("⏹")
+                                    .shortcut("F9")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Secondary);
+                                if ui.add(btn).clicked() {
+                                    macro_core::stop_recording();
+                                }
+                            }
 
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                            if !self.is_playing {
+                                let btn = GlassButton::new(self.lang.play_btn())
+                                    .icon("▶")
+                                    .shortcut("F4 stop")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Success);
+                                if ui.add(btn).clicked() {
+                                    macro_core::play_macro();
+                                }
+                            } else {
+                                let btn = GlassButton::new(self.lang.emergency_stop_btn())
+                                    .icon("⏹")
+                                    .shortcut("F4")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Warning);
+                                if ui.add(btn).clicked() {
+                                    macro_core::stop_playback();
+                                }
+                            }
 
-                    // Switch Mode Boucle
-                    let toggle = CustomToggleSwitch::new(&mut self.loop_playback)
-                        .label(self.lang.loop_mode_label());
-                    if ui
-                        .add(toggle)
-                        .on_hover_text("Répéter la macro indéfiniment jusqu'à l'arrêt d'urgence F4")
-                        .changed()
-                    {
-                        macro_core::set_loop_playback(self.loop_playback);
-                    }
+                            ui.separator();
 
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                            let toggle =
+                                CustomToggleSwitch::new(&mut self.loop_playback).label("Boucle");
+                            if ui.add(toggle).changed() {
+                                macro_core::set_loop_playback(self.loop_playback);
+                            }
 
-                    // Bouton Configuration Image d'arrêt
-                    let (stop_img, _) = macro_core::get_stop_image();
-                    let has_stop_img = stop_img.is_some();
-                    let stop_img_btn =
-                        GlassButton::new(self.lang.stop_image_cfg_btn()).variant(if has_stop_img {
-                            ButtonVariant::Primary
-                        } else {
-                            ButtonVariant::Secondary
-                        });
-                    if ui
-                        .add(stop_img_btn)
-                        .on_hover_text("Configurer l'image de détection d'arrêt d'urgence")
-                        .clicked()
-                    {
-                        self.stop_image_modal.open();
-                    }
-
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-
-                    // Sauvegarder profil .mforge
-                    let save_btn = GlassButton::new(self.lang.save_profile())
-                        .icon("💾")
-                        .variant(ButtonVariant::Secondary);
-                    if ui
-                        .add(save_btn)
-                        .on_hover_text("Exporter le profil de macro (.mforge)")
-                        .clicked()
-                    {
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("MacroForge Profile", &["mforge", "json"])
-                            .save_file()
-                        {
-                            if let Some(path_str) = path.to_str() {
-                                if let Err(e) = macro_core::save_macro_to_file(path_str) {
-                                    self.status_message = format!("❌ Erreur sauvegarde: {}", e);
+                            let (stop_img, _) = macro_core::get_stop_image();
+                            let has_stop_img = stop_img.is_some();
+                            let stop_img_btn = GlassButton::new("Arrêt image")
+                                .icon("🛑")
+                                .compact(true)
+                                .variant(if has_stop_img {
+                                    ButtonVariant::Primary
                                 } else {
-                                    self.status_message =
-                                        "✅ Profil sauvegardé avec succès!".to_string();
-                                }
+                                    ButtonVariant::Secondary
+                                });
+                            if ui.add(stop_img_btn).clicked() {
+                                self.stop_image_modal.open();
                             }
-                        }
-                    }
+                        });
 
-                    // Ouvrir profil .mforge
-                    let open_btn = GlassButton::new(self.lang.open_profile())
-                        .icon("📂")
-                        .variant(ButtonVariant::Secondary);
-                    if ui
-                        .add(open_btn)
-                        .on_hover_text("Importer un profil de macro (.mforge)")
-                        .clicked()
-                    {
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("MacroForge Profile", &["mforge", "json"])
-                            .pick_file()
-                        {
-                            if let Some(path_str) = path.to_str() {
-                                match macro_core::load_macro_from_file(path_str) {
-                                    Ok(count) => {
-                                        self.refresh_actions();
-                                        self.status_message =
-                                            format!("✅ {} actions chargées.", count);
-                                    }
-                                    Err(e) => {
-                                        self.status_message =
-                                            format!("❌ Erreur chargement: {}", e);
+                        ui.add_space(3.0);
+
+                        ui.horizontal(|ui| {
+                            let save_btn = GlassButton::new(self.lang.save_profile())
+                                .icon("💾")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(save_btn).clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("MacroForge Profile", &["mforge", "json"])
+                                    .save_file()
+                                {
+                                    if let Some(path_str) = path.to_str() {
+                                        if let Err(e) = macro_core::save_macro_to_file(path_str) {
+                                            self.status_message =
+                                                format!("❌ Erreur sauvegarde: {}", e);
+                                        } else {
+                                            self.status_message =
+                                                "✅ Profil sauvegardé avec succès!".to_string();
+                                        }
                                     }
                                 }
                             }
-                        }
-                    }
 
-                    // Vider
-                    let clear_btn = GlassButton::new(self.lang.clear_actions())
-                        .icon("🗑️")
-                        .variant(ButtonVariant::Ghost);
-                    if ui
-                        .add(clear_btn)
-                        .on_hover_text("Effacer toutes les actions enregistrées")
-                        .clicked()
-                    {
-                        macro_core::clear_actions();
-                        self.actions_cache.clear();
-                        self.status_message = match self.lang {
-                            Language::Fr => "Toutes les actions ont été effacées.".to_string(),
-                            Language::En => "All actions have been cleared.".to_string(),
-                        };
-                    }
-                });
+                            let open_btn = GlassButton::new(self.lang.open_profile())
+                                .icon("📂")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(open_btn).clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("MacroForge Profile", &["mforge", "json"])
+                                    .pick_file()
+                                {
+                                    if let Some(path_str) = path.to_str() {
+                                        match macro_core::load_macro_from_file(path_str) {
+                                            Ok(count) => {
+                                                self.refresh_actions();
+                                                self.status_message =
+                                                    format!("✅ {} actions chargées.", count);
+                                            }
+                                            Err(e) => {
+                                                self.status_message =
+                                                    format!("❌ Erreur chargement: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            let clear_btn = GlassButton::new(self.lang.clear_actions())
+                                .icon("🗑")
+                                .compact(true)
+                                .variant(ButtonVariant::Ghost);
+                            if ui.add(clear_btn).clicked() {
+                                macro_core::clear_actions();
+                                self.actions_cache.clear();
+                                self.status_message = match self.lang {
+                                    Language::Fr => {
+                                        "Toutes les actions ont été effacées.".to_string()
+                                    }
+                                    Language::En => "All actions have been cleared.".to_string(),
+                                };
+                            }
+                        });
+                    });
+                }
 
                 ui.add_space(4.0);
                 ui.separator();
                 ui.add_space(2.0);
 
-                // Ligne de statut informative
+                // Ligne de statut informative avec puce lumineuse
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("ℹ️")
-                            .color(colors::ACCENT_PRIMARY_HOVER)
-                            .size(12.0),
-                    );
+                    let dot_color = if self.is_recording {
+                        colors::ACCENT_DANGER
+                    } else if self.is_playing {
+                        colors::ACCENT_SUCCESS
+                    } else {
+                        colors::ACCENT_PRIMARY
+                    };
+                    ui.label(egui::RichText::new("●").color(dot_color).size(10.0));
                     ui.label(
                         egui::RichText::new(&self.status_message)
                             .color(colors::TEXT_SECONDARY)
-                            .size(12.5),
+                            .size(12.0),
                     );
                 });
             });
@@ -644,6 +897,7 @@ impl eframe::App for MacroForgeApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let refresh_btn = GlassButton::new(self.lang.refresh_btn())
                         .icon("🔄")
+                        .compact(true)
                         .variant(ButtonVariant::Ghost);
                     if ui
                         .add(refresh_btn)

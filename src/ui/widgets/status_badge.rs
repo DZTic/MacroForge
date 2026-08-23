@@ -14,15 +14,25 @@ pub enum StatusKind {
 pub struct StatusBadge<'a> {
     kind: StatusKind,
     label: Option<&'a str>,
+    compact: bool,
 }
 
 impl<'a> StatusBadge<'a> {
     pub fn new(kind: StatusKind) -> Self {
-        Self { kind, label: None }
+        Self {
+            kind,
+            label: None,
+            compact: false,
+        }
     }
 
     pub fn label(mut self, label: &'a str) -> Self {
         self.label = Some(label);
+        self
+    }
+
+    pub fn compact(mut self, compact: bool) -> Self {
+        self.compact = compact;
         self
     }
 }
@@ -32,55 +42,71 @@ impl<'a> Widget for StatusBadge<'a> {
         let (dot_color, glow_color, bg_fill, border_stroke, default_text) = match self.kind {
             StatusKind::Recording => (
                 colors::ACCENT_DANGER,
-                Color32::from_rgba_premultiplied(239, 68, 68, 80),
-                Color32::from_rgba_premultiplied(239, 68, 68, 30),
-                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(239, 68, 68, 120)),
-                "ENREGISTREMENT EN COURS",
+                Color32::from_rgba_premultiplied(239, 68, 68, 90),
+                Color32::from_rgba_premultiplied(239, 68, 68, 35),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(239, 68, 68, 140)),
+                if self.compact {
+                    "REC"
+                } else {
+                    "ENREGISTREMENT"
+                },
             ),
             StatusKind::Playing => (
                 colors::ACCENT_SUCCESS,
-                Color32::from_rgba_premultiplied(16, 185, 129, 80),
-                Color32::from_rgba_premultiplied(16, 185, 129, 30),
-                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(16, 185, 129, 120)),
-                "LECTURE ACTIVE",
+                Color32::from_rgba_premultiplied(16, 185, 129, 90),
+                Color32::from_rgba_premultiplied(16, 185, 129, 35),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(16, 185, 129, 140)),
+                if self.compact {
+                    "PLAY"
+                } else {
+                    "LECTURE ACTIVE"
+                },
             ),
             StatusKind::Paused => (
                 colors::ACCENT_WARNING,
-                Color32::from_rgba_premultiplied(245, 158, 11, 80),
-                Color32::from_rgba_premultiplied(245, 158, 11, 30),
-                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(245, 158, 11, 120)),
-                "EN PAUSE",
+                Color32::from_rgba_premultiplied(245, 158, 11, 90),
+                Color32::from_rgba_premultiplied(245, 158, 11, 35),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(245, 158, 11, 140)),
+                if self.compact { "PAUSE" } else { "EN PAUSE" },
             ),
             StatusKind::Idle => (
                 colors::TEXT_MUTED,
-                Color32::from_rgba_premultiplied(110, 118, 129, 40),
+                Color32::from_rgba_premultiplied(100, 116, 139, 40),
                 Color32::from_rgba_premultiplied(30, 41, 59, 120),
                 Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-                "PRÊT / INACTIF",
+                if self.compact {
+                    "PRÊT"
+                } else {
+                    "PRÊT / INACTIF"
+                },
             ),
         };
 
         let display_text = self.label.unwrap_or(default_text);
         let font_id = TextStyle::Small.resolve(ui.style());
-        let text_galley = ui.painter().layout_no_wrap(
-            display_text.to_string(),
-            font_id,
-            match self.kind {
-                StatusKind::Recording => colors::ACCENT_DANGER_HOVER,
-                StatusKind::Playing => colors::ACCENT_SUCCESS_HOVER,
-                StatusKind::Paused => colors::ACCENT_WARNING_HOVER,
-                StatusKind::Idle => colors::TEXT_SECONDARY,
-            },
-        );
+        let text_color = match self.kind {
+            StatusKind::Recording => colors::ACCENT_DANGER_HOVER,
+            StatusKind::Playing => colors::ACCENT_SUCCESS_HOVER,
+            StatusKind::Paused => colors::ACCENT_WARNING_HOVER,
+            StatusKind::Idle => colors::TEXT_SECONDARY,
+        };
 
-        let dot_radius = 4.0;
-        let glow_radius = 7.0;
-        let padding = Vec2::new(10.0, 4.0);
-        let spacing_dot_text = 8.0;
+        let text_galley =
+            ui.painter()
+                .layout_no_wrap(display_text.to_string(), font_id, text_color);
+
+        let dot_radius = 3.5;
+        let glow_radius = 6.5;
+        let padding = if self.compact {
+            Vec2::new(7.0, 3.0)
+        } else {
+            Vec2::new(9.0, 3.5)
+        };
+        let spacing_dot_text = 6.0;
 
         let desired_size = Vec2::new(
             padding.x * 2.0 + glow_radius * 2.0 + spacing_dot_text + text_galley.size().x,
-            (text_galley.size().y + padding.y * 2.0).max(24.0),
+            (text_galley.size().y + padding.y * 2.0).max(22.0),
         );
 
         let (rect, response) = ui.allocate_exact_size(desired_size, Sense::hover());
@@ -105,7 +131,7 @@ impl<'a> Widget for StatusBadge<'a> {
                 rect.min.x + padding.x + glow_radius * 2.0 + spacing_dot_text,
                 rect.center().y - text_galley.size().y * 0.5,
             );
-            ui.painter().galley(text_pos, text_galley, Color32::WHITE);
+            ui.painter().galley(text_pos, text_galley, text_color);
         }
 
         response

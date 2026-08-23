@@ -3,45 +3,104 @@ use eframe::egui::{
     TextStyle, Vec2, Visuals,
 };
 
-/// Palette de couleurs du Design System MacroForge (Dark UI / Glassmorphism)
+/// Palette de couleurs du Design System MacroForge (Dark Glassmorphism / Modern Tech)
 pub mod colors {
     use eframe::egui::Color32;
 
-    // Arrière-plans
-    pub const BG_APP: Color32 = Color32::from_rgb(13, 17, 23); // #0d1117 (Dark Slate)
-    pub const BG_PANEL: Color32 = Color32::from_rgb(22, 27, 34); // #161b22
-    pub const BG_CARD: Color32 = Color32::from_rgba_premultiplied(30, 41, 59, 180); // rgba(30, 41, 59, 0.7)
-    pub const BG_CARD_HOVER: Color32 = Color32::from_rgba_premultiplied(40, 53, 75, 210);
-    pub const BG_CARD_ACTIVE: Color32 = Color32::from_rgba_premultiplied(50, 65, 90, 230);
-    pub const BG_INPUT: Color32 = Color32::from_rgba_premultiplied(15, 23, 42, 200);
+    // Arrière-plans sombres profonds & surfaces
+    pub const BG_APP: Color32 = Color32::from_rgb(10, 14, 23); // #0a0e17
+    pub const BG_PANEL: Color32 = Color32::from_rgb(15, 23, 42); // #0f172a (Slate 900)
+    pub const BG_CARD: Color32 = Color32::from_rgba_premultiplied(30, 41, 59, 180); // #1e293b
+    pub const BG_CARD_HOVER: Color32 = Color32::from_rgba_premultiplied(51, 65, 85, 210);
+    pub const BG_CARD_ACTIVE: Color32 = Color32::from_rgba_premultiplied(71, 85, 105, 230);
+    pub const BG_INPUT: Color32 = Color32::from_rgba_premultiplied(15, 23, 42, 220);
 
-    // Bordures
-    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(48, 54, 61); // #30363d
-    pub const BORDER_HOVER: Color32 = Color32::from_rgb(88, 166, 255); // #58a6ff
+    // Bordures lumineuses et subtiles
+    pub const BORDER_SUBTLE: Color32 = Color32::from_rgba_premultiplied(148, 163, 184, 45);
+    pub const BORDER_HOVER: Color32 = Color32::from_rgb(96, 165, 250); // #60a5fa
     pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(59, 130, 246); // #3b82f6
 
-    // Accents
-    pub const ACCENT_PRIMARY: Color32 = Color32::from_rgb(59, 130, 246); // #3b82f6 (Bleu lumineux)
+    // Accents vibrants
+    pub const ACCENT_PRIMARY: Color32 = Color32::from_rgb(59, 130, 246); // #3b82f6 (Bleu électrique)
     pub const ACCENT_PRIMARY_HOVER: Color32 = Color32::from_rgb(96, 165, 250); // #60a5fa
     pub const ACCENT_SUCCESS: Color32 = Color32::from_rgb(16, 185, 129); // #10b981 (Vert émeraude)
     pub const ACCENT_SUCCESS_HOVER: Color32 = Color32::from_rgb(52, 211, 153); // #34d399
-    pub const ACCENT_DANGER: Color32 = Color32::from_rgb(239, 68, 68); // #ef4444 (Rouge vibrant)
+    pub const ACCENT_DANGER: Color32 = Color32::from_rgb(239, 68, 68); // #ef4444 (Rouge vif)
     pub const ACCENT_DANGER_HOVER: Color32 = Color32::from_rgb(248, 113, 113); // #f87171
     pub const ACCENT_WARNING: Color32 = Color32::from_rgb(245, 158, 11); // #f59e0b (Ambre)
     pub const ACCENT_WARNING_HOVER: Color32 = Color32::from_rgb(251, 191, 36); // #fbbf24
-    pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(217, 70, 239); // #d946ef (Fuchsia/Violet)
-    pub const ACCENT_PURPLE_HOVER: Color32 = Color32::from_rgb(232, 121, 249); // #e879f9
+    pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(168, 85, 247); // #a855f7 (Violet moderne)
+    pub const ACCENT_PURPLE_HOVER: Color32 = Color32::from_rgb(192, 132, 252); // #c084fc
     pub const ACCENT_CYAN: Color32 = Color32::from_rgb(6, 182, 212); // #06b6d4 (Cyan)
 
-    // Textes
-    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(240, 246, 252); // #f0f6fc
-    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(139, 148, 158); // #8b949e
-    pub const TEXT_MUTED: Color32 = Color32::from_rgb(110, 118, 129); // #6e7681
+    // Typographie & Hiérarchie de contraste
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(241, 245, 249); // #f1f5f9
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(148, 163, 184); // #94a3b8
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(100, 116, 139); // #64748b
     pub const TEXT_WHITE: Color32 = Color32::from_rgb(255, 255, 255);
+}
+
+/// Configure les polices système Windows (Segoe UI, Segoe UI Emoji, Consolas) pour un rendu net
+pub fn configure_fonts(ctx: &Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    #[cfg(windows)]
+    {
+        // 1. Segoe UI (Police système principale pour interface propre)
+        if let Ok(font_data) = std::fs::read("C:\\Windows\\Fonts\\segoeui.ttf") {
+            fonts
+                .font_data
+                .insert("segoe_ui".to_owned(), egui::FontData::from_owned(font_data));
+            if let Some(family) = fonts.families.get_mut(&FontFamily::Proportional) {
+                family.insert(0, "segoe_ui".to_owned());
+            }
+        }
+
+        // 2. Segoe UI Emoji (Support complet des glyphes et symboles modernes)
+        if let Ok(emoji_data) = std::fs::read("C:\\Windows\\Fonts\\seguiemj.ttf") {
+            fonts.font_data.insert(
+                "segoe_emoji".to_owned(),
+                egui::FontData::from_owned(emoji_data),
+            );
+            if let Some(family) = fonts.families.get_mut(&FontFamily::Proportional) {
+                family.push("segoe_emoji".to_owned());
+            }
+            if let Some(family) = fonts.families.get_mut(&FontFamily::Monospace) {
+                family.push("segoe_emoji".to_owned());
+            }
+        }
+
+        // 3. Segoe UI Symbol (Symboles universels)
+        if let Ok(symbol_data) = std::fs::read("C:\\Windows\\Fonts\\seguisym.ttf") {
+            fonts.font_data.insert(
+                "segoe_symbol".to_owned(),
+                egui::FontData::from_owned(symbol_data),
+            );
+            if let Some(family) = fonts.families.get_mut(&FontFamily::Proportional) {
+                family.push("segoe_symbol".to_owned());
+            }
+        }
+
+        // 4. Consolas pour la typographie Monospace (Coordonnées, délais, VK codes)
+        if let Ok(mono_data) = std::fs::read("C:\\Windows\\Fonts\\consola.ttf") {
+            fonts
+                .font_data
+                .insert("consolas".to_owned(), egui::FontData::from_owned(mono_data));
+            if let Some(family) = fonts.families.get_mut(&FontFamily::Monospace) {
+                family.insert(0, "consolas".to_owned());
+            }
+        }
+    }
+
+    ctx.set_fonts(fonts);
 }
 
 /// Applique le thème sombre personnalisé et la typographie au contexte egui
 pub fn apply_theme(ctx: &Context) {
+    // 1. Initialiser et appliquer les polices nettes
+    configure_fonts(ctx);
+
+    // 2. Configurer les styles visuels Dark Glassmorphism
     let mut visuals = Visuals::dark();
 
     // Couleurs de base de l'application
@@ -61,25 +120,25 @@ pub fn apply_theme(ctx: &Context) {
     visuals.widgets.inactive.bg_fill = Color32::from_rgba_premultiplied(30, 41, 59, 140);
     visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
-    visuals.widgets.inactive.rounding = Rounding::same(8.0);
+    visuals.widgets.inactive.rounding = Rounding::same(6.0);
 
     // Widgets survolés (hovered)
     visuals.widgets.hovered.bg_fill = colors::BG_CARD_HOVER;
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, colors::BORDER_HOVER);
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_WHITE);
-    visuals.widgets.hovered.rounding = Rounding::same(8.0);
+    visuals.widgets.hovered.rounding = Rounding::same(6.0);
 
     // Widgets actifs/pressés
     visuals.widgets.active.bg_fill = colors::BG_CARD_ACTIVE;
     visuals.widgets.active.bg_stroke = Stroke::new(1.5_f32, colors::ACCENT_PRIMARY);
     visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_WHITE);
-    visuals.widgets.active.rounding = Rounding::same(8.0);
+    visuals.widgets.active.rounding = Rounding::same(6.0);
 
     // Widgets ouverts / déroulants
     visuals.widgets.open.bg_fill = colors::BG_CARD_HOVER;
     visuals.widgets.open.bg_stroke = Stroke::new(1.0_f32, colors::ACCENT_PRIMARY);
     visuals.widgets.open.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_WHITE);
-    visuals.widgets.open.rounding = Rounding::same(8.0);
+    visuals.widgets.open.rounding = Rounding::same(6.0);
 
     // Sélection
     visuals.selection.bg_fill = Color32::from_rgba_premultiplied(59, 130, 246, 120);
@@ -88,15 +147,15 @@ pub fn apply_theme(ctx: &Context) {
     // Ombres fenêtres et modales
     visuals.window_shadow = Shadow {
         offset: Vec2::new(0.0, 4.0),
-        blur: 12.0,
+        blur: 16.0,
         spread: 0.0,
-        color: Color32::from_black_alpha(100),
+        color: Color32::from_black_alpha(120),
     };
     visuals.popup_shadow = Shadow {
         offset: Vec2::new(0.0, 2.0),
-        blur: 8.0,
+        blur: 10.0,
         spread: 0.0,
-        color: Color32::from_black_alpha(80),
+        color: Color32::from_black_alpha(90),
     };
 
     // Configuration des styles de texte
@@ -181,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_theme_colors_integrity() {
-        assert_eq!(colors::BG_APP, Color32::from_rgb(13, 17, 23));
+        assert_eq!(colors::BG_APP, Color32::from_rgb(10, 14, 23));
         assert_eq!(colors::ACCENT_PRIMARY, Color32::from_rgb(59, 130, 246));
         assert_eq!(colors::ACCENT_SUCCESS, Color32::from_rgb(16, 185, 129));
         assert_eq!(colors::ACCENT_DANGER, Color32::from_rgb(239, 68, 68));
