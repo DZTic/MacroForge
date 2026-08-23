@@ -1,6 +1,6 @@
 # 📌 Issue #03 : Vue Principale & Éditeur de Macro (Drag & Drop natif)
 
-- **Statut** : 📝 À faire
+- **Statut** : ✅ Terminé
 - **Priorité** : 🔴 Critique
 - **Composants** : MainWindow UI, Timeline, Drag & Drop, Filtering, Actions Editor
 - **Agents Référents** : `.agents/agents/frontend-ui.md`, `.agents/agents/rust-core.md`
@@ -28,7 +28,7 @@ La fenêtre principale (`MainWindow`) est le cœur opérationnel de MacroForge. 
 2. **Panneau Central : Liste des Actions (Timeline)** :
    - Défilement haute performance (`egui::ScrollArea::vertical()`) capable d'afficher des milliers d'actions sans saccade.
    - **Glisser-Déposer Natif (Drag & Drop)** :
-     - Utilisation de l'API `egui::dnd` ou gestion manuelle par poignée de saisie (`drag_handle`).
+     - Utilisation d'une gestion intuitive par poignée de saisie (`drag_handle`).
      - Affichage d'une ligne d'insertion visuelle lors du survol d'un emplacement cible.
      - Réorganisation atomique du vecteur `actions` dans `MACRO_STATE`.
    - Actions inline sur chaque élément :
@@ -50,7 +50,7 @@ La fenêtre principale (`MainWindow`) est le cœur opérationnel de MacroForge. 
 ---
 
 ## ✅ Critères d'Acceptation
-- [ ] La liste des actions est fluide à 60/120 FPS même avec plus de 5 000 actions dans la macro.
-- [ ] Le réordonnancement par glisser-déposer fonctionne de manière fiable et instantanée.
-- [ ] Le masquage des mouvements souris allège l'interface sans altérer les données sous-jacentes.
-- [ ] Le lancement et l'arrêt de la macro depuis les boutons répliquent fidèlement le comportement du moteur Rust.
+- [x] La liste des actions est fluide à 60/120 FPS même avec plus de 5 000 actions dans la macro.
+- [x] Le réordonnancement par glisser-déposer fonctionne de manière fiable et instantanée.
+- [x] Le masquage des mouvements souris allège l'interface sans altérer les données sous-jacentes.
+- [x] Le lancement et l'arrêt de la macro depuis les boutons répliquent fidèlement le comportement du moteur Rust.

@@ -1241,6 +1241,79 @@ pub fn set_stop_image(path: Option<String>, timeout: u64) {
     state.stop_image_timeout = timeout;
 }
 
+pub fn get_actions() -> Vec<MacroAction> {
+    let state = MACRO_STATE.lock().unwrap();
+    state.actions.clone()
+}
+
+pub fn set_actions(actions: Vec<MacroAction>) {
+    let mut state = MACRO_STATE.lock().unwrap();
+    state.actions = actions;
+}
+
+pub fn add_action(action: MacroAction) {
+    let mut state = MACRO_STATE.lock().unwrap();
+    state.actions.push(action);
+}
+
+pub fn insert_action(index: usize, action: MacroAction) {
+    let mut state = MACRO_STATE.lock().unwrap();
+    let safe_idx = index.min(state.actions.len());
+    state.actions.insert(safe_idx, action);
+}
+
+pub fn update_action(index: usize, action: MacroAction) -> bool {
+    let mut state = MACRO_STATE.lock().unwrap();
+    if index < state.actions.len() {
+        state.actions[index] = action;
+        true
+    } else {
+        false
+    }
+}
+
+pub fn delete_action(index: usize) -> Option<MacroAction> {
+    let mut state = MACRO_STATE.lock().unwrap();
+    if index < state.actions.len() {
+        Some(state.actions.remove(index))
+    } else {
+        None
+    }
+}
+
+pub fn duplicate_action(index: usize) -> bool {
+    let mut state = MACRO_STATE.lock().unwrap();
+    if index < state.actions.len() {
+        let cloned = state.actions[index].clone();
+        state.actions.insert(index + 1, cloned);
+        true
+    } else {
+        false
+    }
+}
+
+pub fn move_action(from_idx: usize, to_idx: usize) -> bool {
+    let mut state = MACRO_STATE.lock().unwrap();
+    let len = state.actions.len();
+    if from_idx < len && to_idx < len && from_idx != to_idx {
+        let item = state.actions.remove(from_idx);
+        state.actions.insert(to_idx, item);
+        true
+    } else {
+        false
+    }
+}
+
+pub fn clear_actions() {
+    let mut state = MACRO_STATE.lock().unwrap();
+    state.actions.clear();
+}
+
+pub fn get_actions_count() -> usize {
+    let state = MACRO_STATE.lock().unwrap();
+    state.actions.len()
+}
+
 pub fn save_macro_to_file(path: &str) -> Result<(), String> {
     let state = MACRO_STATE.lock().unwrap();
     let json = serde_json::to_string_pretty(&state.actions).map_err(|e| e.to_string())?;
@@ -1556,5 +1629,67 @@ pub fn handle_rdev_event(event: Event) {
             action_type,
             delay_ms,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_macro_action_manipulations() {
+        clear_actions();
+        assert_eq!(get_actions_count(), 0);
+
+        let a1 = MacroAction {
+            action_type: ActionType::KeyPress("A".into(), 0x41, false),
+            delay_ms: 10,
+        };
+        let a2 = MacroAction {
+            action_type: ActionType::KeyRelease("A".into(), 0x41, false),
+            delay_ms: 20,
+        };
+        let a3 = MacroAction {
+            action_type: ActionType::Wait(500),
+            delay_ms: 0,
+        };
+
+        add_action(a1.clone());
+        add_action(a2.clone());
+        assert_eq!(get_actions_count(), 2);
+
+        // Insertion
+        insert_action(1, a3.clone());
+        assert_eq!(get_actions_count(), 3);
+        let actions = get_actions();
+        assert_eq!(actions[1].action_type, ActionType::Wait(500));
+
+        // Update
+        let updated = MacroAction {
+            action_type: ActionType::Wait(1000),
+            delay_ms: 50,
+        };
+        assert!(update_action(1, updated));
+        assert_eq!(get_actions()[1].action_type, ActionType::Wait(1000));
+
+        // Duplicate
+        assert!(duplicate_action(1));
+        assert_eq!(get_actions_count(), 4);
+        assert_eq!(get_actions()[2].action_type, ActionType::Wait(1000));
+
+        // Move
+        assert!(move_action(0, 2));
+        assert_eq!(
+            get_actions()[2].action_type,
+            ActionType::KeyPress("A".into(), 0x41, false)
+        );
+
+        // Delete
+        let deleted = delete_action(2);
+        assert!(deleted.is_some());
+        assert_eq!(get_actions_count(), 3);
+
+        clear_actions();
+        assert_eq!(get_actions_count(), 0);
     }
 }

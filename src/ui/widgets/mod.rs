@@ -1,10 +1,12 @@
 pub mod action_card;
+pub mod filter_bar;
 pub mod glass_button;
 pub mod numeric_input;
 pub mod status_badge;
 pub mod toggle_switch;
 
-pub use action_card::ActionCard;
+pub use action_card::{ActionCard, ActionCardEvent};
+pub use filter_bar::FilterBar;
 pub use glass_button::{ButtonVariant, GlassButton};
 pub use numeric_input::NumericInputWithSlider;
 pub use status_badge::{StatusBadge, StatusKind};
@@ -14,6 +16,7 @@ pub use toggle_switch::CustomToggleSwitch;
 mod tests {
     use super::*;
     use crate::macro_core::{ActionType, MacroAction};
+    use crate::ui::i18n::Language;
     use eframe::egui::Vec2;
 
     #[test]
@@ -91,7 +94,10 @@ mod tests {
         ];
 
         for (idx, action) in actions.iter().enumerate() {
-            let _card = ActionCard::new(idx, action).selected(idx == 0);
+            let _card = ActionCard::new(idx, action)
+                .selected(idx == 0)
+                .lang(Language::Fr)
+                .bounds(idx == 0, idx == actions.len() - 1);
         }
     }
 }
