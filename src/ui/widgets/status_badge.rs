@@ -42,9 +42,9 @@ impl<'a> Widget for StatusBadge<'a> {
         let (dot_color, glow_color, bg_fill, border_stroke, default_text) = match self.kind {
             StatusKind::Recording => (
                 colors::ACCENT_DANGER,
-                Color32::from_rgba_premultiplied(239, 68, 68, 90),
-                Color32::from_rgba_premultiplied(239, 68, 68, 35),
-                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(239, 68, 68, 140)),
+                Color32::from_rgba_unmultiplied(239, 68, 68, 90),
+                Color32::from_rgba_unmultiplied(239, 68, 68, 35),
+                Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(239, 68, 68, 160)),
                 if self.compact {
                     "REC"
                 } else {
@@ -53,9 +53,9 @@ impl<'a> Widget for StatusBadge<'a> {
             ),
             StatusKind::Playing => (
                 colors::ACCENT_SUCCESS,
-                Color32::from_rgba_premultiplied(16, 185, 129, 90),
-                Color32::from_rgba_premultiplied(16, 185, 129, 35),
-                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(16, 185, 129, 140)),
+                Color32::from_rgba_unmultiplied(16, 185, 129, 90),
+                Color32::from_rgba_unmultiplied(16, 185, 129, 35),
+                Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(16, 185, 129, 160)),
                 if self.compact {
                     "PLAY"
                 } else {
@@ -64,14 +64,14 @@ impl<'a> Widget for StatusBadge<'a> {
             ),
             StatusKind::Paused => (
                 colors::ACCENT_WARNING,
-                Color32::from_rgba_premultiplied(245, 158, 11, 90),
-                Color32::from_rgba_premultiplied(245, 158, 11, 35),
-                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(245, 158, 11, 140)),
+                Color32::from_rgba_unmultiplied(245, 158, 11, 90),
+                Color32::from_rgba_unmultiplied(245, 158, 11, 35),
+                Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(245, 158, 11, 160)),
                 if self.compact { "PAUSE" } else { "EN PAUSE" },
             ),
             StatusKind::Idle => (
                 colors::ACCENT_PRIMARY_HOVER,
-                Color32::from_rgba_premultiplied(59, 130, 246, 60),
+                Color32::from_rgba_unmultiplied(59, 130, 246, 60),
                 colors::BG_CARD,
                 Stroke::new(1.0_f32, colors::BORDER_CARD),
                 if self.compact {

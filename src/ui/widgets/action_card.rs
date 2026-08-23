@@ -61,55 +61,55 @@ impl<'a> ActionCard<'a> {
             ActionType::KeyPress(name, vk, _) => (
                 "⌨",
                 self.lang.action_key_press(),
-                colors::ACCENT_PRIMARY,
+                colors::ACCENT_PRIMARY_HOVER,
                 format!("{} (VK: {:#04X})", name, vk),
             ),
             ActionType::KeyRelease(name, vk, _) => (
                 "⌨",
                 self.lang.action_key_release(),
-                colors::TEXT_SECONDARY,
+                Color32::from_rgb(148, 163, 184),
                 format!("{} (VK: {:#04X})", name, vk),
             ),
             ActionType::MouseMove(x, y) => (
                 "🖱",
                 self.lang.action_mouse_pos(),
-                colors::ACCENT_CYAN,
+                colors::ACCENT_CYAN_HOVER,
                 format!("X: {:.0}, Y: {:.0}", x, y),
             ),
             ActionType::MouseMoveRelative(dx, dy) => (
                 "🖱",
                 self.lang.action_mouse_relative(),
-                colors::ACCENT_WARNING,
+                Color32::from_rgb(251, 146, 60),
                 format!("ΔX: {}, ΔY: {}", dx, dy),
             ),
             ActionType::MousePress(btn, x, y) => (
                 "🖱",
                 self.lang.action_mouse_press(),
-                colors::ACCENT_SUCCESS,
+                colors::ACCENT_SUCCESS_HOVER,
                 format!("Btn {} à ({:.0}, {:.0})", btn, x, y),
             ),
             ActionType::MouseRelease(btn, x, y) => (
                 "🖱",
                 self.lang.action_mouse_release(),
-                colors::TEXT_SECONDARY,
+                Color32::from_rgb(148, 163, 184),
                 format!("Btn {} à ({:.0}, {:.0})", btn, x, y),
             ),
             ActionType::Scroll(dx, dy) => (
                 "📜",
                 self.lang.action_scroll(),
-                colors::ACCENT_WARNING_HOVER,
+                Color32::from_rgb(250, 204, 21),
                 format!("ΔX: {:.1}, ΔY: {:.1}", dx, dy),
             ),
             ActionType::Wait(ms) => (
                 "⏱",
                 self.lang.action_wait(),
-                colors::ACCENT_WARNING,
+                Color32::from_rgb(251, 146, 60),
                 format!("Attente de {} ms", ms),
             ),
             ActionType::WaitImage(path, timeout) => (
                 "🖼",
                 self.lang.action_wait_image(),
-                colors::ACCENT_PURPLE,
+                colors::ACCENT_PURPLE_HOVER,
                 format!("{} ({}ms)", path, timeout),
             ),
         };
@@ -146,7 +146,7 @@ impl<'a> ActionCard<'a> {
                                 .color(if is_being_dragged {
                                     colors::ACCENT_PRIMARY_HOVER
                                 } else {
-                                    colors::TEXT_MUTED
+                                    colors::TEXT_SECONDARY
                                 })
                                 .size(16.0),
                         )
@@ -171,44 +171,45 @@ impl<'a> ActionCard<'a> {
                         .fill(colors::BG_INPUT)
                         .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
                         .rounding(Rounding::same(4.0))
-                        .inner_margin(Margin::symmetric(5.0, 2.0));
+                        .inner_margin(Margin::symmetric(6.0, 2.5));
                     index_badge.show(ui, |ui| {
                         ui.label(
                             egui::RichText::new(index_text)
                                 .monospace()
-                                .color(colors::TEXT_MUTED)
-                                .size(11.0),
+                                .color(colors::TEXT_SECONDARY)
+                                .size(11.0)
+                                .strong(),
                         );
                     });
 
                     ui.add_space(4.0);
 
-                    // Badge de catégorie d'action avec pastille / fond teinté haute visibilité
+                    // Badge de catégorie d'action avec capsule sombre et bordure lumineuse haute visibilité
                     let type_badge_frame = Frame::none()
-                        .fill(Color32::from_rgba_premultiplied(
+                        .fill(Color32::from_rgba_unmultiplied(
                             type_color.r(),
                             type_color.g(),
                             type_color.b(),
-                            45,
+                            32,
                         ))
                         .stroke(Stroke::new(
                             1.0_f32,
-                            Color32::from_rgba_premultiplied(
+                            Color32::from_rgba_unmultiplied(
                                 type_color.r(),
                                 type_color.g(),
                                 type_color.b(),
-                                120,
+                                180,
                             ),
                         ))
                         .rounding(Rounding::same(5.0))
-                        .inner_margin(Margin::symmetric(6.0, 2.5));
+                        .inner_margin(Margin::symmetric(7.0, 3.0));
 
                     type_badge_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(icon);
+                            ui.label(egui::RichText::new(icon).size(11.5).color(type_color));
                             ui.label(
                                 egui::RichText::new(type_label)
-                                    .color(type_color)
+                                    .color(colors::TEXT_WHITE)
                                     .size(11.5)
                                     .strong(),
                             );
@@ -222,7 +223,7 @@ impl<'a> ActionCard<'a> {
                         egui::RichText::new(detail_str)
                             .monospace()
                             .color(colors::TEXT_PRIMARY)
-                            .size(12.0),
+                            .size(12.5),
                     );
 
                     // Boutons d'actions et délai alignés à droite

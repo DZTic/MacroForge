@@ -247,6 +247,9 @@ impl MacroForgeApp {
 
 impl eframe::App for MacroForgeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Garantir le maintien du thème sombre Dark Glassmorphism face aux variations du thème Windows
+        theme::apply_visuals(ctx);
+
         self.update_from_events();
 
         // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F4: Stop Playback)

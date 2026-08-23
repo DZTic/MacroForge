@@ -252,13 +252,13 @@ impl<'a> Widget for GlassButton<'a> {
                 ButtonVariant::Ghost => {
                     if is_clicked || self.selected {
                         (
-                            Color32::from_rgba_premultiplied(59, 130, 246, 70),
-                            Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
+                            Color32::from_rgba_unmultiplied(59, 130, 246, 75),
+                            Stroke::new(1.5_f32, colors::ACCENT_PRIMARY),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
-                            Color32::from_rgba_premultiplied(255, 255, 255, 24),
+                            Color32::from_rgba_unmultiplied(59, 130, 246, 35),
                             Stroke::new(1.0_f32, colors::BORDER_HOVER),
                             colors::TEXT_WHITE,
                         )
@@ -297,8 +297,8 @@ impl<'a> Widget for GlassButton<'a> {
                 ui.painter().rect(
                     sc_rect,
                     Rounding::same(4.0),
-                    Color32::from_rgba_premultiplied(0, 0, 0, 110),
-                    Stroke::new(1.0_f32, Color32::from_white_alpha(45)),
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 110),
+                    Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 45)),
                 );
 
                 let sc_pos = Pos2::new(

@@ -414,20 +414,20 @@ fn render_window_btn(
         WindowBtnType::OpenEditor => {
             if is_clicked {
                 (
-                    Color32::from_rgba_premultiplied(59, 130, 246, 70),
+                    Color32::from_rgba_unmultiplied(59, 130, 246, 75),
                     Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                     Color32::WHITE,
                 )
             } else if is_hovered {
                 (
-                    Color32::from_rgba_premultiplied(255, 255, 255, 28),
+                    Color32::from_rgba_unmultiplied(59, 130, 246, 40),
                     Stroke::new(1.0_f32, colors::BORDER_HOVER),
                     Color32::WHITE,
                 )
             } else {
                 (
-                    Color32::from_rgba_premultiplied(255, 255, 255, 8),
-                    Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(255, 255, 255, 16)),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 12),
+                    Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 25)),
                     colors::TEXT_SECONDARY,
                 )
             }
@@ -435,20 +435,20 @@ fn render_window_btn(
         WindowBtnType::Close => {
             if is_clicked {
                 (
-                    Color32::from_rgba_premultiplied(185, 28, 28, 220),
+                    Color32::from_rgba_unmultiplied(185, 28, 28, 220),
                     Stroke::new(1.0_f32, colors::ACCENT_DANGER_HOVER),
                     Color32::WHITE,
                 )
             } else if is_hovered {
                 (
-                    Color32::from_rgba_premultiplied(220, 38, 38, 160),
+                    Color32::from_rgba_unmultiplied(220, 38, 38, 160),
                     Stroke::new(1.0_f32, colors::ACCENT_DANGER),
                     Color32::WHITE,
                 )
             } else {
                 (
-                    Color32::from_rgba_premultiplied(255, 255, 255, 8),
-                    Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(255, 255, 255, 16)),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 12),
+                    Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 25)),
                     colors::TEXT_MUTED,
                 )
             }
