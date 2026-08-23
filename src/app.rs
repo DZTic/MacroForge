@@ -339,7 +339,7 @@ impl eframe::App for MacroForgeApp {
                 let is_very_compact = avail_w < 650.0;
 
                 if !is_very_compact {
-                    ui.horizontal_centered(|ui| {
+                    ui.horizontal(|ui| {
                         // Logo et Titre
                         ui.label(
                             egui::RichText::new(self.lang.app_title())
@@ -485,7 +485,7 @@ impl eframe::App for MacroForgeApp {
                 } else {
                     // Disposition 2 rangées pour fenêtres très étroites (< 650px)
                     ui.vertical(|ui| {
-                        ui.horizontal_centered(|ui| {
+                        ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new(self.lang.app_title())
                                     .heading()
@@ -534,7 +534,7 @@ impl eframe::App for MacroForgeApp {
 
                         ui.add_space(3.0);
 
-                        ui.horizontal_centered(|ui| {
+                        ui.horizontal(|ui| {
                             let key_btn = GlassButton::new("+ Clavier")
                                 .compact(true)
                                 .variant(ButtonVariant::Secondary);
@@ -572,7 +572,7 @@ impl eframe::App for MacroForgeApp {
                 let is_compact = avail_w < 820.0;
 
                 if !is_compact {
-                    ui.horizontal_centered(|ui| {
+                    ui.horizontal(|ui| {
                         // Bouton Enregistrer / Arrêter
                         if !self.is_recording {
                             let btn = GlassButton::new(self.lang.record_btn())
@@ -744,7 +744,7 @@ impl eframe::App for MacroForgeApp {
                 } else {
                     // Disposition 2 rangées responsive pour fenêtres compactes
                     ui.vertical(|ui| {
-                        ui.horizontal_centered(|ui| {
+                        ui.horizontal(|ui| {
                             if !self.is_recording {
                                 let btn = GlassButton::new(self.lang.record_btn())
                                     .icon("🔴")
@@ -810,7 +810,7 @@ impl eframe::App for MacroForgeApp {
 
                         ui.add_space(3.0);
 
-                        ui.horizontal_centered(|ui| {
+                        ui.horizontal(|ui| {
                             let save_btn = GlassButton::new(self.lang.save_profile())
                                 .icon("💾")
                                 .compact(true)
@@ -880,7 +880,7 @@ impl eframe::App for MacroForgeApp {
                 ui.add_space(2.0);
 
                 // Ligne de statut informative avec puce lumineuse
-                ui.horizontal_centered(|ui| {
+                ui.horizontal(|ui| {
                     let dot_color = if self.is_recording {
                         colors::ACCENT_DANGER
                     } else if self.is_playing {
@@ -904,7 +904,7 @@ impl eframe::App for MacroForgeApp {
                 ui.add_space(2.0);
 
                 // En-tête de section Timeline & Actions
-                ui.horizontal_centered(|ui| {
+                ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(self.lang.timeline_heading())
                             .heading()

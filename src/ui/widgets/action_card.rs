@@ -138,7 +138,7 @@ impl<'a> ActionCard<'a> {
 
         let card_response = card_frame
             .show(ui, |ui| {
-                ui.horizontal_centered(|ui| {
+                ui.horizontal(|ui| {
                     // Poignée de Drag & Drop (⠿) avec curseur interactif
                     let handle_resp = ui.add(
                         egui::Label::new(
@@ -205,7 +205,7 @@ impl<'a> ActionCard<'a> {
                         .inner_margin(Margin::symmetric(7.0, 3.0));
 
                     type_badge_frame.show(ui, |ui| {
-                        ui.horizontal_centered(|ui| {
+                        ui.horizontal(|ui| {
                             ui.label(egui::RichText::new(icon).size(11.5).color(type_color));
                             ui.label(
                                 egui::RichText::new(type_label)
