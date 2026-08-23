@@ -38,6 +38,9 @@ pub struct MacroForgeApp {
 
     // Toolbar flottante native
     toolbar: crate::ui::FloatingToolbar,
+
+    // Overlay transparent click-through
+    overlay: crate::ui::TransparentOverlay,
 }
 
 impl MacroForgeApp {
@@ -79,6 +82,17 @@ impl MacroForgeApp {
                 total_actions,
                 action_detail: String::new(),
             },
+
+            overlay: crate::ui::TransparentOverlay {
+                is_visible: false,
+                current_action_idx: 0,
+                total_actions,
+                action_type_label: String::new(),
+                action_detail: String::new(),
+                target_x: None,
+                target_y: None,
+                win32_configured: false,
+            },
         }
     }
 
@@ -110,6 +124,7 @@ impl MacroForgeApp {
                 }
                 EngineEvent::PlaybackStateChanged(play) => {
                     self.is_playing = play;
+                    self.overlay.is_visible = play;
                     if play {
                         self.status_message = match self.lang {
                             Language::Fr => {
@@ -136,6 +151,11 @@ impl MacroForgeApp {
                     self.toolbar.total_actions = action.total;
                     self.toolbar.action_detail =
                         format!("{} ({})", action.action_type, action.detail);
+
+                    self.overlay.current_action_idx = action.index;
+                    self.overlay.total_actions = action.total;
+                    self.overlay.action_type_label = action.action_type;
+                    self.overlay.action_detail = action.detail;
                 }
             }
         }
@@ -276,7 +296,10 @@ impl eframe::App for MacroForgeApp {
             }
         }
 
-        // 2. En-tête supérieur (Header & Quick Actions)
+        // 3. Overlay transparent click-through (HUD temps réel pendant la lecture)
+        self.overlay.show(ctx, self.is_playing);
+
+        // 4. En-tête supérieur (Header & Quick Actions)
         egui::TopBottomPanel::top("header_panel")
             .frame(theme::header_frame())
             .show(ctx, |ui| {
