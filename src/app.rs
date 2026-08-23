@@ -47,6 +47,7 @@ impl MacroForgeApp {
     pub fn new(cc: &eframe::CreationContext<'_>, rx_events: Receiver<EngineEvent>) -> Self {
         // Appliquer le thème Glassmorphism et la typographie au contexte egui
         theme::apply_theme(&cc.egui_ctx);
+        macro_core::set_egui_ctx(cc.egui_ctx.clone());
 
         let settings = crate::ui::i18n::AppSettings::load();
         let initial_loop = macro_core::get_loop_playback() || settings.loop_playback;
@@ -247,6 +248,28 @@ impl MacroForgeApp {
 impl eframe::App for MacroForgeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_from_events();
+
+        // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F4: Stop Playback)
+        if !self.action_modal.is_listening_key {
+            if ctx.input(|i| i.key_pressed(egui::Key::F8)) {
+                if self.is_recording {
+                    macro_core::stop_recording();
+                } else {
+                    macro_core::start_recording();
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::F9)) {
+                if self.is_recording {
+                    macro_core::stop_recording();
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
+                macro_core::stop_playback();
+                if self.is_recording {
+                    macro_core::stop_recording();
+                }
+            }
+        }
 
         // 1. Modales d'ajout/édition et de configuration d'arrêt
         if let Some((target, action)) = self.action_modal.show(ctx, self.lang) {
@@ -1067,6 +1090,12 @@ impl eframe::App for MacroForgeApp {
                                 }
                             }
                         });
+
+                    // Nettoyer l'état de glisser-déposer si le pointeur est relâché
+                    if ctx.input(|i| i.pointer.any_released()) {
+                        let dnd_payload_id = egui::Id::new("timeline_dnd_dragged_idx");
+                        ui.data_mut(|d| d.remove_temp::<usize>(dnd_payload_id));
+                    }
 
                     // Réinitialiser le curseur de défilement ciblé
                     self.scroll_target_index = None;

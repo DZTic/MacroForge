@@ -273,23 +273,25 @@ impl<'a> Widget for GlassButton<'a> {
             // Rendu du fond du bouton
             ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
-            // Position du texte principal
-            let text_pos = Pos2::new(
-                rect.min.x + padding.x,
-                rect.center().y - galley.size().y * 0.5,
-            );
-            ui.painter().galley(text_pos, galley, text_color);
-
-            // Rendu du raccourci clavier sans AUCUN chevauchement
             if let Some(sc_g) = shortcut_galley {
+                // Centrer harmonieusement l'ensemble [Texte + Espace + Badge] dans le bouton
+                let spacing = 8.0;
                 let sc_rect_height = (sc_g.size().y + 4.0).max(18.0);
+                let content_w = galley.size().x + spacing + shortcut_box_width;
+                let start_x = rect.center().x - content_w * 0.5;
+
+                // Rendu du badge de raccourci clavier
                 let sc_rect = Rect::from_min_size(
                     Pos2::new(
-                        rect.max.x - padding.x - shortcut_box_width,
+                        start_x + galley.size().x + spacing,
                         rect.center().y - sc_rect_height * 0.5,
                     ),
                     Vec2::new(shortcut_box_width, sc_rect_height),
                 );
+
+                // Position du texte principal
+                let text_pos = Pos2::new(start_x, rect.center().y - galley.size().y * 0.5);
+                ui.painter().galley(text_pos, galley, text_color);
 
                 // Fond capsule du raccourci
                 ui.painter().rect(
@@ -300,10 +302,17 @@ impl<'a> Widget for GlassButton<'a> {
                 );
 
                 let sc_pos = Pos2::new(
-                    sc_rect.min.x + 5.0,
+                    sc_rect.center().x - sc_g.size().x * 0.5,
                     sc_rect.center().y - sc_g.size().y * 0.5,
                 );
                 ui.painter().galley(sc_pos, sc_g, colors::TEXT_WHITE);
+            } else {
+                // Bouton standard : centrage parfait horizontal et vertical
+                let text_pos = Pos2::new(
+                    rect.center().x - galley.size().x * 0.5,
+                    rect.center().y - galley.size().y * 0.5,
+                );
+                ui.painter().galley(text_pos, galley, text_color);
             }
         }
 

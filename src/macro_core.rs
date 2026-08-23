@@ -305,6 +305,7 @@ const FAILED_IMAGE_DATA: &[u8] = include_bytes!("../failed.PNG");
 lazy_static::lazy_static! {
     pub static ref MACRO_STATE: Mutex<MacroState> = Mutex::new(MacroState::new());
     pub static ref EVENT_SENDER: Mutex<Option<Sender<EngineEvent>>> = Mutex::new(None);
+    pub static ref EGUI_CTX: Mutex<Option<eframe::egui::Context>> = Mutex::new(None);
     pub static ref IMAGE_CACHE: Mutex<HashMap<String, Arc<image::RgbaImage>>> = Mutex::new(HashMap::new());
 }
 
@@ -323,10 +324,73 @@ pub fn set_event_sender(sender: Sender<EngineEvent>) {
     *EVENT_SENDER.lock().unwrap() = Some(sender);
 }
 
+pub fn set_egui_ctx(ctx: eframe::egui::Context) {
+    *EGUI_CTX.lock().unwrap() = Some(ctx);
+}
+
 fn notify_event(event: EngineEvent) {
     if let Some(ref sender) = *EVENT_SENDER.lock().unwrap() {
         let _ = sender.send(event);
     }
+    if let Some(ref ctx) = *EGUI_CTX.lock().unwrap() {
+        ctx.request_repaint();
+    }
+}
+
+/// Démarrer un écouteur global de raccourcis Win32 (RegisterHotKey)
+/// Assure la réactivité des touches F8, F9, F4 partout sous Windows
+#[cfg(windows)]
+pub fn start_global_hotkey_listener() {
+    use winapi::um::winuser::{
+        DispatchMessageW, GetMessageW, RegisterHotKey, TranslateMessage, MSG, MOD_NOREPEAT,
+        WM_HOTKEY,
+    };
+
+    thread::spawn(|| unsafe {
+        // ID 1: F8 (VK_F8 = 0x77) -> Toggle Enregistrement
+        // ID 2: F9 (VK_F9 = 0x78) -> Arrêt Enregistrement
+        // ID 3: F4 (VK_F4 = 0x73) -> Arrêt d'urgence Relecture / Enregistrement
+        let _ = RegisterHotKey(std::ptr::null_mut(), 1, MOD_NOREPEAT as u32, 0x77);
+        let _ = RegisterHotKey(std::ptr::null_mut(), 2, MOD_NOREPEAT as u32, 0x78);
+        let _ = RegisterHotKey(std::ptr::null_mut(), 3, MOD_NOREPEAT as u32, 0x73);
+
+        let mut msg: MSG = std::mem::zeroed();
+        while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+            if msg.message == WM_HOTKEY {
+                match msg.wParam {
+                    1 => {
+                        let is_rec = {
+                            let s = MACRO_STATE.lock().unwrap();
+                            s.is_recording
+                        };
+                        if !is_rec {
+                            start_recording();
+                        } else {
+                            stop_recording();
+                        }
+                    }
+                    2 => {
+                        stop_recording();
+                    }
+                    3 => {
+                        stop_playback();
+                        let was_rec = {
+                            let mut s = MACRO_STATE.lock().unwrap();
+                            let r = s.is_recording;
+                            s.is_recording = false;
+                            r
+                        };
+                        if was_rec {
+                            emit_recording_state(false);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    });
 }
 
 #[cfg(windows)]
@@ -552,6 +616,9 @@ fn rdev_key_to_name_and_scan(key: &RdevKey) -> (String, u16, bool) {
         RdevKey::F5 => 0x74,
         RdevKey::F6 => 0x75,
         RdevKey::F7 => 0x76,
+        RdevKey::F8 => 0x77,
+        RdevKey::F9 => 0x78,
+        RdevKey::F10 => 0x79,
         RdevKey::F11 => 0x7A,
         RdevKey::F12 => 0x7B,
         RdevKey::KeyA => 0x41,
@@ -1688,6 +1755,33 @@ mod tests {
         let deleted = delete_action(2);
         assert!(deleted.is_some());
         assert_eq!(get_actions_count(), 3);
+
+        // Drag and drop reorder test
+        clear_actions();
+        for i in 0..5 {
+            add_action(MacroAction {
+                action_type: ActionType::Wait(i * 100),
+                delay_ms: 0,
+            });
+        }
+
+        // Simuler glissement de #0 vers après #2 (target 3 -> actual 2)
+        let from = 0;
+        let to = 3;
+        let actual_to = if to > from { to - 1 } else { to };
+        assert!(move_action(from, actual_to));
+        let current = get_actions();
+        assert_eq!(current[0].action_type, ActionType::Wait(100));
+        assert_eq!(current[1].action_type, ActionType::Wait(200));
+        assert_eq!(current[2].action_type, ActionType::Wait(0)); // Déplacé ici
+
+        // Simuler glissement de #4 vers avant #0 (target 0 -> actual 0)
+        let from = 4;
+        let to = 0;
+        let actual_to = if to > from { to - 1 } else { to };
+        assert!(move_action(from, actual_to));
+        let current = get_actions();
+        assert_eq!(current[0].action_type, ActionType::Wait(400)); // Placé en tête
 
         clear_actions();
         assert_eq!(get_actions_count(), 0);

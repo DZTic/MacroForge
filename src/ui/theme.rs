@@ -43,23 +43,34 @@ pub mod colors {
     pub const TEXT_WHITE: Color32 = Color32::from_rgb(255, 255, 255);
 }
 
-/// Configure les polices système Windows (Segoe UI, Segoe UI Emoji, Consolas) pour un rendu net
+const INTER_FONT_DATA: &[u8] = include_bytes!("../../assets/fonts/Inter-Variable.ttf");
+
+/// Configure les polices modernes (Inter, Cascadia Code, Segoe UI Emoji) pour un rendu net et élégant
 pub fn configure_fonts(ctx: &Context) {
     let mut fonts = egui::FontDefinitions::default();
 
+    // 1. Inter (Police moderne embarquée pour l'ensemble de l'interface)
+    fonts.font_data.insert(
+        "inter".to_owned(),
+        egui::FontData::from_static(INTER_FONT_DATA),
+    );
+    if let Some(family) = fonts.families.get_mut(&FontFamily::Proportional) {
+        family.insert(0, "inter".to_owned());
+    }
+
     #[cfg(windows)]
     {
-        // 1. Segoe UI (Police système principale pour interface propre)
+        // 2. Segoe UI en secours
         if let Ok(font_data) = std::fs::read("C:\\Windows\\Fonts\\segoeui.ttf") {
             fonts
                 .font_data
                 .insert("segoe_ui".to_owned(), egui::FontData::from_owned(font_data));
             if let Some(family) = fonts.families.get_mut(&FontFamily::Proportional) {
-                family.insert(0, "segoe_ui".to_owned());
+                family.push("segoe_ui".to_owned());
             }
         }
 
-        // 2. Segoe UI Emoji (Support complet des glyphes et symboles modernes)
+        // 3. Segoe UI Emoji (Support complet des glyphes et symboles modernes)
         if let Ok(emoji_data) = std::fs::read("C:\\Windows\\Fonts\\seguiemj.ttf") {
             fonts.font_data.insert(
                 "segoe_emoji".to_owned(),
@@ -73,7 +84,7 @@ pub fn configure_fonts(ctx: &Context) {
             }
         }
 
-        // 3. Segoe UI Symbol (Symboles universels)
+        // 4. Segoe UI Symbol (Symboles universels)
         if let Ok(symbol_data) = std::fs::read("C:\\Windows\\Fonts\\seguisym.ttf") {
             fonts.font_data.insert(
                 "segoe_symbol".to_owned(),
@@ -84,8 +95,25 @@ pub fn configure_fonts(ctx: &Context) {
             }
         }
 
-        // 4. Consolas pour la typographie Monospace (Coordonnées, délais, VK codes)
-        if let Ok(mono_data) = std::fs::read("C:\\Windows\\Fonts\\consola.ttf") {
+        // 5. Cascadia Code / Cascadia Mono pour la typographie Monospace (Coordonnées, délais, VK codes)
+        let cascadia_path = if std::path::Path::new("C:\\Windows\\Fonts\\CascadiaMono.ttf").exists() {
+            Some("C:\\Windows\\Fonts\\CascadiaMono.ttf")
+        } else if std::path::Path::new("C:\\Windows\\Fonts\\CascadiaCode.ttf").exists() {
+            Some("C:\\Windows\\Fonts\\CascadiaCode.ttf")
+        } else {
+            None
+        };
+
+        if let Some(path) = cascadia_path {
+            if let Ok(mono_data) = std::fs::read(path) {
+                fonts
+                    .font_data
+                    .insert("cascadia".to_owned(), egui::FontData::from_owned(mono_data));
+                if let Some(family) = fonts.families.get_mut(&FontFamily::Monospace) {
+                    family.insert(0, "cascadia".to_owned());
+                }
+            }
+        } else if let Ok(mono_data) = std::fs::read("C:\\Windows\\Fonts\\consola.ttf") {
             fonts
                 .font_data
                 .insert("consolas".to_owned(), egui::FontData::from_owned(mono_data));
