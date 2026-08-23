@@ -64,7 +64,7 @@ impl FloatingToolbar {
                 let dark_glass_frame = Frame::none()
                     .fill(Color32::from_rgba_premultiplied(16, 20, 28, 240))
                     .stroke(Stroke::new(
-                        1.0,
+                        1.0_f32,
                         Color32::from_rgba_premultiplied(70, 85, 120, 180),
                     ))
                     .rounding(Rounding::same(12.0))

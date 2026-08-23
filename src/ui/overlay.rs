@@ -61,7 +61,7 @@ impl TransparentOverlay {
                 let hud_frame = Frame::none()
                     .fill(Color32::from_rgba_premultiplied(12, 16, 24, 230))
                     .stroke(Stroke::new(
-                        1.5,
+                        1.5_f32,
                         Color32::from_rgba_premultiplied(59, 130, 246, 220),
                     ))
                     .rounding(Rounding::same(10.0))
