@@ -269,6 +269,12 @@ pub struct MacroState {
     pub stop_image_timeout: u64,
 }
 
+impl Default for MacroState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MacroState {
     pub fn new() -> Self {
         Self {
@@ -597,7 +603,7 @@ fn rdev_key_to_name_and_scan(key: &RdevKey) -> (String, u16, bool) {
         RdevKey::Unknown(sc) => {
             #[cfg(windows)]
             unsafe {
-                MapVirtualKeyW(*sc as u32, MAPVK_VSC_TO_VK_EX) as u16
+                MapVirtualKeyW(*sc, MAPVK_VSC_TO_VK_EX) as u16
             }
             #[cfg(not(windows))]
             {
@@ -958,7 +964,7 @@ pub fn play_macro() {
                                                         let (sr, sg, sb) = (
                                                             screen_raw[monitor_pixel_idx + 2],
                                                             screen_raw[monitor_pixel_idx + 1],
-                                                            screen_raw[monitor_pixel_idx + 0],
+                                                            screen_raw[monitor_pixel_idx],
                                                         );
 
                                                         if !pixels_match(
@@ -982,7 +988,7 @@ pub fn play_macro() {
                                                         let (smr, smg, smb) = (
                                                             screen_raw[s_mid_idx + 2],
                                                             screen_raw[s_mid_idx + 1],
-                                                            screen_raw[s_mid_idx + 0],
+                                                            screen_raw[s_mid_idx],
                                                         );
                                                         if !pixels_match(
                                                             smr,
@@ -1006,7 +1012,7 @@ pub fn play_macro() {
                                                         let (slr, slg, slb) = (
                                                             screen_raw[s_last_idx + 2],
                                                             screen_raw[s_last_idx + 1],
-                                                            screen_raw[s_last_idx + 0],
+                                                            screen_raw[s_last_idx],
                                                         );
                                                         if !pixels_match(
                                                             slr,
@@ -1032,7 +1038,7 @@ pub fn play_macro() {
                                                                 let (cur_r, cur_g, cur_b) = (
                                                                     screen_raw[s_idx + 2],
                                                                     screen_raw[s_idx + 1],
-                                                                    screen_raw[s_idx + 0],
+                                                                    screen_raw[s_idx],
                                                                 );
                                                                 if !pixels_match(
                                                                     cur_r,
@@ -1270,7 +1276,7 @@ fn check_image_present(path: &str) -> bool {
                     let (sr, sg, sb) = (
                         screen_raw[monitor_pixel_idx + 2],
                         screen_raw[monitor_pixel_idx + 1],
-                        screen_raw[monitor_pixel_idx + 0],
+                        screen_raw[monitor_pixel_idx],
                     );
 
                     if !pixels_match(
@@ -1292,7 +1298,7 @@ fn check_image_present(path: &str) -> bool {
                     let (smr, smg, smb) = (
                         screen_raw[s_mid_idx + 2],
                         screen_raw[s_mid_idx + 1],
-                        screen_raw[s_mid_idx + 0],
+                        screen_raw[s_mid_idx],
                     );
                     if !pixels_match(
                         smr,
@@ -1313,7 +1319,7 @@ fn check_image_present(path: &str) -> bool {
                     let (slr, slg, slb) = (
                         screen_raw[s_last_idx + 2],
                         screen_raw[s_last_idx + 1],
-                        screen_raw[s_last_idx + 0],
+                        screen_raw[s_last_idx],
                     );
                     if pixels_match(
                         slr,
@@ -1382,11 +1388,11 @@ pub fn handle_rdev_event(event: Event) {
             let (name, vk, is_ext) = rdev_key_to_name_and_scan(key);
             if vk == 0 {
                 None
-            } else if state.key_press_times.contains_key(&vk) {
-                None
-            } else {
-                state.key_press_times.insert(vk, Instant::now());
+            } else if let std::collections::hash_map::Entry::Vacant(e) = state.key_press_times.entry(vk) {
+                e.insert(Instant::now());
                 Some(ActionType::KeyPress(name, vk, is_ext))
+            } else {
+                None
             }
         }
         EventType::KeyRelease(key) => {
