@@ -64,9 +64,17 @@ impl StopImageConfigModal {
                         ui.add_space(8.0);
 
                         ui.horizontal(|ui| {
-                            ui.label(lang.stop_image_path_label());
+                            ui.label(
+                                egui::RichText::new(lang.stop_image_path_label())
+                                    .color(colors::TEXT_PRIMARY)
+                                    .size(13.0),
+                            );
                             ui.text_edit_singleline(&mut self.path);
-                            if ui.button(lang.browse_file_btn()).clicked() {
+                            let browse_btn = GlassButton::new(lang.browse_file_btn())
+                                .icon("📂")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(browse_btn).clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter(
                                         "Images (*.png, *.jpg, *.bmp)",
@@ -85,11 +93,23 @@ impl StopImageConfigModal {
 
                         // Presets images intégrées
                         ui.horizontal(|ui| {
-                            ui.label(lang.embedded_images_label());
-                            if ui.small_button("🎯 extreme.png").clicked() {
+                            ui.label(
+                                egui::RichText::new(lang.embedded_images_label())
+                                    .color(colors::TEXT_SECONDARY)
+                                    .size(12.5),
+                            );
+                            let extreme_btn = GlassButton::new("extreme.png")
+                                .icon("🎯")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(extreme_btn).clicked() {
                                 self.path = "embedded://extreme.png".to_string();
                             }
-                            if ui.small_button("❌ failed.PNG").clicked() {
+                            let failed_btn = GlassButton::new("failed.PNG")
+                                .icon("❌")
+                                .compact(true)
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(failed_btn).clicked() {
                                 self.path = "embedded://failed.PNG".to_string();
                             }
                         });
@@ -97,7 +117,11 @@ impl StopImageConfigModal {
                         ui.add_space(8.0);
 
                         ui.horizontal(|ui| {
-                            ui.label(lang.timeout_label());
+                            ui.label(
+                                egui::RichText::new(lang.timeout_label())
+                                    .color(colors::TEXT_PRIMARY)
+                                    .size(13.0),
+                            );
                             ui.add(
                                 DragValue::new(&mut self.timeout_ms)
                                     .range(100..=60000)
@@ -105,9 +129,13 @@ impl StopImageConfigModal {
                                     .suffix(" ms"),
                             );
 
-                            let timeout_presets = [1000, 2000, 5000, 10000];
-                            for t in timeout_presets {
-                                if ui.small_button(format!("{}s", t / 1000)).clicked() {
+                            let timeout_presets =
+                                [(1000, "1s"), (2000, "2s"), (5000, "5s"), (10000, "10s")];
+                            for &(t, lbl) in &timeout_presets {
+                                let t_btn = GlassButton::new(lbl)
+                                    .compact(true)
+                                    .variant(ButtonVariant::Secondary);
+                                if ui.add(t_btn).clicked() {
                                     self.timeout_ms = t;
                                 }
                             }

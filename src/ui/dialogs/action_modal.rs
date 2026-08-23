@@ -285,7 +285,11 @@ impl ActionEditorModal {
 
                         // Champ délai universel avec présélections rapides
                         ui.horizontal(|ui| {
-                            ui.label(lang.delay_label());
+                            ui.label(
+                                egui::RichText::new(lang.delay_label())
+                                    .color(colors::TEXT_PRIMARY)
+                                    .size(13.0),
+                            );
                             ui.add(
                                 DragValue::new(&mut self.delay_ms)
                                     .range(0..=60000)
@@ -293,9 +297,19 @@ impl ActionEditorModal {
                                     .suffix(" ms"),
                             );
 
-                            let quick_delays = [0, 5, 10, 25, 50, 100];
-                            for d in quick_delays {
-                                if ui.small_button(format!("{}ms", d)).clicked() {
+                            let quick_delays = [
+                                (0, "0ms"),
+                                (5, "5ms"),
+                                (10, "10ms"),
+                                (25, "25ms"),
+                                (50, "50ms"),
+                                (100, "100ms"),
+                            ];
+                            for &(d, lbl) in &quick_delays {
+                                let d_btn = GlassButton::new(lbl)
+                                    .compact(true)
+                                    .variant(ButtonVariant::Secondary);
+                                if ui.add(d_btn).clicked() {
                                     self.delay_ms = d;
                                 }
                             }
@@ -336,7 +350,11 @@ impl ActionEditorModal {
 
     fn render_keyboard_fields(&mut self, ui: &mut Ui, lang: Language) {
         ui.horizontal(|ui| {
-            ui.label(lang.event_type_label());
+            ui.label(
+                egui::RichText::new(lang.event_type_label())
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
             ui.radio_value(&mut self.is_key_press, true, lang.action_key_press());
             ui.radio_value(&mut self.is_key_press, false, lang.action_key_release());
         });
@@ -368,14 +386,22 @@ impl ActionEditorModal {
         ui.add_space(6.0);
 
         ui.horizontal(|ui| {
-            ui.label(lang.key_label());
+            ui.label(
+                egui::RichText::new(lang.key_label())
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
             ui.text_edit_singleline(&mut self.key_name);
         });
 
         ui.add_space(4.0);
 
         ui.horizontal(|ui| {
-            ui.label(lang.vk_code_label());
+            ui.label(
+                egui::RichText::new(lang.vk_code_label())
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
             let mut vk_u32 = self.vk_code as u32;
             if ui
                 .add(
@@ -388,7 +414,12 @@ impl ActionEditorModal {
             {
                 self.vk_code = vk_u32 as u16;
             }
-            ui.label(format!("(Hex: {:#04X})", self.vk_code));
+            ui.label(
+                egui::RichText::new(format!("(Hex: {:#04X})", self.vk_code))
+                    .color(colors::TEXT_MUTED)
+                    .monospace()
+                    .size(12.0),
+            );
         });
 
         ui.add_space(4.0);
@@ -398,7 +429,11 @@ impl ActionEditorModal {
 
     fn render_mouse_fields(&mut self, ui: &mut Ui, lang: Language) {
         ui.horizontal(|ui| {
-            ui.label(lang.mouse_action_type());
+            ui.label(
+                egui::RichText::new(lang.mouse_action_type())
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
             egui::ComboBox::from_id_salt("mouse_sub_type_combo")
                 .selected_text(match self.mouse_sub_type {
                     0 => lang.action_mouse_press(),
@@ -420,7 +455,11 @@ impl ActionEditorModal {
 
         if self.mouse_sub_type == 0 || self.mouse_sub_type == 1 {
             ui.horizontal(|ui| {
-                ui.label(lang.mouse_btn_label());
+                ui.label(
+                    egui::RichText::new(lang.mouse_btn_label())
+                        .color(colors::TEXT_PRIMARY)
+                        .size(13.0),
+                );
                 egui::ComboBox::from_id_salt("mouse_btn_combo")
                     .selected_text(match self.mouse_button {
                         1 => lang.mouse_btn_left(),
@@ -449,13 +488,21 @@ impl ActionEditorModal {
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                ui.label("X :");
+                ui.label(
+                    egui::RichText::new("X :")
+                        .color(colors::TEXT_PRIMARY)
+                        .strong(),
+                );
                 ui.add(
                     DragValue::new(&mut self.mouse_x)
                         .range(0.0..=10000.0)
                         .speed(1.0),
                 );
-                ui.label("Y :");
+                ui.label(
+                    egui::RichText::new("Y :")
+                        .color(colors::TEXT_PRIMARY)
+                        .strong(),
+                );
                 ui.add(
                     DragValue::new(&mut self.mouse_y)
                         .range(0.0..=10000.0)
@@ -464,13 +511,21 @@ impl ActionEditorModal {
             });
         } else if self.mouse_sub_type == 3 {
             ui.horizontal(|ui| {
-                ui.label("ΔX :");
+                ui.label(
+                    egui::RichText::new("ΔX :")
+                        .color(colors::TEXT_PRIMARY)
+                        .strong(),
+                );
                 ui.add(
                     DragValue::new(&mut self.mouse_dx)
                         .range(-10000..=10000)
                         .speed(1.0),
                 );
-                ui.label("ΔY :");
+                ui.label(
+                    egui::RichText::new("ΔY :")
+                        .color(colors::TEXT_PRIMARY)
+                        .strong(),
+                );
                 ui.add(
                     DragValue::new(&mut self.mouse_dy)
                         .range(-10000..=10000)
@@ -479,13 +534,21 @@ impl ActionEditorModal {
             });
         } else {
             ui.horizontal(|ui| {
-                ui.label("ΔX :");
+                ui.label(
+                    egui::RichText::new("ΔX :")
+                        .color(colors::TEXT_PRIMARY)
+                        .strong(),
+                );
                 ui.add(
                     DragValue::new(&mut self.scroll_dx)
                         .range(-1000.0..=1000.0)
                         .speed(1.0),
                 );
-                ui.label("ΔY :");
+                ui.label(
+                    egui::RichText::new("ΔY :")
+                        .color(colors::TEXT_PRIMARY)
+                        .strong(),
+                );
                 ui.add(
                     DragValue::new(&mut self.scroll_dy)
                         .range(-1000.0..=1000.0)
@@ -512,7 +575,11 @@ impl ActionEditorModal {
 
     fn render_wait_fields(&mut self, ui: &mut Ui, lang: Language) {
         ui.horizontal(|ui| {
-            ui.label(lang.wait_duration_label());
+            ui.label(
+                egui::RichText::new(lang.wait_duration_label())
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
             ui.add(
                 DragValue::new(&mut self.wait_duration_ms)
                     .range(1..=600000)
@@ -524,10 +591,25 @@ impl ActionEditorModal {
         ui.add_space(6.0);
 
         ui.horizontal(|ui| {
-            let presets = [50, 100, 250, 500, 1000, 2000, 5000];
-            ui.label(lang.presets_label());
-            for p in presets {
-                if ui.small_button(format!("{}ms", p)).clicked() {
+            let presets = [
+                (50, "50ms"),
+                (100, "100ms"),
+                (250, "250ms"),
+                (500, "500ms"),
+                (1000, "1000ms"),
+                (2000, "2000ms"),
+                (5000, "5000ms"),
+            ];
+            ui.label(
+                egui::RichText::new(lang.presets_label())
+                    .color(colors::TEXT_SECONDARY)
+                    .size(12.5),
+            );
+            for &(p, lbl) in &presets {
+                let p_btn = GlassButton::new(lbl)
+                    .compact(true)
+                    .variant(ButtonVariant::Secondary);
+                if ui.add(p_btn).clicked() {
                     self.wait_duration_ms = p;
                 }
             }
@@ -536,9 +618,17 @@ impl ActionEditorModal {
 
     fn render_image_fields(&mut self, ui: &mut Ui, lang: Language) {
         ui.horizontal(|ui| {
-            ui.label(lang.stop_image_path_label());
+            ui.label(
+                egui::RichText::new(lang.stop_image_path_label())
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
             ui.text_edit_singleline(&mut self.image_path);
-            if ui.button(lang.browse_file_btn()).clicked() {
+            let browse_btn = GlassButton::new(lang.browse_file_btn())
+                .icon("📂")
+                .compact(true)
+                .variant(ButtonVariant::Secondary);
+            if ui.add(browse_btn).clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter(
                         "Images (*.png, *.jpg, *.bmp)",
@@ -557,11 +647,23 @@ impl ActionEditorModal {
 
         // Présélections d'images intégrées
         ui.horizontal(|ui| {
-            ui.label(lang.embedded_images_label());
-            if ui.small_button("🎯 extreme.png").clicked() {
+            ui.label(
+                egui::RichText::new(lang.embedded_images_label())
+                    .color(colors::TEXT_SECONDARY)
+                    .size(12.5),
+            );
+            let extreme_btn = GlassButton::new("extreme.png")
+                .icon("🎯")
+                .compact(true)
+                .variant(ButtonVariant::Secondary);
+            if ui.add(extreme_btn).clicked() {
                 self.image_path = "embedded://extreme.png".to_string();
             }
-            if ui.small_button("❌ failed.PNG").clicked() {
+            let failed_btn = GlassButton::new("failed.PNG")
+                .icon("❌")
+                .compact(true)
+                .variant(ButtonVariant::Secondary);
+            if ui.add(failed_btn).clicked() {
                 self.image_path = "embedded://failed.PNG".to_string();
             }
         });
@@ -569,7 +671,11 @@ impl ActionEditorModal {
         ui.add_space(6.0);
 
         ui.horizontal(|ui| {
-            ui.label(lang.timeout_label());
+            ui.label(
+                egui::RichText::new(lang.timeout_label())
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
             ui.add(
                 DragValue::new(&mut self.image_timeout_ms)
                     .range(100..=120000)
@@ -577,9 +683,12 @@ impl ActionEditorModal {
                     .suffix(" ms"),
             );
 
-            let timeout_presets = [1000, 2000, 5000, 10000];
-            for t in timeout_presets {
-                if ui.small_button(format!("{}s", t / 1000)).clicked() {
+            let timeout_presets = [(1000, "1s"), (2000, "2s"), (5000, "5s"), (10000, "10s")];
+            for &(t, lbl) in &timeout_presets {
+                let t_btn = GlassButton::new(lbl)
+                    .compact(true)
+                    .variant(ButtonVariant::Secondary);
+                if ui.add(t_btn).clicked() {
                     self.image_timeout_ms = t;
                 }
             }

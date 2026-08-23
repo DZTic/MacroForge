@@ -1,4 +1,6 @@
-use eframe::egui::{DragValue, Response, Ui, Widget};
+use crate::ui::theme::colors;
+use crate::ui::widgets::{ButtonVariant, GlassButton};
+use eframe::egui::{self, DragValue, Response, Ui, Widget};
 
 /// Champ de saisie numérique de précision avec curseur et boutons d'ajustement
 pub struct NumericInputWithSlider<'a, T> {
@@ -38,13 +40,20 @@ impl<'a> NumericInputWithSlider<'a, u64> {
 impl<'a> Widget for NumericInputWithSlider<'a, u64> {
     fn ui(self, ui: &mut Ui) -> Response {
         ui.horizontal(|ui| {
-            ui.label(self.label);
+            ui.label(
+                egui::RichText::new(self.label)
+                    .color(colors::TEXT_PRIMARY)
+                    .size(13.0),
+            );
 
             let min = *self.range.start();
             let max = *self.range.end();
 
             // Bouton de décrémentation rapide
-            if ui.small_button("➖").clicked() {
+            let dec_btn = GlassButton::new("➖")
+                .compact(true)
+                .variant(ButtonVariant::Secondary);
+            if ui.add(dec_btn).clicked() {
                 let step_val = self.step.unwrap_or(10.0) as u64;
                 *self.value = self.value.saturating_sub(step_val).max(min);
             }
@@ -61,7 +70,10 @@ impl<'a> Widget for NumericInputWithSlider<'a, u64> {
             let response = ui.add(drag);
 
             // Bouton d'incrémentation rapide
-            if ui.small_button("➕").clicked() {
+            let inc_btn = GlassButton::new("➕")
+                .compact(true)
+                .variant(ButtonVariant::Secondary);
+            if ui.add(inc_btn).clicked() {
                 let step_val = self.step.unwrap_or(10.0) as u64;
                 *self.value = (*self.value + step_val).min(max);
             }

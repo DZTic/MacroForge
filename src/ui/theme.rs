@@ -132,15 +132,25 @@ pub fn apply_theme(ctx: &Context) {
     // 1. Initialiser et appliquer les polices nettes
     configure_fonts(ctx);
 
-    // 2. Configurer les styles visuels Dark Glassmorphism
+    // 2. Appliquer les visuels et styles
+    apply_visuals(ctx);
+}
+
+/// Applique ou restaure les styles visuels Dark Glassmorphism (haute performance, appelable à chaque frame)
+pub fn apply_visuals(ctx: &Context) {
     let mut visuals = Visuals::dark();
+    visuals.dark_mode = true;
 
     // Couleurs de base de l'application (suppression totale du fond clair)
     visuals.panel_fill = colors::BG_APP;
     visuals.window_fill = colors::BG_PANEL;
     visuals.faint_bg_color = colors::BG_CARD;
     visuals.extreme_bg_color = colors::BG_INPUT;
+    visuals.code_bg_color = colors::BG_INPUT;
     visuals.override_text_color = Some(colors::TEXT_PRIMARY);
+    visuals.warn_fg_color = colors::ACCENT_WARNING_HOVER;
+    visuals.error_fg_color = colors::ACCENT_DANGER_HOVER;
+    visuals.hyperlink_color = colors::ACCENT_PRIMARY_HOVER;
 
     // Bordures et séparateurs
     visuals.window_stroke = Stroke::new(1.0_f32, colors::BORDER_CARD);
@@ -149,9 +159,9 @@ pub fn apply_theme(ctx: &Context) {
     visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.noninteractive.rounding = Rounding::same(8.0);
 
-    // Widgets inactifs
-    visuals.widgets.inactive.bg_fill = colors::BG_INPUT;
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
+    // Widgets inactifs (Boutons standard, TextEdit, DragValue)
+    visuals.widgets.inactive.bg_fill = colors::BG_CARD;
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER_CARD);
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.inactive.rounding = Rounding::same(6.0);
 
