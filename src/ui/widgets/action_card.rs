@@ -114,13 +114,21 @@ impl<'a> ActionCard<'a> {
             ),
         };
 
+        let dnd_payload_id = egui::Id::new("timeline_dnd_dragged_idx");
+        let is_being_dragged = ui.data(|d| d.get_temp::<usize>(dnd_payload_id)) == Some(self.index);
+        let maybe_dragged_idx = ui.data(|d| d.get_temp::<usize>(dnd_payload_id));
+
         let card_frame = Frame::none()
-            .fill(if self.selected {
+            .fill(if is_being_dragged {
+                Color32::from_rgba_premultiplied(40, 60, 95, 160)
+            } else if self.selected {
                 colors::BG_CARD_SELECTED
             } else {
                 colors::BG_CARD
             })
-            .stroke(if self.selected {
+            .stroke(if is_being_dragged {
+                Stroke::new(1.5_f32, colors::ACCENT_PRIMARY_HOVER)
+            } else if self.selected {
                 Stroke::new(1.5_f32, colors::ACCENT_PRIMARY)
             } else {
                 Stroke::new(1.0_f32, colors::BORDER_CARD)
@@ -131,23 +139,28 @@ impl<'a> ActionCard<'a> {
         let card_response = card_frame
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    // Poignée de Drag & Drop (⠿)
+                    // Poignée de Drag & Drop (⠿) avec curseur interactif
                     let handle_resp = ui.add(
                         egui::Label::new(
                             egui::RichText::new("⠿")
-                                .color(colors::TEXT_MUTED)
-                                .size(15.0),
+                                .color(if is_being_dragged {
+                                    colors::ACCENT_PRIMARY_HOVER
+                                } else {
+                                    colors::TEXT_MUTED
+                                })
+                                .size(16.0),
                         )
                         .sense(egui::Sense::drag()),
                     );
 
-                    let dnd_payload_id = egui::Id::new("timeline_dnd_dragged_idx");
                     if handle_resp.drag_started() {
                         ui.data_mut(|d| d.insert_temp(dnd_payload_id, self.index));
                     }
 
-                    if handle_resp.hovered() || handle_resp.dragged() {
+                    if handle_resp.hovered() {
                         ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Grab);
+                    } else if handle_resp.dragged() || is_being_dragged {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Grabbing);
                     }
 
                     ui.add_space(2.0);
@@ -278,43 +291,71 @@ impl<'a> ActionCard<'a> {
             })
             .response;
 
-        // Gestion du Drag & Drop : Ligne d'insertion visuelle et détection du drop
-        let dnd_payload_id = egui::Id::new("timeline_dnd_dragged_idx");
-        if let Some(dragged_idx) = ui.data(|d| d.get_temp::<usize>(dnd_payload_id)) {
-            if card_response.hovered() {
-                let is_top = ui
-                    .input(|i| i.pointer.hover_pos())
-                    .is_none_or(|pos| pos.y < card_response.rect.center().y);
+        // Gestion du Drag & Drop : Détection géométrique précise et retour visuel
+        if let Some(dragged_idx) = maybe_dragged_idx {
+            ui.ctx().request_repaint();
+
+            let pointer_pos = ui.input(|i| i.pointer.hover_pos().or(i.pointer.interact_pos()));
+            let is_over = pointer_pos.is_some_and(|pos| card_response.rect.contains(pos));
+
+            if is_over && dragged_idx != self.index {
+                let pos = pointer_pos.unwrap();
+                let is_top = pos.y < card_response.rect.center().y;
                 let line_y = if is_top {
-                    card_response.rect.top() - 1.5
+                    card_response.rect.top() - 2.0
                 } else {
-                    card_response.rect.bottom() + 1.5
+                    card_response.rect.bottom() + 2.0
                 };
 
-                // Ligne visuelle lumineuse
+                // Ligne visuelle lumineuse d'insertion
                 ui.painter().hline(
-                    card_response.rect.x_range(),
+                    (card_response.rect.min.x - 2.0)..=(card_response.rect.max.x + 2.0),
                     line_y,
-                    Stroke::new(2.5_f32, colors::ACCENT_PRIMARY_HOVER),
+                    Stroke::new(3.0_f32, colors::ACCENT_PRIMARY_HOVER),
                 );
 
-                // Pastille d'accroche visuelle
+                // Pastille d'accroche visuelle gauche
                 ui.painter().circle_filled(
-                    egui::pos2(card_response.rect.min.x + 4.0, line_y),
-                    3.5,
+                    egui::pos2(card_response.rect.min.x, line_y),
+                    4.0,
+                    colors::ACCENT_PRIMARY,
+                );
+
+                // Pastille d'accroche visuelle droite
+                ui.painter().circle_filled(
+                    egui::pos2(card_response.rect.max.x, line_y),
+                    4.0,
                     colors::ACCENT_PRIMARY,
                 );
 
                 if ui.input(|i| i.pointer.any_released()) {
                     let target_idx = if is_top { self.index } else { self.index + 1 };
-                    if dragged_idx != self.index && dragged_idx != target_idx {
-                        event = Some(ActionCardEvent::Reorder {
-                            from: dragged_idx,
-                            to: target_idx,
-                        });
-                    }
+                    event = Some(ActionCardEvent::Reorder {
+                        from: dragged_idx,
+                        to: target_idx,
+                    });
                     ui.data_mut(|d| d.remove_temp::<usize>(dnd_payload_id));
                 }
+            }
+
+            // Info-bulle flottante guidant le déplacement
+            if is_being_dragged && pointer_pos.is_some() {
+                egui::show_tooltip_at_pointer(
+                    ui.ctx(),
+                    ui.layer_id(),
+                    egui::Id::new("dnd_tooltip"),
+                    |ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "🔀 Déplacement Action #{:03} ({})",
+                                self.index + 1,
+                                type_label
+                            ))
+                            .color(colors::TEXT_PRIMARY)
+                            .size(12.0),
+                        );
+                    },
+                );
             }
         }
 

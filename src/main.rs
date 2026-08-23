@@ -27,6 +27,10 @@ fn main() -> eframe::Result<()> {
         }
     });
 
+    // 3. bis Démarrer l'écouteur global RegisterHotKey Win32 pour garantir la capture globale des touches F8, F9, F4
+    #[cfg(windows)]
+    macro_core::start_global_hotkey_listener();
+
     // 4. Configurer les options de fenêtre native
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
