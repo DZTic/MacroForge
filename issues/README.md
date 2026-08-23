@@ -18,7 +18,7 @@ Migrer l'intégralité de **MacroForge** d'une architecture hybride (Tauri v2 + 
 |---|---|:---:|:---:|:---:|
 | [**#2**](https://github.com/DZTic/MacroForge/issues/2) | Architecture Fondatrice & Setup Standalone (`egui`/`eframe`) | 📝 Ouverte | 🔴 Bloquant | [`ISSUE-01`](./ISSUE-01-architecture-fondatrice.md) |
 | [**#3**](https://github.com/DZTic/MacroForge/issues/3) | Thème & Design System Natif (Dark UI / Glassmorphism) | 📝 Ouverte | 🟠 Haute | [`ISSUE-02`](./ISSUE-02-theme-et-design-system-natif.md) |
-| [**#4**](https://github.com/DZTic/MacroForge/issues/4) | Vue Principale & Éditeur de Macro (Drag & Drop natif) | 📝 Ouverte | 🔴 Critique | [`ISSUE-03`](./ISSUE-03-vue-principale-editeur-macro.md) |
+| [**#4**](https://github.com/DZTic/MacroForge/issues/4) | Vue Principale & Éditeur de Macro (Drag & Drop natif) | ✅ Résolue | 🔴 Critique | [`ISSUE-03`](./ISSUE-03-vue-principale-editeur-macro.md) |
 | [**#5**](https://github.com/DZTic/MacroForge/issues/5) | Modales & Boîtes de Dialogue Natives (Clavier, Souris, Images, RFD) | 📝 Ouverte | 🟠 Haute | [`ISSUE-04`](./ISSUE-04-modales-et-dialogues-natifs.md) |
 | [**#6**](https://github.com/DZTic/MacroForge/issues/6) | Toolbar Flottante Native (Mini-contrôleur compact) | 📝 Ouverte | 🟠 Haute | [`ISSUE-05`](./ISSUE-05-toolbar-flottante-native.md) |
 | [**#7**](https://github.com/DZTic/MacroForge/issues/7) | Overlay Transparent Click-Through (HUD sans capture GDI) | 📝 Ouverte | 🟠 Haute | [`ISSUE-06`](./ISSUE-06-overlay-transparent-click-through.md) |
