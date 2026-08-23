@@ -96,11 +96,11 @@ impl FloatingToolbar {
                                 Color32::from_rgba_premultiplied(148, 163, 184, 150)
                             };
                             let center = handle_rect.center();
-                            for dx in [-3.0, 3.0] {
-                                for dy in [-6.0, 0.0, 6.0] {
+                            for dx in [-3.0_f32, 3.0_f32] {
+                                for dy in [-6.0_f32, 0.0_f32, 6.0_f32] {
                                     ui.painter().circle_filled(
                                         Pos2::new(center.x + dx, center.y + dy),
-                                        1.4,
+                                        1.4_f32,
                                         dot_color,
                                     );
                                 }
@@ -161,7 +161,7 @@ impl FloatingToolbar {
                                     1.0_f32,
                                     Color32::from_rgba_premultiplied(255, 255, 255, 18),
                                 ))
-                                .rounding(Rounding::same(6.0))
+                                .rounding(Rounding::same(6.0_f32))
                                 .inner_margin(Margin::symmetric(8.0, 3.0));
 
                             status_frame.show(ui, |ui| {
@@ -180,10 +180,10 @@ impl FloatingToolbar {
                                         ui.spacing_mut().item_spacing = egui::vec2(3.0, 0.0);
                                         ui.painter().circle_filled(
                                             Pos2::new(
-                                                ui.cursor().min.x + 3.0,
-                                                ui.cursor().center().y + 1.0,
+                                                ui.cursor().min.x + 3.0_f32,
+                                                ui.cursor().center().y + 1.0_f32,
                                             ),
-                                            3.0,
+                                            3.0_f32,
                                             Color32::from_rgb(239, 68, 68),
                                         );
                                         ui.add_space(8.0);
@@ -261,17 +261,17 @@ fn render_record_btn(
         if is_clicked {
             (
                 Color32::from_rgb(185, 28, 28),
-                Stroke::new(1.5, colors::ACCENT_DANGER_HOVER),
+                Stroke::new(1.5_f32, colors::ACCENT_DANGER_HOVER),
             )
         } else if is_hovered {
             (
                 Color32::from_rgb(220, 38, 38),
-                Stroke::new(1.5, colors::ACCENT_DANGER_HOVER),
+                Stroke::new(1.5_f32, colors::ACCENT_DANGER_HOVER),
             )
         } else {
             (
                 Color32::from_rgba_premultiplied(185, 28, 28, 230),
-                Stroke::new(1.5, colors::ACCENT_DANGER),
+                Stroke::new(1.5_f32, colors::ACCENT_DANGER),
             )
         }
     } else {
@@ -279,31 +279,31 @@ fn render_record_btn(
         if is_clicked {
             (
                 Color32::from_rgb(153, 27, 27),
-                Stroke::new(1.5, colors::ACCENT_DANGER),
+                Stroke::new(1.5_f32, colors::ACCENT_DANGER),
             )
         } else if is_hovered {
             (
                 Color32::from_rgba_premultiplied(185, 28, 28, 160),
-                Stroke::new(1.5, colors::ACCENT_DANGER_HOVER),
+                Stroke::new(1.5_f32, colors::ACCENT_DANGER_HOVER),
             )
         } else {
             (
                 Color32::from_rgba_premultiplied(127, 29, 29, 140),
-                Stroke::new(1.0, Color32::from_rgba_premultiplied(239, 68, 68, 180)),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(239, 68, 68, 180)),
             )
         }
     };
 
-    let rounding = Rounding::same(7.0);
+    let rounding = Rounding::same(7.0_f32);
     ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
     let center = rect.center();
     if is_recording {
         // Carré d'arrêt blanc (Stop record)
-        let sq_size = Vec2::splat(9.0);
+        let sq_size = Vec2::splat(9.0_f32);
         let sq_rect = Rect::from_center_size(center, sq_size);
         ui.painter()
-            .rect_filled(sq_rect, Rounding::same(1.5), Color32::WHITE);
+            .rect_filled(sq_rect, Rounding::same(1.5_f32), Color32::WHITE);
     } else {
         // Point rouge lumineux
         let dot_color = if is_hovered {
@@ -311,7 +311,7 @@ fn render_record_btn(
         } else {
             Color32::from_rgb(239, 68, 68)
         };
-        ui.painter().circle_filled(center, 4.5, dot_color);
+        ui.painter().circle_filled(center, 4.5_f32, dot_color);
     }
 
     resp.on_hover_text(tooltip)
@@ -333,17 +333,17 @@ fn render_play_btn(
         if is_clicked {
             (
                 Color32::from_rgb(180, 83, 9),
-                Stroke::new(1.5, colors::ACCENT_WARNING_HOVER),
+                Stroke::new(1.5_f32, colors::ACCENT_WARNING_HOVER),
             )
         } else if is_hovered {
             (
                 Color32::from_rgb(217, 119, 6),
-                Stroke::new(1.5, colors::ACCENT_WARNING_HOVER),
+                Stroke::new(1.5_f32, colors::ACCENT_WARNING_HOVER),
             )
         } else {
             (
                 Color32::from_rgba_premultiplied(180, 83, 9, 230),
-                Stroke::new(1.5, colors::ACCENT_WARNING),
+                Stroke::new(1.5_f32, colors::ACCENT_WARNING),
             )
         }
     } else {
@@ -351,37 +351,37 @@ fn render_play_btn(
         if is_clicked {
             (
                 Color32::from_rgb(4, 120, 87),
-                Stroke::new(1.5, colors::ACCENT_SUCCESS_HOVER),
+                Stroke::new(1.5_f32, colors::ACCENT_SUCCESS_HOVER),
             )
         } else if is_hovered {
             (
                 Color32::from_rgba_premultiplied(5, 150, 105, 180),
-                Stroke::new(1.5, colors::ACCENT_SUCCESS_HOVER),
+                Stroke::new(1.5_f32, colors::ACCENT_SUCCESS_HOVER),
             )
         } else {
             (
                 Color32::from_rgba_premultiplied(6, 95, 70, 160),
-                Stroke::new(1.0, Color32::from_rgba_premultiplied(16, 185, 129, 180)),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(16, 185, 129, 180)),
             )
         }
     };
 
-    let rounding = Rounding::same(7.0);
+    let rounding = Rounding::same(7.0_f32);
     ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
     let center = rect.center();
     if is_playing {
         // Carré d'arrêt blanc (Stop playback)
-        let sq_size = Vec2::splat(9.0);
+        let sq_size = Vec2::splat(9.0_f32);
         let sq_rect = Rect::from_center_size(center, sq_size);
         ui.painter()
-            .rect_filled(sq_rect, Rounding::same(1.5), Color32::WHITE);
+            .rect_filled(sq_rect, Rounding::same(1.5_f32), Color32::WHITE);
     } else {
         // Polygone triangle blanc centré
         let tri_points = vec![
-            Pos2::new(center.x - 3.5, center.y - 5.0),
-            Pos2::new(center.x + 5.0, center.y),
-            Pos2::new(center.x - 3.5, center.y + 5.0),
+            Pos2::new(center.x - 3.5_f32, center.y - 5.0_f32),
+            Pos2::new(center.x + 5.0_f32, center.y),
+            Pos2::new(center.x - 3.5_f32, center.y + 5.0_f32),
         ];
         ui.painter().add(egui::Shape::convex_polygon(
             tri_points,
@@ -415,19 +415,19 @@ fn render_window_btn(
             if is_clicked {
                 (
                     Color32::from_rgba_premultiplied(59, 130, 246, 70),
-                    Stroke::new(1.0, colors::ACCENT_PRIMARY),
+                    Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                     Color32::WHITE,
                 )
             } else if is_hovered {
                 (
                     Color32::from_rgba_premultiplied(255, 255, 255, 28),
-                    Stroke::new(1.0, colors::BORDER_HOVER),
+                    Stroke::new(1.0_f32, colors::BORDER_HOVER),
                     Color32::WHITE,
                 )
             } else {
                 (
                     Color32::from_rgba_premultiplied(255, 255, 255, 8),
-                    Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 16)),
+                    Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(255, 255, 255, 16)),
                     colors::TEXT_SECONDARY,
                 )
             }
@@ -436,59 +436,62 @@ fn render_window_btn(
             if is_clicked {
                 (
                     Color32::from_rgba_premultiplied(185, 28, 28, 220),
-                    Stroke::new(1.0, colors::ACCENT_DANGER_HOVER),
+                    Stroke::new(1.0_f32, colors::ACCENT_DANGER_HOVER),
                     Color32::WHITE,
                 )
             } else if is_hovered {
                 (
                     Color32::from_rgba_premultiplied(220, 38, 38, 160),
-                    Stroke::new(1.0, colors::ACCENT_DANGER),
+                    Stroke::new(1.0_f32, colors::ACCENT_DANGER),
                     Color32::WHITE,
                 )
             } else {
                 (
                     Color32::from_rgba_premultiplied(255, 255, 255, 8),
-                    Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 16)),
+                    Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(255, 255, 255, 16)),
                     colors::TEXT_MUTED,
                 )
             }
         }
     };
 
-    let rounding = Rounding::same(6.0);
+    let rounding = Rounding::same(6.0_f32);
     ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
     let center = rect.center();
     match btn_type {
         WindowBtnType::OpenEditor => {
             // Icône fenêtre vectorielle nette (deux rectangles imbriqués / fenêtre épurée)
-            let win_rect = Rect::from_center_size(center, Vec2::new(10.0, 9.0));
-            ui.painter()
-                .rect_stroke(win_rect, Rounding::same(1.5), Stroke::new(1.2, icon_color));
+            let win_rect = Rect::from_center_size(center, Vec2::new(10.0_f32, 9.0_f32));
+            ui.painter().rect_stroke(
+                win_rect,
+                Rounding::same(1.5_f32),
+                Stroke::new(1.2_f32, icon_color),
+            );
             ui.painter().line_segment(
                 [
-                    Pos2::new(win_rect.min.x, win_rect.min.y + 2.5),
-                    Pos2::new(win_rect.max.x, win_rect.min.y + 2.5),
+                    Pos2::new(win_rect.min.x, win_rect.min.y + 2.5_f32),
+                    Pos2::new(win_rect.max.x, win_rect.min.y + 2.5_f32),
                 ],
-                Stroke::new(1.2, icon_color),
+                Stroke::new(1.2_f32, icon_color),
             );
         }
         WindowBtnType::Close => {
             // Croix vectorielle ✕ parfaitement centrée
-            let s = 3.5;
+            let s = 3.5_f32;
             ui.painter().line_segment(
                 [
                     Pos2::new(center.x - s, center.y - s),
                     Pos2::new(center.x + s, center.y + s),
                 ],
-                Stroke::new(1.4, icon_color),
+                Stroke::new(1.4_f32, icon_color),
             );
             ui.painter().line_segment(
                 [
                     Pos2::new(center.x + s, center.y - s),
                     Pos2::new(center.x - s, center.y + s),
                 ],
-                Stroke::new(1.4, icon_color),
+                Stroke::new(1.4_f32, icon_color),
             );
         }
     }
