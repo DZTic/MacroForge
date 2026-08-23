@@ -289,6 +289,24 @@ pub fn modal_frame() -> Frame {
         })
 }
 
+/// Frame stylisée pour la toolbar flottante (Dark Glassmorphism moderne)
+pub fn toolbar_frame() -> Frame {
+    Frame::none()
+        .fill(Color32::from_rgba_premultiplied(15, 23, 42, 245))
+        .stroke(Stroke::new(
+            1.0_f32,
+            Color32::from_rgba_premultiplied(255, 255, 255, 25),
+        ))
+        .rounding(Rounding::same(12.0))
+        .inner_margin(Margin::symmetric(10.0, 7.0))
+        .shadow(Shadow {
+            offset: Vec2::new(0.0, 6.0),
+            blur: 18.0,
+            spread: 0.0,
+            color: Color32::from_black_alpha(160),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

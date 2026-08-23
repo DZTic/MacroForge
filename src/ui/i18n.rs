@@ -751,6 +751,63 @@ impl Language {
             Language::En => "Max detection timeout (ms):",
         }
     }
+
+    // --- Toolbar Flottante ---
+    pub fn toolbar_rec_start_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Démarrer l'enregistrement (F8)",
+            Language::En => "Start recording (F8)",
+        }
+    }
+
+    pub fn toolbar_rec_stop_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Arrêter l'enregistrement (F9)",
+            Language::En => "Stop recording (F9)",
+        }
+    }
+
+    pub fn toolbar_play_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Rejouer la macro (F4)",
+            Language::En => "Play macro (F4)",
+        }
+    }
+
+    pub fn toolbar_stop_playback_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Arrêt d'urgence (F4)",
+            Language::En => "Emergency stop (F4)",
+        }
+    }
+
+    pub fn toolbar_open_editor_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Ouvrir l'éditeur principal",
+            Language::En => "Open main editor",
+        }
+    }
+
+    pub fn toolbar_close_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Fermer la barre flottante",
+            Language::En => "Close floating toolbar",
+        }
+    }
+
+    pub fn toolbar_drag_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Glisser pour déplacer",
+            Language::En => "Drag to move",
+        }
+    }
+
+    pub fn toolbar_actions_count(&self, count: usize) -> String {
+        match self {
+            Language::Fr => format!("{} act.", count),
+            Language::En => format!("{} act.", count),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -252,20 +252,13 @@ impl eframe::App for MacroForgeApp {
         // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F4: Stop Playback)
         if !self.action_modal.is_listening_key {
             if ctx.input(|i| i.key_pressed(egui::Key::F8)) {
-                if self.is_recording {
-                    macro_core::stop_recording();
-                } else {
-                    macro_core::start_recording();
-                }
+                macro_core::toggle_recording();
             }
             if ctx.input(|i| i.key_pressed(egui::Key::F9)) && self.is_recording {
                 macro_core::stop_recording();
             }
             if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
-                macro_core::stop_playback();
-                if self.is_recording {
-                    macro_core::stop_recording();
-                }
+                macro_core::emergency_stop();
             }
         }
 
@@ -307,22 +300,22 @@ impl eframe::App for MacroForgeApp {
         {
             crate::ui::ToolbarAction::None => {}
             crate::ui::ToolbarAction::ToggleRecord => {
-                if self.is_recording {
-                    macro_core::stop_recording();
-                } else {
-                    macro_core::start_recording();
-                }
+                macro_core::toggle_recording();
             }
             crate::ui::ToolbarAction::TogglePlay => {
                 macro_core::play_macro();
             }
             crate::ui::ToolbarAction::EmergencyStop => {
-                macro_core::stop_playback();
+                macro_core::emergency_stop();
             }
             crate::ui::ToolbarAction::OpenMainWindow => {
                 ctx.send_viewport_cmd_to(
                     egui::ViewportId::ROOT,
                     egui::ViewportCommand::Visible(true),
+                );
+                ctx.send_viewport_cmd_to(
+                    egui::ViewportId::ROOT,
+                    egui::ViewportCommand::Minimized(false),
                 );
                 ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
             }
@@ -588,7 +581,7 @@ impl eframe::App for MacroForgeApp {
                                 .on_hover_text("Démarrer l'enregistrement global des entrées (F8)")
                                 .clicked()
                             {
-                                macro_core::start_recording();
+                                macro_core::toggle_recording();
                             }
                         } else {
                             let btn = GlassButton::new(self.lang.stop_btn())
@@ -627,7 +620,7 @@ impl eframe::App for MacroForgeApp {
                                 .on_hover_text("Arrêter immédiatement la relecture (F4)")
                                 .clicked()
                             {
-                                macro_core::stop_playback();
+                                macro_core::emergency_stop();
                             }
                         }
 
@@ -756,7 +749,7 @@ impl eframe::App for MacroForgeApp {
                                     .compact(true)
                                     .variant(ButtonVariant::Danger);
                                 if ui.add(btn).clicked() {
-                                    macro_core::start_recording();
+                                    macro_core::toggle_recording();
                                 }
                             } else {
                                 let btn = GlassButton::new(self.lang.stop_btn())
@@ -785,7 +778,7 @@ impl eframe::App for MacroForgeApp {
                                     .compact(true)
                                     .variant(ButtonVariant::Warning);
                                 if ui.add(btn).clicked() {
-                                    macro_core::stop_playback();
+                                    macro_core::emergency_stop();
                                 }
                             }
 
