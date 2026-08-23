@@ -2,7 +2,7 @@ use crate::macro_core::{ActionType, MacroAction};
 use crate::ui::i18n::Language;
 use crate::ui::theme::colors;
 use crate::ui::widgets::{ButtonVariant, GlassButton};
-use eframe::egui::{self, DragValue, Frame, Margin, Rounding, Stroke, Ui, Vec2};
+use eframe::egui::{self, DragValue, Frame, Key, Margin, Rounding, Stroke, Ui, Vec2};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionModalTab {
@@ -29,6 +29,7 @@ pub struct ActionEditorModal {
     pub vk_code: u16,
     pub is_extended: bool,
     pub is_key_press: bool,
+    pub is_listening_key: bool,
 
     // Mouse fields
     pub mouse_sub_type: usize, // 0: Press, 1: Release, 2: Move, 3: MoveRel, 4: Scroll
@@ -66,6 +67,7 @@ impl ActionEditorModal {
             vk_code: 0x41,
             is_extended: false,
             is_key_press: true,
+            is_listening_key: false,
 
             mouse_sub_type: 0,
             mouse_button: 1,
@@ -87,12 +89,14 @@ impl ActionEditorModal {
         self.is_open = true;
         self.target = ActionModalTarget::New;
         self.current_tab = default_tab;
+        self.is_listening_key = false;
     }
 
     pub fn open_for_edit(&mut self, index: usize, action: &MacroAction) {
         self.is_open = true;
         self.target = ActionModalTarget::Edit(index);
         self.delay_ms = action.delay_ms;
+        self.is_listening_key = false;
 
         match &action.action_type {
             ActionType::KeyPress(name, vk, ext) => {
@@ -190,6 +194,30 @@ impl ActionEditorModal {
             return None;
         }
 
+        // Gestion de l'écoute interactive de touche clavier
+        if self.is_listening_key {
+            ctx.input(|i| {
+                for event in &i.events {
+                    if let egui::Event::Key {
+                        key,
+                        pressed: true,
+                        repeat: false,
+                        ..
+                    } = event
+                    {
+                        if *key == Key::Escape {
+                            self.is_listening_key = false;
+                        } else if let Some((name, vk, ext)) = egui_key_to_vk(*key) {
+                            self.key_name = name.to_string();
+                            self.vk_code = vk;
+                            self.is_extended = ext;
+                            self.is_listening_key = false;
+                        }
+                    }
+                }
+            });
+        }
+
         let mut confirmed_action = None;
         let mut should_close = false;
 
@@ -201,7 +229,7 @@ impl ActionEditorModal {
         egui::Window::new(title)
             .collapsible(false)
             .resizable(false)
-            .default_size(Vec2::new(460.0, 380.0))
+            .default_size(Vec2::new(480.0, 420.0))
             .anchor(egui::Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.add_space(4.0);
@@ -227,6 +255,7 @@ impl ActionEditorModal {
                                 });
                         if ui.add(btn).clicked() {
                             self.current_tab = tab;
+                            self.is_listening_key = false;
                         }
                     }
                 });
@@ -253,15 +282,22 @@ impl ActionEditorModal {
                         ui.separator();
                         ui.add_space(6.0);
 
-                        // Champ délai universel
+                        // Champ délai universel avec présélections rapides
                         ui.horizontal(|ui| {
                             ui.label(lang.delay_label());
                             ui.add(
                                 DragValue::new(&mut self.delay_ms)
                                     .range(0..=60000)
-                                    .speed(10.0)
+                                    .speed(5.0)
                                     .suffix(" ms"),
                             );
+
+                            let quick_delays = [0, 5, 10, 25, 50, 100];
+                            for d in quick_delays {
+                                if ui.small_button(format!("{}ms", d)).clicked() {
+                                    self.delay_ms = d;
+                                }
+                            }
                         });
                     });
 
@@ -291,6 +327,7 @@ impl ActionEditorModal {
 
         if should_close {
             self.is_open = false;
+            self.is_listening_key = false;
         }
 
         confirmed_action
@@ -298,12 +335,36 @@ impl ActionEditorModal {
 
     fn render_keyboard_fields(&mut self, ui: &mut Ui, lang: Language) {
         ui.horizontal(|ui| {
-            ui.label("Événement :");
+            ui.label(lang.event_type_label());
             ui.radio_value(&mut self.is_key_press, true, lang.action_key_press());
             ui.radio_value(&mut self.is_key_press, false, lang.action_key_release());
         });
 
-        ui.add_space(4.0);
+        ui.add_space(6.0);
+
+        // Bouton de capture interactive
+        let capture_text = if self.is_listening_key {
+            lang.key_listening_prompt()
+        } else {
+            lang.capture_key_btn()
+        };
+        let capture_btn = GlassButton::new(capture_text)
+            .icon(if self.is_listening_key {
+                "🔴"
+            } else {
+                "🎯"
+            })
+            .variant(if self.is_listening_key {
+                ButtonVariant::Danger
+            } else {
+                ButtonVariant::Primary
+            });
+
+        if ui.add(capture_btn).clicked() {
+            self.is_listening_key = !self.is_listening_key;
+        }
+
+        ui.add_space(6.0);
 
         ui.horizontal(|ui| {
             ui.label(lang.key_label());
@@ -331,7 +392,7 @@ impl ActionEditorModal {
 
         ui.add_space(4.0);
 
-        ui.checkbox(&mut self.is_extended, "Touche étendue (Extended Key)");
+        ui.checkbox(&mut self.is_extended, lang.extended_key_label());
     }
 
     fn render_mouse_fields(&mut self, ui: &mut Ui, lang: Language) {
@@ -372,11 +433,21 @@ impl ActionEditorModal {
                         ui.selectable_value(&mut self.mouse_button, 3, lang.mouse_btn_middle());
                     });
             });
+            ui.add_space(4.0);
         }
 
         if self.mouse_sub_type <= 2 {
+            // Bouton pour capturer la position actuelle du curseur avec GetCursorPos
+            let cap_pos_btn = GlassButton::new(lang.capture_cursor_pos_btn())
+                .icon("🎯")
+                .variant(ButtonVariant::Secondary);
+            if ui.add(cap_pos_btn).clicked() {
+                self.capture_current_cursor();
+            }
+
+            ui.add_space(4.0);
+
             ui.horizontal(|ui| {
-                ui.label("Coordonnées absolues :");
                 ui.label("X :");
                 ui.add(
                     DragValue::new(&mut self.mouse_x)
@@ -392,7 +463,6 @@ impl ActionEditorModal {
             });
         } else if self.mouse_sub_type == 3 {
             ui.horizontal(|ui| {
-                ui.label("Deltas relatifs (FPS) :");
                 ui.label("ΔX :");
                 ui.add(
                     DragValue::new(&mut self.mouse_dx)
@@ -408,7 +478,6 @@ impl ActionEditorModal {
             });
         } else {
             ui.horizontal(|ui| {
-                ui.label("Défilement molette :");
                 ui.label("ΔX :");
                 ui.add(
                     DragValue::new(&mut self.scroll_dx)
@@ -425,9 +494,24 @@ impl ActionEditorModal {
         }
     }
 
-    fn render_wait_fields(&mut self, ui: &mut Ui, _lang: Language) {
+    pub fn capture_current_cursor(&mut self) {
+        #[cfg(windows)]
+        {
+            use winapi::shared::windef::POINT;
+            use winapi::um::winuser::GetCursorPos;
+            let mut pt = POINT { x: 0, y: 0 };
+            unsafe {
+                if GetCursorPos(&mut pt) != 0 {
+                    self.mouse_x = pt.x as f64;
+                    self.mouse_y = pt.y as f64;
+                }
+            }
+        }
+    }
+
+    fn render_wait_fields(&mut self, ui: &mut Ui, lang: Language) {
         ui.horizontal(|ui| {
-            ui.label("Durée de la pause :");
+            ui.label(lang.wait_duration_label());
             ui.add(
                 DragValue::new(&mut self.wait_duration_ms)
                     .range(1..=600000)
@@ -440,7 +524,7 @@ impl ActionEditorModal {
 
         ui.horizontal(|ui| {
             let presets = [50, 100, 250, 500, 1000, 2000, 5000];
-            ui.label("Préréglages :");
+            ui.label(lang.presets_label());
             for p in presets {
                 if ui.small_button(format!("{}ms", p)).clicked() {
                     self.wait_duration_ms = p;
@@ -455,7 +539,10 @@ impl ActionEditorModal {
             ui.text_edit_singleline(&mut self.image_path);
             if ui.button(lang.browse_file_btn()).clicked() {
                 if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Images", &["png", "jpg", "jpeg", "bmp"])
+                    .add_filter(
+                        "Images (*.png, *.jpg, *.bmp)",
+                        &["png", "jpg", "jpeg", "bmp"],
+                    )
                     .pick_file()
                 {
                     if let Some(s) = path.to_str() {
@@ -465,7 +552,20 @@ impl ActionEditorModal {
             }
         });
 
-        ui.add_space(4.0);
+        ui.add_space(6.0);
+
+        // Présélections d'images intégrées
+        ui.horizontal(|ui| {
+            ui.label(lang.embedded_images_label());
+            if ui.small_button("🎯 extreme.png").clicked() {
+                self.image_path = "embedded://extreme.png".to_string();
+            }
+            if ui.small_button("❌ failed.PNG").clicked() {
+                self.image_path = "embedded://failed.PNG".to_string();
+            }
+        });
+
+        ui.add_space(6.0);
 
         ui.horizontal(|ui| {
             ui.label(lang.timeout_label());
@@ -475,7 +575,88 @@ impl ActionEditorModal {
                     .speed(100.0)
                     .suffix(" ms"),
             );
+
+            let timeout_presets = [1000, 2000, 5000, 10000];
+            for t in timeout_presets {
+                if ui.small_button(format!("{}s", t / 1000)).clicked() {
+                    self.image_timeout_ms = t;
+                }
+            }
         });
+    }
+}
+
+/// Convertit un egui::Key en (Nom de la touche, Code VK Windows, Touche étendue)
+pub fn egui_key_to_vk(key: Key) -> Option<(&'static str, u16, bool)> {
+    match key {
+        Key::A => Some(("A", 0x41, false)),
+        Key::B => Some(("B", 0x42, false)),
+        Key::C => Some(("C", 0x43, false)),
+        Key::D => Some(("D", 0x44, false)),
+        Key::E => Some(("E", 0x45, false)),
+        Key::F => Some(("F", 0x46, false)),
+        Key::G => Some(("G", 0x47, false)),
+        Key::H => Some(("H", 0x48, false)),
+        Key::I => Some(("I", 0x49, false)),
+        Key::J => Some(("J", 0x4A, false)),
+        Key::K => Some(("K", 0x4B, false)),
+        Key::L => Some(("L", 0x4C, false)),
+        Key::M => Some(("M", 0x4D, false)),
+        Key::N => Some(("N", 0x4E, false)),
+        Key::O => Some(("O", 0x4F, false)),
+        Key::P => Some(("P", 0x50, false)),
+        Key::Q => Some(("Q", 0x51, false)),
+        Key::R => Some(("R", 0x52, false)),
+        Key::S => Some(("S", 0x53, false)),
+        Key::T => Some(("T", 0x54, false)),
+        Key::U => Some(("U", 0x55, false)),
+        Key::V => Some(("V", 0x56, false)),
+        Key::W => Some(("W", 0x57, false)),
+        Key::X => Some(("X", 0x58, false)),
+        Key::Y => Some(("Y", 0x59, false)),
+        Key::Z => Some(("Z", 0x5A, false)),
+
+        Key::Num0 => Some(("0", 0x30, false)),
+        Key::Num1 => Some(("1", 0x31, false)),
+        Key::Num2 => Some(("2", 0x32, false)),
+        Key::Num3 => Some(("3", 0x33, false)),
+        Key::Num4 => Some(("4", 0x34, false)),
+        Key::Num5 => Some(("5", 0x35, false)),
+        Key::Num6 => Some(("6", 0x36, false)),
+        Key::Num7 => Some(("7", 0x37, false)),
+        Key::Num8 => Some(("8", 0x38, false)),
+        Key::Num9 => Some(("9", 0x39, false)),
+
+        Key::F1 => Some(("F1", 0x70, false)),
+        Key::F2 => Some(("F2", 0x71, false)),
+        Key::F3 => Some(("F3", 0x72, false)),
+        Key::F4 => Some(("F4", 0x73, false)),
+        Key::F5 => Some(("F5", 0x74, false)),
+        Key::F6 => Some(("F6", 0x75, false)),
+        Key::F7 => Some(("F7", 0x76, false)),
+        Key::F8 => Some(("F8", 0x77, false)),
+        Key::F9 => Some(("F9", 0x78, false)),
+        Key::F10 => Some(("F10", 0x79, false)),
+        Key::F11 => Some(("F11", 0x7A, false)),
+        Key::F12 => Some(("F12", 0x7B, false)),
+
+        Key::Space => Some(("Space", 0x20, false)),
+        Key::Enter => Some(("Enter", 0x0D, false)),
+        Key::Backspace => Some(("Backspace", 0x08, false)),
+        Key::Tab => Some(("Tab", 0x09, false)),
+        Key::Escape => Some(("Escape", 0x1B, false)),
+        Key::Insert => Some(("Insert", 0x2D, true)),
+        Key::Delete => Some(("Delete", 0x2E, true)),
+        Key::Home => Some(("Home", 0x24, true)),
+        Key::End => Some(("End", 0x23, true)),
+        Key::PageUp => Some(("PageUp", 0x21, true)),
+        Key::PageDown => Some(("PageDown", 0x22, true)),
+        Key::ArrowLeft => Some(("ArrowLeft", 0x25, true)),
+        Key::ArrowUp => Some(("ArrowUp", 0x26, true)),
+        Key::ArrowRight => Some(("ArrowRight", 0x27, true)),
+        Key::ArrowDown => Some(("ArrowDown", 0x28, true)),
+
+        _ => None,
     }
 }
 
@@ -489,6 +670,7 @@ mod tests {
         assert!(!modal.is_open);
         assert_eq!(modal.target, ActionModalTarget::New);
         assert_eq!(modal.current_tab, ActionModalTab::Keyboard);
+        assert!(!modal.is_listening_key);
     }
 
     #[test]
@@ -523,5 +705,18 @@ mod tests {
         assert_eq!(modal.current_tab, ActionModalTab::Wait);
         assert_eq!(modal.wait_duration_ms, 500);
         assert_eq!(modal.delay_ms, 25);
+    }
+
+    #[test]
+    fn test_egui_key_mapping() {
+        let (name, vk, ext) = egui_key_to_vk(Key::F5).unwrap();
+        assert_eq!(name, "F5");
+        assert_eq!(vk, 0x74);
+        assert!(!ext);
+
+        let (name, vk, ext) = egui_key_to_vk(Key::ArrowDown).unwrap();
+        assert_eq!(name, "ArrowDown");
+        assert_eq!(vk, 0x28);
+        assert!(ext);
     }
 }
