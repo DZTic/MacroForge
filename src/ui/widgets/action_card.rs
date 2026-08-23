@@ -296,7 +296,7 @@ impl<'a> ActionCard<'a> {
             ui.ctx().request_repaint();
 
             let pointer_pos = ui.input(|i| i.pointer.hover_pos().or(i.pointer.interact_pos()));
-            let is_over = pointer_pos.map_or(false, |pos| card_response.rect.contains(pos));
+            let is_over = pointer_pos.is_some_and(|pos| card_response.rect.contains(pos));
 
             if is_over && dragged_idx != self.index {
                 let pos = pointer_pos.unwrap();

@@ -96,7 +96,8 @@ pub fn configure_fonts(ctx: &Context) {
         }
 
         // 5. Cascadia Code / Cascadia Mono pour la typographie Monospace (Coordonnées, délais, VK codes)
-        let cascadia_path = if std::path::Path::new("C:\\Windows\\Fonts\\CascadiaMono.ttf").exists() {
+        let cascadia_path = if std::path::Path::new("C:\\Windows\\Fonts\\CascadiaMono.ttf").exists()
+        {
             Some("C:\\Windows\\Fonts\\CascadiaMono.ttf")
         } else if std::path::Path::new("C:\\Windows\\Fonts\\CascadiaCode.ttf").exists() {
             Some("C:\\Windows\\Fonts\\CascadiaCode.ttf")

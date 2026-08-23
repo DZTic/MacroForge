@@ -342,7 +342,7 @@ fn notify_event(event: EngineEvent) {
 #[cfg(windows)]
 pub fn start_global_hotkey_listener() {
     use winapi::um::winuser::{
-        DispatchMessageW, GetMessageW, RegisterHotKey, TranslateMessage, MSG, MOD_NOREPEAT,
+        DispatchMessageW, GetMessageW, RegisterHotKey, TranslateMessage, MOD_NOREPEAT, MSG,
         WM_HOTKEY,
     };
 

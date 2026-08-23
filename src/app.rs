@@ -258,10 +258,8 @@ impl eframe::App for MacroForgeApp {
                     macro_core::start_recording();
                 }
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::F9)) {
-                if self.is_recording {
-                    macro_core::stop_recording();
-                }
+            if ctx.input(|i| i.key_pressed(egui::Key::F9)) && self.is_recording {
+                macro_core::stop_recording();
             }
             if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
                 macro_core::stop_playback();
