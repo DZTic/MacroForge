@@ -51,39 +51,39 @@ pub fn apply_theme(ctx: &Context) {
     visuals.extreme_bg_color = colors::BG_INPUT;
 
     // Bordures et séparateurs
-    visuals.window_stroke = Stroke::new(1.0, colors::BORDER_SUBTLE);
+    visuals.window_stroke = Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
     visuals.widgets.noninteractive.bg_fill = colors::BG_CARD;
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, colors::BORDER_SUBTLE);
-    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, colors::TEXT_SECONDARY);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_SECONDARY);
     visuals.widgets.noninteractive.rounding = Rounding::same(8.0);
 
     // Widgets inactifs
     visuals.widgets.inactive.bg_fill = Color32::from_rgba_premultiplied(30, 41, 59, 140);
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, colors::BORDER_SUBTLE);
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, colors::TEXT_PRIMARY);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.inactive.rounding = Rounding::same(8.0);
 
     // Widgets survolés (hovered)
     visuals.widgets.hovered.bg_fill = colors::BG_CARD_HOVER;
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, colors::BORDER_HOVER);
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, colors::TEXT_WHITE);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, colors::BORDER_HOVER);
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_WHITE);
     visuals.widgets.hovered.rounding = Rounding::same(8.0);
 
     // Widgets actifs/pressés
     visuals.widgets.active.bg_fill = colors::BG_CARD_ACTIVE;
-    visuals.widgets.active.bg_stroke = Stroke::new(1.5, colors::ACCENT_PRIMARY);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, colors::TEXT_WHITE);
+    visuals.widgets.active.bg_stroke = Stroke::new(1.5_f32, colors::ACCENT_PRIMARY);
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_WHITE);
     visuals.widgets.active.rounding = Rounding::same(8.0);
 
     // Widgets ouverts / déroulants
     visuals.widgets.open.bg_fill = colors::BG_CARD_HOVER;
-    visuals.widgets.open.bg_stroke = Stroke::new(1.0, colors::ACCENT_PRIMARY);
-    visuals.widgets.open.fg_stroke = Stroke::new(1.0, colors::TEXT_WHITE);
+    visuals.widgets.open.bg_stroke = Stroke::new(1.0_f32, colors::ACCENT_PRIMARY);
+    visuals.widgets.open.fg_stroke = Stroke::new(1.0_f32, colors::TEXT_WHITE);
     visuals.widgets.open.rounding = Rounding::same(8.0);
 
     // Sélection
     visuals.selection.bg_fill = Color32::from_rgba_premultiplied(59, 130, 246, 120);
-    visuals.selection.stroke = Stroke::new(1.0, colors::ACCENT_PRIMARY);
+    visuals.selection.stroke = Stroke::new(1.0_f32, colors::ACCENT_PRIMARY);
 
     // Ombres fenêtres et modales
     visuals.window_shadow = Shadow {
@@ -139,7 +139,7 @@ pub fn apply_theme(ctx: &Context) {
 pub fn glass_card_frame() -> Frame {
     Frame::none()
         .fill(colors::BG_CARD)
-        .stroke(Stroke::new(1.0, colors::BORDER_SUBTLE))
+        .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
         .rounding(Rounding::same(8.0))
         .inner_margin(Margin::symmetric(12.0, 8.0))
         .shadow(Shadow {
@@ -154,7 +154,7 @@ pub fn glass_card_frame() -> Frame {
 pub fn glass_panel_frame() -> Frame {
     Frame::none()
         .fill(colors::BG_PANEL)
-        .stroke(Stroke::new(1.0, colors::BORDER_SUBTLE))
+        .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
         .rounding(Rounding::same(10.0))
         .inner_margin(Margin::same(10.0))
 }
@@ -163,7 +163,7 @@ pub fn glass_panel_frame() -> Frame {
 pub fn header_frame() -> Frame {
     Frame::none()
         .fill(colors::BG_PANEL)
-        .stroke(Stroke::new(1.0, colors::BORDER_SUBTLE))
+        .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
         .inner_margin(Margin::symmetric(14.0, 10.0))
 }
 
@@ -171,7 +171,7 @@ pub fn header_frame() -> Frame {
 pub fn footer_frame() -> Frame {
     Frame::none()
         .fill(colors::BG_PANEL)
-        .stroke(Stroke::new(1.0, colors::BORDER_SUBTLE))
+        .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
         .inner_margin(Margin::symmetric(14.0, 10.0))
 }
 

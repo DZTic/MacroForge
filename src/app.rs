@@ -97,7 +97,10 @@ impl eframe::App for MacroForgeApp {
                     // Badge de version
                     let version_badge = Frame::none()
                         .fill(Color32::from_rgba_premultiplied(59, 130, 246, 30))
-                        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(59, 130, 246, 80)))
+                        .stroke(Stroke::new(
+                            1.0_f32,
+                            Color32::from_rgba_premultiplied(59, 130, 246, 80),
+                        ))
                         .rounding(Rounding::same(4.0))
                         .inner_margin(Margin::symmetric(6.0, 2.0));
 
@@ -309,7 +312,7 @@ impl eframe::App for MacroForgeApp {
                 // Badge de compteur d'actions
                 let count_badge = Frame::none()
                     .fill(colors::BG_CARD)
-                    .stroke(Stroke::new(1.0, colors::BORDER_SUBTLE))
+                    .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
                     .rounding(Rounding::same(12.0))
                     .inner_margin(Margin::symmetric(8.0, 2.0));
 

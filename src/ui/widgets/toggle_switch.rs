@@ -59,21 +59,24 @@ impl<'a> Widget for CustomToggleSwitch<'a> {
                 if is_hovered {
                     (
                         colors::ACCENT_PRIMARY_HOVER,
-                        Stroke::new(1.0, colors::ACCENT_PRIMARY),
+                        Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                     )
                 } else {
                     (
                         colors::ACCENT_PRIMARY,
-                        Stroke::new(1.0, Color32::from_rgb(29, 78, 216)),
+                        Stroke::new(1.0_f32, Color32::from_rgb(29, 78, 216)),
                     )
                 }
             } else if is_hovered {
                 (
                     colors::BG_CARD_HOVER,
-                    Stroke::new(1.0, colors::BORDER_HOVER),
+                    Stroke::new(1.0_f32, colors::BORDER_HOVER),
                 )
             } else {
-                (colors::BG_INPUT, Stroke::new(1.0, colors::BORDER_SUBTLE))
+                (
+                    colors::BG_INPUT,
+                    Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+                )
             };
 
             // Dessin du corps en pilule
