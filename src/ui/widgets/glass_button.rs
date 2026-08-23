@@ -1,0 +1,290 @@
+use crate::ui::theme::colors;
+use eframe::egui::{Color32, Pos2, Rect, Response, Rounding, Sense, Stroke, TextStyle, Ui, Vec2, Widget};
+
+/// Variantes de style pour les boutons Glassmorphism
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonVariant {
+    Primary,   // Accent bleu
+    Success,   // Accent vert émeraude (Play)
+    Danger,    // Accent rouge vibrant (Record / Arrêt)
+    Warning,   // Accent ambre (Pause / Attention)
+    Secondary, // Neutre / Slate (Ouvrir, Sauvegarder, Paramètres)
+    Ghost,     // Discret sans fond fixe
+}
+
+/// Bouton stylisé avec effet de verre dépoli, dégradé subtil et retour visuel au survol
+pub struct GlassButton<'a> {
+    text: &'a str,
+    icon: Option<&'a str>,
+    shortcut: Option<&'a str>,
+    variant: ButtonVariant,
+    min_size: Vec2,
+    selected: bool,
+    enabled: bool,
+}
+
+impl<'a> GlassButton<'a> {
+    pub fn new(text: &'a str) -> Self {
+        Self {
+            text,
+            icon: None,
+            shortcut: None,
+            variant: ButtonVariant::Secondary,
+            min_size: Vec2::new(0.0, 32.0),
+            selected: false,
+            enabled: true,
+        }
+    }
+
+    pub fn icon(mut self, icon: &'a str) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    pub fn shortcut(mut self, shortcut: &'a str) -> Self {
+        self.shortcut = Some(shortcut);
+        self
+    }
+
+    pub fn variant(mut self, variant: ButtonVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    pub fn min_size(mut self, min_size: Vec2) -> Self {
+        self.min_size = min_size;
+        self
+    }
+
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+}
+
+impl<'a> Widget for GlassButton<'a> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let padding = Vec2::new(12.0, 6.0);
+        let font_id = TextStyle::Button.resolve(ui.style());
+        let shortcut_font_id = TextStyle::Small.resolve(ui.style());
+
+        // Calcul de la taille du contenu
+        let mut text_width = 0.0;
+        let mut full_text = String::new();
+        if let Some(icon) = self.icon {
+            full_text.push_str(icon);
+            full_text.push(' ');
+        }
+        full_text.push_str(self.text);
+
+        let galley = ui.painter().layout_no_wrap(
+            full_text.clone(),
+            font_id.clone(),
+            colors::TEXT_PRIMARY,
+        );
+        text_width += galley.size().x;
+
+        let shortcut_galley = self.shortcut.map(|sc| {
+            ui.painter().layout_no_wrap(
+                sc.to_string(),
+                shortcut_font_id.clone(),
+                colors::TEXT_SECONDARY,
+            )
+        });
+
+        if let Some(ref sc_g) = shortcut_galley {
+            text_width += sc_g.size().x + 8.0;
+        }
+
+        let desired_size = Vec2::new(
+            (text_width + padding.x * 2.0).max(self.min_size.x),
+            (galley.size().y + padding.y * 2.0).max(self.min_size.y),
+        );
+
+        let (rect, response) = ui.allocate_exact_size(
+            desired_size,
+            if self.enabled { Sense::click() } else { Sense::hover() },
+        );
+
+        if ui.is_rect_visible(rect) {
+            let is_hovered = response.hovered() && self.enabled;
+            let is_clicked = response.is_pointer_button_down_on() && self.enabled;
+
+            // Déterminer les couleurs de fond et de bordure selon la variante et l'état
+            let (bg_fill, border_stroke, text_color) = match self.variant {
+                ButtonVariant::Primary => {
+                    if is_clicked || self.selected {
+                        (
+                            Color32::from_rgb(29, 78, 216),
+                            Stroke::new(1.5, colors::ACCENT_PRIMARY_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else if is_hovered {
+                        (
+                            Color32::from_rgb(37, 99, 235),
+                            Stroke::new(1.5, colors::ACCENT_PRIMARY_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else {
+                        (
+                            Color32::from_rgba_premultiplied(37, 99, 235, 200),
+                            Stroke::new(1.0, colors::ACCENT_PRIMARY),
+                            colors::TEXT_PRIMARY,
+                        )
+                    }
+                }
+                ButtonVariant::Success => {
+                    if is_clicked || self.selected {
+                        (
+                            Color32::from_rgb(4, 120, 87),
+                            Stroke::new(1.5, colors::ACCENT_SUCCESS_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else if is_hovered {
+                        (
+                            Color32::from_rgb(5, 150, 105),
+                            Stroke::new(1.5, colors::ACCENT_SUCCESS_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else {
+                        (
+                            Color32::from_rgba_premultiplied(16, 185, 129, 180),
+                            Stroke::new(1.0, colors::ACCENT_SUCCESS),
+                            colors::TEXT_WHITE,
+                        )
+                    }
+                }
+                ButtonVariant::Danger => {
+                    if is_clicked || self.selected {
+                        (
+                            Color32::from_rgb(185, 28, 28),
+                            Stroke::new(1.5, colors::ACCENT_DANGER_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else if is_hovered {
+                        (
+                            Color32::from_rgb(220, 38, 38),
+                            Stroke::new(1.5, colors::ACCENT_DANGER_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else {
+                        (
+                            Color32::from_rgba_premultiplied(239, 68, 68, 180),
+                            Stroke::new(1.0, colors::ACCENT_DANGER),
+                            colors::TEXT_WHITE,
+                        )
+                    }
+                }
+                ButtonVariant::Warning => {
+                    if is_clicked || self.selected {
+                        (
+                            Color32::from_rgb(180, 83, 9),
+                            Stroke::new(1.5, colors::ACCENT_WARNING_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else if is_hovered {
+                        (
+                            Color32::from_rgb(217, 119, 6),
+                            Stroke::new(1.5, colors::ACCENT_WARNING_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else {
+                        (
+                            Color32::from_rgba_premultiplied(245, 158, 11, 180),
+                            Stroke::new(1.0, colors::ACCENT_WARNING),
+                            colors::TEXT_WHITE,
+                        )
+                    }
+                }
+                ButtonVariant::Secondary => {
+                    if is_clicked || self.selected {
+                        (
+                            colors::BG_CARD_ACTIVE,
+                            Stroke::new(1.5, colors::ACCENT_PRIMARY),
+                            colors::TEXT_WHITE,
+                        )
+                    } else if is_hovered {
+                        (
+                            colors::BG_CARD_HOVER,
+                            Stroke::new(1.0, colors::BORDER_HOVER),
+                            colors::TEXT_WHITE,
+                        )
+                    } else {
+                        (
+                            colors::BG_CARD,
+                            Stroke::new(1.0, colors::BORDER_SUBTLE),
+                            colors::TEXT_PRIMARY,
+                        )
+                    }
+                }
+                ButtonVariant::Ghost => {
+                    if is_clicked || self.selected {
+                        (
+                            Color32::from_rgba_premultiplied(59, 130, 246, 60),
+                            Stroke::new(1.0, colors::ACCENT_PRIMARY),
+                            colors::TEXT_WHITE,
+                        )
+                    } else if is_hovered {
+                        (
+                            Color32::from_rgba_premultiplied(255, 255, 255, 20),
+                            Stroke::new(1.0, colors::BORDER_SUBTLE),
+                            colors::TEXT_WHITE,
+                        )
+                    } else {
+                        (
+                            Color32::TRANSPARENT,
+                            Stroke::NONE,
+                            colors::TEXT_SECONDARY,
+                        )
+                    }
+                }
+            };
+
+            let rounding = Rounding::same(6.0);
+
+            // Rendu de l'arrière-plan du bouton
+            ui.painter().rect(rect, rounding, bg_fill, border_stroke);
+
+            // Rendu du texte principal
+            let text_pos = Pos2::new(
+                rect.min.x + padding.x,
+                rect.center().y - galley.size().y * 0.5,
+            );
+            ui.painter().galley(text_pos, galley, text_color);
+
+            // Rendu du raccourci clavier si présent
+            if let Some(sc_g) = shortcut_galley {
+                let sc_rect_width = sc_g.size().x + 8.0;
+                let sc_rect_height = sc_g.size().y + 4.0;
+                let sc_rect = Rect::from_min_size(
+                    Pos2::new(
+                        rect.max.x - padding.x - sc_rect_width,
+                        rect.center().y - sc_rect_height * 0.5,
+                    ),
+                    Vec2::new(sc_rect_width, sc_rect_height),
+                );
+
+                // Fond de la touche de raccourci (style kbd)
+                ui.painter().rect(
+                    sc_rect,
+                    Rounding::same(4.0),
+                    Color32::from_rgba_premultiplied(0, 0, 0, 80),
+                    Stroke::new(1.0, Color32::from_white_alpha(30)),
+                );
+
+                let sc_pos = Pos2::new(
+                    sc_rect.min.x + 4.0,
+                    sc_rect.center().y - sc_g.size().y * 0.5,
+                );
+                ui.painter().galley(sc_pos, sc_g, colors::TEXT_SECONDARY);
+            }
+        }
+
+        response
+    }
+}

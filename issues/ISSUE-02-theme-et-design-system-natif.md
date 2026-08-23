@@ -1,6 +1,6 @@
 # 📌 Issue #02 : Thème & Design System Natif (Dark UI / Glassmorphism)
 
-- **Statut** : 📝 À faire
+- **Statut** : ✅ Terminé
 - **Priorité** : 🟠 Haute
 - **Composants** : UI Rust, egui Styles, Widgets, Icons
 - **Agent Référent** : `.agents/agents/frontend-ui.md`
@@ -43,6 +43,6 @@ Cette identité doit être transposée dans le moteur de rendu immédiat `egui` 
 ---
 
 ## ✅ Critères d'Acceptation
-- [ ] L'application native reproduit le rendu visuel Dark / Glassmorphism de la version actuelle.
-- [ ] Tous les contrôles ont des retours visuels interactifs (hover, click, active).
-- [ ] Le texte et les icônes sont nets, parfaitement alignés et lisibles sur toutes les résolutions DPI (support HiDPI Windows natif).
+- [x] L'application native reproduit le rendu visuel Dark / Glassmorphism de la version actuelle.
+- [x] Tous les contrôles ont des retours visuels interactifs (hover, click, active).
+- [x] Le texte et les icônes sont nets, parfaitement alignés et lisibles sur toutes les résolutions DPI (support HiDPI Windows natif).

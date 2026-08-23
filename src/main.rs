@@ -4,6 +4,7 @@
 pub mod app;
 pub mod events;
 pub mod macro_core;
+pub mod ui;
 
 use app::MacroForgeApp;
 use eframe::egui;
