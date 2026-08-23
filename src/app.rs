@@ -35,6 +35,9 @@ pub struct MacroForgeApp {
     // Modales & dialogues
     action_modal: ActionEditorModal,
     stop_image_modal: StopImageConfigModal,
+
+    // Toolbar flottante native
+    toolbar: crate::ui::FloatingToolbar,
 }
 
 impl MacroForgeApp {
@@ -50,6 +53,7 @@ impl MacroForgeApp {
 
         let lang = Language::Fr;
         let ready_msg = lang.ready_status().to_string();
+        let total_actions = initial_actions.len();
 
         Self {
             rx_events,
@@ -68,6 +72,13 @@ impl MacroForgeApp {
 
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
+
+            toolbar: crate::ui::FloatingToolbar {
+                is_visible: false,
+                current_action_idx: 0,
+                total_actions,
+                action_detail: String::new(),
+            },
         }
     }
 
@@ -121,6 +132,10 @@ impl MacroForgeApp {
                         action.index, action.total, action.action_type, action.detail
                     );
                     self.selected_action_index = Some(action.index.saturating_sub(1));
+                    self.toolbar.current_action_idx = action.index;
+                    self.toolbar.total_actions = action.total;
+                    self.toolbar.action_detail =
+                        format!("{} ({})", action.action_type, action.detail);
                 }
             }
         }
@@ -128,6 +143,7 @@ impl MacroForgeApp {
 
     fn refresh_actions(&mut self) {
         self.actions_cache = macro_core::get_actions();
+        self.toolbar.total_actions = self.actions_cache.len();
     }
 
     fn matches_filter(&self, action: &MacroAction) -> bool {
@@ -229,6 +245,37 @@ impl eframe::App for MacroForgeApp {
             };
         }
 
+        // 2. Toolbar flottante native (Multi-viewport)
+        match self
+            .toolbar
+            .show(ctx, self.is_recording, self.is_playing, self.lang)
+        {
+            crate::ui::ToolbarAction::None => {}
+            crate::ui::ToolbarAction::ToggleRecord => {
+                if self.is_recording {
+                    macro_core::stop_recording();
+                } else {
+                    macro_core::start_recording();
+                }
+            }
+            crate::ui::ToolbarAction::TogglePlay => {
+                macro_core::play_macro();
+            }
+            crate::ui::ToolbarAction::EmergencyStop => {
+                macro_core::stop_playback();
+            }
+            crate::ui::ToolbarAction::OpenMainWindow => {
+                ctx.send_viewport_cmd_to(
+                    egui::ViewportId::ROOT,
+                    egui::ViewportCommand::Visible(true),
+                );
+                ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+            }
+            crate::ui::ToolbarAction::CloseToolbar => {
+                self.toolbar.is_visible = false;
+            }
+        }
+
         // 2. En-tête supérieur (Header & Quick Actions)
         egui::TopBottomPanel::top("header_panel")
             .frame(theme::header_frame())
@@ -320,11 +367,29 @@ impl eframe::App for MacroForgeApp {
 
                         // Bouton Toolbar flottante
                         let toolbar_btn = GlassButton::new(self.lang.toolbar_window_btn())
-                            .variant(ButtonVariant::Ghost);
-                        if ui.add(toolbar_btn).on_hover_text("Ouvrir la Toolbar flottante compacte").clicked() {
-                            self.status_message = match self.lang {
-                                Language::Fr => "🗔 Toolbar flottante native initialisée.".to_string(),
-                                Language::En => "🗔 Native floating toolbar initialized.".to_string(),
+                            .selected(self.toolbar.is_visible)
+                            .variant(if self.toolbar.is_visible {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Ghost
+                            });
+                        if ui
+                            .add(toolbar_btn)
+                            .on_hover_text("Afficher/Masquer la Toolbar flottante compacte")
+                            .clicked()
+                        {
+                            self.toolbar.is_visible = !self.toolbar.is_visible;
+                            self.toolbar.total_actions = self.actions_cache.len();
+                            self.status_message = if self.toolbar.is_visible {
+                                match self.lang {
+                                    Language::Fr => "🗔 Toolbar flottante affichée.".to_string(),
+                                    Language::En => "🗔 Floating toolbar shown.".to_string(),
+                                }
+                            } else {
+                                match self.lang {
+                                    Language::Fr => "🗔 Toolbar flottante masquée.".to_string(),
+                                    Language::En => "🗔 Floating toolbar hidden.".to_string(),
+                                }
                             };
                         }
                     });
