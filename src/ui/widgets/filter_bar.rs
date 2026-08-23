@@ -1,9 +1,7 @@
 use crate::ui::i18n::Language;
 use crate::ui::theme::colors;
 use crate::ui::widgets::{ButtonVariant, CustomToggleSwitch, GlassButton};
-use eframe::egui::{
-    self, Color32, DragValue, Frame, Margin, Response, Rounding, Stroke, Ui, Widget,
-};
+use eframe::egui::{self, DragValue, Frame, Margin, Response, Rounding, Stroke, Ui, Widget};
 
 pub struct FilterBar<'a> {
     hide_mouse_moves: &'a mut bool,
@@ -40,13 +38,13 @@ impl<'a> FilterBar<'a> {
 impl<'a> Widget for FilterBar<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
         let avail_w = ui.available_width();
-        let is_compact = avail_w < 720.0;
+        let is_compact = avail_w < 740.0;
 
         let frame = Frame::none()
             .fill(colors::BG_PANEL)
-            .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
+            .stroke(Stroke::new(1.0_f32, colors::BORDER_CARD))
             .rounding(Rounding::same(8.0))
-            .inner_margin(Margin::symmetric(8.0, 5.0));
+            .inner_margin(Margin::symmetric(10.0, 6.0));
 
         frame
             .show(ui, |ui| {
@@ -62,28 +60,41 @@ impl<'a> Widget for FilterBar<'a> {
                         "Masquer les événements de déplacement continu de la souris pour simplifier la vue.",
                     );
 
-                    ui.add_space(6.0);
+                    ui.add_space(8.0);
                     ui.separator();
-                    ui.add_space(6.0);
+                    ui.add_space(8.0);
 
-                    // 2. Recherche textuelle
+                    // 2. Recherche textuelle avec icône
+                    ui.label(egui::RichText::new("🔍").color(colors::TEXT_MUTED).size(13.0));
                     let search_w = if is_compact { 110.0 } else { 160.0 };
                     ui.add(
                         egui::TextEdit::singleline(self.search_query)
-                            .hint_text(self.lang.filter_search_placeholder())
+                            .hint_text(
+                                egui::RichText::new(self.lang.filter_search_placeholder())
+                                    .color(colors::TEXT_MUTED),
+                            )
                             .desired_width(search_w),
                     );
 
-                    if !self.search_query.is_empty() && ui.small_button("✕").clicked() {
-                        self.search_query.clear();
+                    if !self.search_query.is_empty() {
+                        let clear_search_btn = GlassButton::new("✕")
+                            .compact(true)
+                            .variant(ButtonVariant::Ghost);
+                        if ui.add(clear_search_btn).clicked() {
+                            self.search_query.clear();
+                        }
                     }
 
-                    ui.add_space(6.0);
+                    ui.add_space(8.0);
                     ui.separator();
-                    ui.add_space(6.0);
+                    ui.add_space(8.0);
 
                     // 3. Saut direct "Aller à n°"
-                    ui.label(self.lang.jump_to_action_label());
+                    ui.label(
+                        egui::RichText::new(self.lang.jump_to_action_label())
+                            .color(colors::TEXT_SECONDARY)
+                            .size(12.5),
+                    );
                     let mut jump_val = *self.jump_index;
                     let drag_resp = ui.add(
                         DragValue::new(&mut jump_val)
@@ -104,10 +115,10 @@ impl<'a> Widget for FilterBar<'a> {
                     // 4. Badge Compteur d'actions aligné à droite
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let count_badge = Frame::none()
-                            .fill(Color32::from_rgba_premultiplied(15, 23, 42, 200))
-                            .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
-                            .rounding(Rounding::same(10.0))
-                            .inner_margin(Margin::symmetric(8.0, 2.5));
+                            .fill(colors::BG_INPUT)
+                            .stroke(Stroke::new(1.0_f32, colors::BORDER_CARD))
+                            .rounding(Rounding::same(8.0))
+                            .inner_margin(Margin::symmetric(9.0, 3.5));
 
                         count_badge.show(ui, |ui| {
                             ui.label(
@@ -116,11 +127,11 @@ impl<'a> Widget for FilterBar<'a> {
                                         .action_count_badge(self.visible_count, self.total_count),
                                 )
                                 .monospace()
-                                .size(11.0)
+                                .size(11.5)
                                 .color(if self.visible_count < self.total_count {
                                     colors::ACCENT_WARNING_HOVER
                                 } else {
-                                    colors::TEXT_SECONDARY
+                                    colors::TEXT_PRIMARY
                                 }),
                             );
                         });

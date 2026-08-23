@@ -881,144 +881,158 @@ impl eframe::App for MacroForgeApp {
             });
 
         // 4. Panneau central (Timeline & Actions Editor)
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add_space(2.0);
+        egui::CentralPanel::default()
+            .frame(theme::central_panel_frame())
+            .show(ctx, |ui| {
+                ui.add_space(2.0);
 
-            // En-tête de section Timeline & Actions
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(self.lang.timeline_heading())
-                        .heading()
-                        .color(colors::TEXT_PRIMARY)
-                        .strong(),
-                );
+                // En-tête de section Timeline & Actions
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(self.lang.timeline_heading())
+                            .heading()
+                            .color(colors::TEXT_PRIMARY)
+                            .strong(),
+                    );
 
-                // Bouton Rafraîchir
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let refresh_btn = GlassButton::new(self.lang.refresh_btn())
-                        .icon("🔄")
-                        .compact(true)
-                        .variant(ButtonVariant::Ghost);
-                    if ui
-                        .add(refresh_btn)
-                        .on_hover_text("Synchroniser la liste avec le moteur interne")
-                        .clicked()
-                    {
-                        self.refresh_actions();
-                    }
-                });
-            });
-
-            ui.add_space(4.0);
-
-            // Filtrage des actions
-            let total_count = self.actions_cache.len();
-            let filtered_indices: Vec<usize> = self
-                .actions_cache
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, act)| {
-                    if self.matches_filter(act) {
-                        Some(idx)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let visible_count = filtered_indices.len();
-
-            let mut jump_triggered = false;
-            let filter_bar = FilterBar::new(
-                &mut self.hide_mouse_moves,
-                &mut self.search_query,
-                &mut self.jump_index,
-                total_count,
-                visible_count,
-                self.lang,
-                &mut jump_triggered,
-            );
-            ui.add(filter_bar);
-
-            if jump_triggered && self.jump_index > 0 && self.jump_index <= total_count {
-                self.scroll_target_index = Some(self.jump_index - 1);
-                self.selected_action_index = Some(self.jump_index - 1);
-            }
-
-            ui.add_space(6.0);
-
-            if self.actions_cache.is_empty() {
-                // État vide élégant
-                ui.vertical_centered(|ui| {
-                    ui.add_space(50.0);
-
-                    let empty_card = theme::glass_card_frame();
-                    empty_card.show(ui, |ui| {
-                        ui.set_max_width(480.0);
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(12.0);
-                            ui.label(
-                                egui::RichText::new("⚡")
-                                    .size(38.0)
-                                    .color(colors::ACCENT_PRIMARY_HOVER),
-                            );
-                            ui.add_space(6.0);
-                            ui.label(
-                                egui::RichText::new(self.lang.empty_state_title())
-                                    .strong()
-                                    .size(16.0)
-                                    .color(colors::TEXT_PRIMARY),
-                            );
-                            ui.add_space(4.0);
-                            ui.label(
-                                egui::RichText::new(self.lang.empty_state_desc())
-                                    .color(colors::TEXT_SECONDARY)
-                                    .size(13.0),
-                            );
-                            ui.add_space(12.0);
-                        });
+                    // Bouton Rafraîchir
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let refresh_btn = GlassButton::new(self.lang.refresh_btn())
+                            .icon("🔄")
+                            .compact(true)
+                            .variant(ButtonVariant::Ghost);
+                        if ui
+                            .add(refresh_btn)
+                            .on_hover_text("Synchroniser la liste avec le moteur interne")
+                            .clicked()
+                        {
+                            self.refresh_actions();
+                        }
                     });
                 });
-            } else {
-                // Liste scrollable des ActionCards avec support Drag & Drop
-                let mut card_event_to_process = None;
-                let is_unfiltered = !self.hide_mouse_moves && self.search_query.trim().is_empty();
 
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .id_salt("timeline_scroll_area")
-                    .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
+                ui.add_space(6.0);
 
-                        if is_unfiltered {
-                            for (idx, action) in self.actions_cache.iter_mut().enumerate() {
-                                let card = ActionCard::new(idx, action)
-                                    .selected(self.selected_action_index == Some(idx))
-                                    .lang(self.lang)
-                                    .bounds(idx == 0, idx == total_count - 1);
-                                let (resp, ev) = card.show(ui);
-                                if let Some(target) = self.scroll_target_index {
-                                    if target == idx {
-                                        resp.scroll_to_me(Some(egui::Align::Center));
-                                    }
-                                }
-                                if let Some(e) = ev {
-                                    card_event_to_process = Some(e);
-                                }
-                            }
+                // Filtrage des actions
+                let total_count = self.actions_cache.len();
+                let filtered_indices: Vec<usize> = self
+                    .actions_cache
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, act)| {
+                        if self.matches_filter(act) {
+                            Some(idx)
                         } else {
-                            // Affichage de la vue filtrée
-                            for &original_idx in &filtered_indices {
-                                if let Some(action) = self.actions_cache.get(original_idx) {
-                                    let is_selected =
-                                        self.selected_action_index == Some(original_idx);
-                                    let card = ActionCard::new(original_idx, action)
-                                        .selected(is_selected)
-                                        .lang(self.lang)
-                                        .bounds(original_idx == 0, original_idx == total_count - 1);
+                            None
+                        }
+                    })
+                    .collect();
+                let visible_count = filtered_indices.len();
 
+                let mut jump_triggered = false;
+                let filter_bar = FilterBar::new(
+                    &mut self.hide_mouse_moves,
+                    &mut self.search_query,
+                    &mut self.jump_index,
+                    total_count,
+                    visible_count,
+                    self.lang,
+                    &mut jump_triggered,
+                );
+                ui.add(filter_bar);
+
+                if jump_triggered && self.jump_index > 0 && self.jump_index <= total_count {
+                    self.scroll_target_index = Some(self.jump_index - 1);
+                    self.selected_action_index = Some(self.jump_index - 1);
+                }
+
+                ui.add_space(8.0);
+
+                if self.actions_cache.is_empty() {
+                    // État vide élégant Dark Glassmorphism avec actions rapides
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(35.0);
+
+                        let empty_card = theme::glass_card_frame();
+                        empty_card.show(ui, |ui| {
+                            ui.set_max_width(520.0);
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(14.0);
+                                ui.label(
+                                    egui::RichText::new("⚡")
+                                        .size(44.0)
+                                        .color(colors::ACCENT_PRIMARY_HOVER),
+                                );
+                                ui.add_space(8.0);
+                                ui.label(
+                                    egui::RichText::new(self.lang.empty_state_title())
+                                        .strong()
+                                        .size(17.0)
+                                        .color(colors::TEXT_PRIMARY),
+                                );
+                                ui.add_space(6.0);
+                                ui.label(
+                                    egui::RichText::new(self.lang.empty_state_desc())
+                                        .color(colors::TEXT_SECONDARY)
+                                        .size(13.5),
+                                );
+                                ui.add_space(16.0);
+
+                                // Boutons d'action rapide pour démarrer immédiatement
+                                ui.horizontal(|ui| {
+                                    let rec_quick_btn =
+                                        GlassButton::new(if self.lang == Language::Fr {
+                                            "Enregistrer (F8)"
+                                        } else {
+                                            "Record (F8)"
+                                        })
+                                        .icon("🔴")
+                                        .variant(ButtonVariant::Danger);
+                                    if ui.add(rec_quick_btn).clicked() {
+                                        macro_core::start_recording();
+                                    }
+
+                                    ui.add_space(6.0);
+
+                                    let key_quick_btn = GlassButton::new(self.lang.quick_add_key())
+                                        .variant(ButtonVariant::Secondary);
+                                    if ui.add(key_quick_btn).clicked() {
+                                        self.action_modal.open_for_new(ActionModalTab::Keyboard);
+                                    }
+
+                                    let mouse_quick_btn =
+                                        GlassButton::new(self.lang.quick_add_mouse())
+                                            .variant(ButtonVariant::Secondary);
+                                    if ui.add(mouse_quick_btn).clicked() {
+                                        self.action_modal.open_for_new(ActionModalTab::Mouse);
+                                    }
+                                });
+
+                                ui.add_space(14.0);
+                            });
+                        });
+                    });
+                } else {
+                    // Liste scrollable des ActionCards avec support Drag & Drop
+                    let mut card_event_to_process = None;
+                    let is_unfiltered =
+                        !self.hide_mouse_moves && self.search_query.trim().is_empty();
+
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .id_salt("timeline_scroll_area")
+                        .show(ui, |ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
+
+                            if is_unfiltered {
+                                for (idx, action) in self.actions_cache.iter_mut().enumerate() {
+                                    let card = ActionCard::new(idx, action)
+                                        .selected(self.selected_action_index == Some(idx))
+                                        .lang(self.lang)
+                                        .bounds(idx == 0, idx == total_count - 1);
                                     let (resp, ev) = card.show(ui);
                                     if let Some(target) = self.scroll_target_index {
-                                        if target == original_idx {
+                                        if target == idx {
                                             resp.scroll_to_me(Some(egui::Align::Center));
                                         }
                                     }
@@ -1026,81 +1040,105 @@ impl eframe::App for MacroForgeApp {
                                         card_event_to_process = Some(e);
                                     }
                                 }
-                            }
-                        }
-                    });
+                            } else {
+                                // Affichage de la vue filtrée
+                                for &original_idx in &filtered_indices {
+                                    if let Some(action) = self.actions_cache.get(original_idx) {
+                                        let is_selected =
+                                            self.selected_action_index == Some(original_idx);
+                                        let card = ActionCard::new(original_idx, action)
+                                            .selected(is_selected)
+                                            .lang(self.lang)
+                                            .bounds(
+                                                original_idx == 0,
+                                                original_idx == total_count - 1,
+                                            );
 
-                // Réinitialiser le curseur de défilement ciblé
-                self.scroll_target_index = None;
+                                        let (resp, ev) = card.show(ui);
+                                        if let Some(target) = self.scroll_target_index {
+                                            if target == original_idx {
+                                                resp.scroll_to_me(Some(egui::Align::Center));
+                                            }
+                                        }
+                                        if let Some(e) = ev {
+                                            card_event_to_process = Some(e);
+                                        }
+                                    }
+                                }
+                            }
+                        });
 
-                // Traiter les événements déclenchés par les cartes
-                if let Some(event) = card_event_to_process {
-                    match event {
-                        ActionCardEvent::Edit(idx) => {
-                            if let Some(action) = self.actions_cache.get(idx) {
-                                self.action_modal.open_for_edit(idx, action);
+                    // Réinitialiser le curseur de défilement ciblé
+                    self.scroll_target_index = None;
+
+                    // Traiter les événements déclenchés par les cartes
+                    if let Some(event) = card_event_to_process {
+                        match event {
+                            ActionCardEvent::Edit(idx) => {
+                                if let Some(action) = self.actions_cache.get(idx) {
+                                    self.action_modal.open_for_edit(idx, action);
+                                }
                             }
-                        }
-                        ActionCardEvent::Duplicate(idx) => {
-                            macro_core::duplicate_action(idx);
-                            self.refresh_actions();
-                            self.status_message = match self.lang {
-                                Language::Fr => format!("📋 Action #{} dupliquée.", idx + 1),
-                                Language::En => format!("📋 Action #{} duplicated.", idx + 1),
-                            };
-                        }
-                        ActionCardEvent::Delete(idx) => {
-                            macro_core::delete_action(idx);
-                            self.refresh_actions();
-                            self.status_message = match self.lang {
-                                Language::Fr => format!("🗑️ Action #{} supprimée.", idx + 1),
-                                Language::En => format!("🗑️ Action #{} deleted.", idx + 1),
-                            };
-                        }
-                        ActionCardEvent::MoveUp(idx) => {
-                            if idx > 0 {
-                                macro_core::move_action(idx, idx - 1);
+                            ActionCardEvent::Duplicate(idx) => {
+                                macro_core::duplicate_action(idx);
                                 self.refresh_actions();
-                                self.selected_action_index = Some(idx - 1);
-                            }
-                        }
-                        ActionCardEvent::MoveDown(idx) => {
-                            if idx + 1 < self.actions_cache.len() {
-                                macro_core::move_action(idx, idx + 1);
-                                self.refresh_actions();
-                                self.selected_action_index = Some(idx + 1);
-                            }
-                        }
-                        ActionCardEvent::Reorder { from, to } => {
-                            let actual_to = if to > from { to.saturating_sub(1) } else { to };
-                            if actual_to < self.actions_cache.len() && from != actual_to {
-                                macro_core::move_action(from, actual_to);
-                                self.refresh_actions();
-                                self.selected_action_index = Some(actual_to);
                                 self.status_message = match self.lang {
-                                    Language::Fr => format!(
-                                        "🔀 Action #{} déplacée vers #{}.",
-                                        from + 1,
-                                        actual_to + 1
-                                    ),
-                                    Language::En => format!(
-                                        "🔀 Action #{} moved to #{}.",
-                                        from + 1,
-                                        actual_to + 1
-                                    ),
+                                    Language::Fr => format!("📋 Action #{} dupliquée.", idx + 1),
+                                    Language::En => format!("📋 Action #{} duplicated.", idx + 1),
                                 };
                             }
-                        }
-                        ActionCardEvent::DelayChanged(idx, delay) => {
-                            if idx < self.actions_cache.len() {
-                                self.actions_cache[idx].delay_ms = delay;
-                                macro_core::update_action(idx, self.actions_cache[idx].clone());
+                            ActionCardEvent::Delete(idx) => {
+                                macro_core::delete_action(idx);
+                                self.refresh_actions();
+                                self.status_message = match self.lang {
+                                    Language::Fr => format!("🗑️ Action #{} supprimée.", idx + 1),
+                                    Language::En => format!("🗑️ Action #{} deleted.", idx + 1),
+                                };
+                            }
+                            ActionCardEvent::MoveUp(idx) => {
+                                if idx > 0 {
+                                    macro_core::move_action(idx, idx - 1);
+                                    self.refresh_actions();
+                                    self.selected_action_index = Some(idx - 1);
+                                }
+                            }
+                            ActionCardEvent::MoveDown(idx) => {
+                                if idx + 1 < self.actions_cache.len() {
+                                    macro_core::move_action(idx, idx + 1);
+                                    self.refresh_actions();
+                                    self.selected_action_index = Some(idx + 1);
+                                }
+                            }
+                            ActionCardEvent::Reorder { from, to } => {
+                                let actual_to = if to > from { to.saturating_sub(1) } else { to };
+                                if actual_to < self.actions_cache.len() && from != actual_to {
+                                    macro_core::move_action(from, actual_to);
+                                    self.refresh_actions();
+                                    self.selected_action_index = Some(actual_to);
+                                    self.status_message = match self.lang {
+                                        Language::Fr => format!(
+                                            "🔀 Action #{} déplacée vers #{}.",
+                                            from + 1,
+                                            actual_to + 1
+                                        ),
+                                        Language::En => format!(
+                                            "🔀 Action #{} moved to #{}.",
+                                            from + 1,
+                                            actual_to + 1
+                                        ),
+                                    };
+                                }
+                            }
+                            ActionCardEvent::DelayChanged(idx, delay) => {
+                                if idx < self.actions_cache.len() {
+                                    self.actions_cache[idx].delay_ms = delay;
+                                    macro_core::update_action(idx, self.actions_cache[idx].clone());
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
 
         // Demander un repaint régulier si en enregistrement ou lecture
         if self.is_recording || self.is_playing {

@@ -62,13 +62,10 @@ impl FloatingToolbar {
                 .with_resizable(false),
             |ctx, _class| {
                 let dark_glass_frame = Frame::none()
-                    .fill(Color32::from_rgba_premultiplied(16, 20, 28, 240))
-                    .stroke(Stroke::new(
-                        1.0_f32,
-                        Color32::from_rgba_premultiplied(70, 85, 120, 180),
-                    ))
-                    .rounding(Rounding::same(12.0))
-                    .inner_margin(Margin::symmetric(8.0, 6.0));
+                    .fill(colors::BG_PANEL)
+                    .stroke(Stroke::new(1.5_f32, colors::ACCENT_PRIMARY))
+                    .rounding(Rounding::same(10.0))
+                    .inner_margin(Margin::symmetric(10.0, 6.0));
 
                 egui::CentralPanel::default()
                     .frame(dark_glass_frame)

@@ -8,7 +8,7 @@ use eframe::egui::{
 pub enum ButtonVariant {
     Primary,   // Accent bleu électrique
     Success,   // Accent vert émeraude (Play)
-    Danger,    // Accent rouge vif (Record / Arrêt)
+    Danger,    // Accent rouge rubis (Record / Arrêt)
     Warning,   // Accent ambre (Pause / Attention)
     Secondary, // Slate neutre (Ouvrir, Sauvegarder, Paramètres)
     Ghost,     // Discret sans fond fixe
@@ -33,7 +33,7 @@ impl<'a> GlassButton<'a> {
             icon: None,
             shortcut: None,
             variant: ButtonVariant::Secondary,
-            min_size: Vec2::new(0.0, 30.0),
+            min_size: Vec2::new(0.0, 32.0),
             selected: false,
             enabled: true,
             compact: false,
@@ -82,9 +82,9 @@ impl<'a> GlassButton<'a> {
 impl<'a> Widget for GlassButton<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
         let padding = if self.compact {
-            Vec2::new(8.0, 4.0)
+            Vec2::new(9.0, 4.0)
         } else {
-            Vec2::new(11.0, 5.5)
+            Vec2::new(13.0, 6.0)
         };
 
         let font_id = if self.compact {
@@ -107,22 +107,25 @@ impl<'a> Widget for GlassButton<'a> {
         let galley =
             ui.painter()
                 .layout_no_wrap(full_text.clone(), font_id.clone(), colors::TEXT_PRIMARY);
-        let mut text_width = galley.size().x;
 
         let shortcut_galley = self.shortcut.map(|sc| {
             ui.painter().layout_no_wrap(
                 sc.to_string(),
                 shortcut_font_id.clone(),
-                colors::TEXT_SECONDARY,
+                colors::TEXT_PRIMARY,
             )
         });
 
+        let mut total_content_width = galley.size().x;
+        let mut shortcut_box_width = 0.0;
+
         if let Some(ref sc_g) = shortcut_galley {
-            text_width += sc_g.size().x + 8.0;
+            shortcut_box_width = sc_g.size().x + 10.0;
+            total_content_width += shortcut_box_width + 10.0; // 10px de séparation nette
         }
 
         let desired_size = Vec2::new(
-            (text_width + padding.x * 2.0).max(self.min_size.x),
+            (total_content_width + padding.x * 2.0).max(self.min_size.x),
             (galley.size().y + padding.y * 2.0).max(self.min_size.y),
         );
 
@@ -139,7 +142,7 @@ impl<'a> Widget for GlassButton<'a> {
             let is_hovered = response.hovered() && self.enabled;
             let is_clicked = response.is_pointer_button_down_on() && self.enabled;
 
-            // Couleurs de fond, de bordure et de texte selon la variante
+            // Couleurs de fond, de bordure et de texte selon la variante avec contraste maximal
             let (bg_fill, border_stroke, text_color) = match self.variant {
                 ButtonVariant::Primary => {
                     if is_clicked || self.selected {
@@ -156,7 +159,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(37, 99, 235, 220),
+                            Color32::from_rgb(30, 64, 175),
                             Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                             colors::TEXT_WHITE,
                         )
@@ -177,7 +180,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(16, 185, 129, 210),
+                            Color32::from_rgb(6, 95, 70),
                             Stroke::new(1.0_f32, colors::ACCENT_SUCCESS),
                             colors::TEXT_WHITE,
                         )
@@ -198,7 +201,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(239, 68, 68, 210),
+                            Color32::from_rgb(153, 27, 27),
                             Stroke::new(1.0_f32, colors::ACCENT_DANGER),
                             colors::TEXT_WHITE,
                         )
@@ -219,7 +222,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(245, 158, 11, 200),
+                            Color32::from_rgb(146, 64, 14),
                             Stroke::new(1.0_f32, colors::ACCENT_WARNING),
                             colors::TEXT_WHITE,
                         )
@@ -241,7 +244,7 @@ impl<'a> Widget for GlassButton<'a> {
                     } else {
                         (
                             colors::BG_CARD,
-                            Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+                            Stroke::new(1.0_f32, colors::BORDER_CARD),
                             colors::TEXT_PRIMARY,
                         )
                     }
@@ -249,14 +252,14 @@ impl<'a> Widget for GlassButton<'a> {
                 ButtonVariant::Ghost => {
                     if is_clicked || self.selected {
                         (
-                            Color32::from_rgba_premultiplied(59, 130, 246, 60),
+                            Color32::from_rgba_premultiplied(59, 130, 246, 70),
                             Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
                             colors::TEXT_WHITE,
                         )
                     } else if is_hovered {
                         (
-                            Color32::from_rgba_premultiplied(255, 255, 255, 18),
-                            Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+                            Color32::from_rgba_premultiplied(255, 255, 255, 24),
+                            Stroke::new(1.0_f32, colors::BORDER_HOVER),
                             colors::TEXT_WHITE,
                         )
                     } else {
@@ -265,42 +268,42 @@ impl<'a> Widget for GlassButton<'a> {
                 }
             };
 
-            let rounding = Rounding::same(6.0);
+            let rounding = Rounding::same(7.0);
 
-            // Rendu du fond
+            // Rendu du fond du bouton
             ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
-            // Rendu du texte principal
+            // Position du texte principal
             let text_pos = Pos2::new(
                 rect.min.x + padding.x,
                 rect.center().y - galley.size().y * 0.5,
             );
             ui.painter().galley(text_pos, galley, text_color);
 
-            // Rendu du raccourci clavier si présent
+            // Rendu du raccourci clavier sans AUCUN chevauchement
             if let Some(sc_g) = shortcut_galley {
-                let sc_rect_width = sc_g.size().x + 8.0;
-                let sc_rect_height = sc_g.size().y + 4.0;
+                let sc_rect_height = (sc_g.size().y + 4.0).max(18.0);
                 let sc_rect = Rect::from_min_size(
                     Pos2::new(
-                        rect.max.x - padding.x - sc_rect_width,
+                        rect.max.x - padding.x - shortcut_box_width,
                         rect.center().y - sc_rect_height * 0.5,
                     ),
-                    Vec2::new(sc_rect_width, sc_rect_height),
+                    Vec2::new(shortcut_box_width, sc_rect_height),
                 );
 
+                // Fond capsule du raccourci
                 ui.painter().rect(
                     sc_rect,
                     Rounding::same(4.0),
-                    Color32::from_rgba_premultiplied(0, 0, 0, 90),
-                    Stroke::new(1.0_f32, Color32::from_white_alpha(35)),
+                    Color32::from_rgba_premultiplied(0, 0, 0, 110),
+                    Stroke::new(1.0_f32, Color32::from_white_alpha(45)),
                 );
 
                 let sc_pos = Pos2::new(
-                    sc_rect.min.x + 4.0,
+                    sc_rect.min.x + 5.0,
                     sc_rect.center().y - sc_g.size().y * 0.5,
                 );
-                ui.painter().galley(sc_pos, sc_g, colors::TEXT_SECONDARY);
+                ui.painter().galley(sc_pos, sc_g, colors::TEXT_WHITE);
             }
         }
 

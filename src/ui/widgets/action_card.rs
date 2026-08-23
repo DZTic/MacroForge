@@ -116,17 +116,17 @@ impl<'a> ActionCard<'a> {
 
         let card_frame = Frame::none()
             .fill(if self.selected {
-                colors::BG_CARD_ACTIVE
+                colors::BG_CARD_SELECTED
             } else {
                 colors::BG_CARD
             })
             .stroke(if self.selected {
                 Stroke::new(1.5_f32, colors::ACCENT_PRIMARY)
             } else {
-                Stroke::new(1.0_f32, colors::BORDER_SUBTLE)
+                Stroke::new(1.0_f32, colors::BORDER_CARD)
             })
-            .rounding(Rounding::same(6.0))
-            .inner_margin(Margin::symmetric(8.0, 5.0));
+            .rounding(Rounding::same(7.0))
+            .inner_margin(Margin::symmetric(10.0, 6.0));
 
         let card_response = card_frame
             .show(ui, |ui| {
@@ -136,7 +136,7 @@ impl<'a> ActionCard<'a> {
                         egui::Label::new(
                             egui::RichText::new("⠿")
                                 .color(colors::TEXT_MUTED)
-                                .size(14.0),
+                                .size(15.0),
                         )
                         .sense(egui::Sense::drag()),
                     );
@@ -152,24 +152,31 @@ impl<'a> ActionCard<'a> {
 
                     ui.add_space(2.0);
 
-                    // Badge numéro d'index (#001)
+                    // Badge numéro d'index (#001) avec fond sombre
                     let index_text = format!("#{:03}", self.index + 1);
-                    ui.label(
-                        egui::RichText::new(index_text)
-                            .monospace()
-                            .color(colors::TEXT_MUTED)
-                            .size(11.0),
-                    );
+                    let index_badge = Frame::none()
+                        .fill(colors::BG_INPUT)
+                        .stroke(Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
+                        .rounding(Rounding::same(4.0))
+                        .inner_margin(Margin::symmetric(5.0, 2.0));
+                    index_badge.show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new(index_text)
+                                .monospace()
+                                .color(colors::TEXT_MUTED)
+                                .size(11.0),
+                        );
+                    });
 
                     ui.add_space(4.0);
 
-                    // Badge de catégorie d'action avec pastille / fond teinté
+                    // Badge de catégorie d'action avec pastille / fond teinté haute visibilité
                     let type_badge_frame = Frame::none()
                         .fill(Color32::from_rgba_premultiplied(
                             type_color.r(),
                             type_color.g(),
                             type_color.b(),
-                            30,
+                            45,
                         ))
                         .stroke(Stroke::new(
                             1.0_f32,
@@ -177,11 +184,11 @@ impl<'a> ActionCard<'a> {
                                 type_color.r(),
                                 type_color.g(),
                                 type_color.b(),
-                                80,
+                                120,
                             ),
                         ))
-                        .rounding(Rounding::same(4.0))
-                        .inner_margin(Margin::symmetric(5.0, 1.5));
+                        .rounding(Rounding::same(5.0))
+                        .inner_margin(Margin::symmetric(6.0, 2.5));
 
                     type_badge_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -197,12 +204,12 @@ impl<'a> ActionCard<'a> {
 
                     ui.add_space(6.0);
 
-                    // Détails techniques
+                    // Détails techniques clairs et lisibles
                     ui.label(
                         egui::RichText::new(detail_str)
                             .monospace()
                             .color(colors::TEXT_PRIMARY)
-                            .size(11.5),
+                            .size(12.0),
                     );
 
                     // Boutons d'actions et délai alignés à droite
@@ -252,7 +259,7 @@ impl<'a> ActionCard<'a> {
                             event = Some(ActionCardEvent::MoveUp(self.index));
                         }
 
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
 
                         // 5. Ajustement direct du délai
                         let mut cur_delay = self.action.delay_ms;

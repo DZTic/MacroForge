@@ -73,10 +73,7 @@ impl<'a> Widget for CustomToggleSwitch<'a> {
                     Stroke::new(1.0_f32, colors::BORDER_HOVER),
                 )
             } else {
-                (
-                    colors::BG_INPUT,
-                    Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-                )
+                (colors::BG_INPUT, Stroke::new(1.0_f32, colors::BORDER_CARD))
             };
 
             // Dessin du corps en pilule
