@@ -39,7 +39,7 @@ impl<'a> NumericInputWithSlider<'a, u64> {
 
 impl<'a> Widget for NumericInputWithSlider<'a, u64> {
     fn ui(self, ui: &mut Ui) -> Response {
-        ui.horizontal(|ui| {
+        ui.horizontal_centered(|ui| {
             ui.label(
                 egui::RichText::new(self.label)
                     .color(colors::TEXT_PRIMARY)

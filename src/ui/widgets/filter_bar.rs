@@ -48,7 +48,7 @@ impl<'a> Widget for FilterBar<'a> {
 
         frame
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_centered(|ui| {
                     // 1. Switch Masquer les déplacements souris
                     let toggle_label = if is_compact {
                         "Masquer souris"

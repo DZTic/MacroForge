@@ -138,7 +138,7 @@ impl<'a> ActionCard<'a> {
 
         let card_response = card_frame
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_centered(|ui| {
                     // Poignée de Drag & Drop (⠿) avec curseur interactif
                     let handle_resp = ui.add(
                         egui::Label::new(
@@ -205,7 +205,7 @@ impl<'a> ActionCard<'a> {
                         .inner_margin(Margin::symmetric(7.0, 3.0));
 
                     type_badge_frame.show(ui, |ui| {
-                        ui.horizontal(|ui| {
+                        ui.horizontal_centered(|ui| {
                             ui.label(egui::RichText::new(icon).size(11.5).color(type_color));
                             ui.label(
                                 egui::RichText::new(type_label)
@@ -226,8 +226,10 @@ impl<'a> ActionCard<'a> {
                             .size(12.5),
                     );
 
-                    // Boutons d'actions et délai alignés à droite
+                    // Boutons d'actions et délai alignés à droite avec espacement équilibré
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(6.0, 0.0);
+
                         // 1. Bouton Supprimer
                         if ui
                             .small_button("🗑")
@@ -273,7 +275,7 @@ impl<'a> ActionCard<'a> {
                             event = Some(ActionCardEvent::MoveUp(self.index));
                         }
 
-                        ui.add_space(6.0);
+                        ui.add_space(8.0);
 
                         // 5. Ajustement direct du délai
                         let mut cur_delay = self.action.delay_ms;
