@@ -619,7 +619,9 @@ impl eframe::App for MacroForgeApp {
                             .label(self.lang.loop_mode_label());
                         if ui
                             .add(toggle)
-                            .on_hover_text("Répéter la macro indéfiniment jusqu'à l'arrêt d'urgence F4")
+                            .on_hover_text(
+                                "Répéter la macro indéfiniment jusqu'à l'arrêt d'urgence F4",
+                            )
                             .changed()
                         {
                             macro_core::set_loop_playback(self.loop_playback);
@@ -666,7 +668,8 @@ impl eframe::App for MacroForgeApp {
                             {
                                 if let Some(path_str) = path.to_str() {
                                     if let Err(e) = macro_core::save_macro_to_file(path_str) {
-                                        self.status_message = format!("❌ Erreur sauvegarde: {}", e);
+                                        self.status_message =
+                                            format!("❌ Erreur sauvegarde: {}", e);
                                     } else {
                                         self.status_message =
                                             "✅ Profil sauvegardé avec succès!".to_string();
@@ -767,8 +770,8 @@ impl eframe::App for MacroForgeApp {
 
                             ui.separator();
 
-                            let toggle = CustomToggleSwitch::new(&mut self.loop_playback)
-                                .label("Boucle");
+                            let toggle =
+                                CustomToggleSwitch::new(&mut self.loop_playback).label("Boucle");
                             if ui.add(toggle).changed() {
                                 macro_core::set_loop_playback(self.loop_playback);
                             }
@@ -802,7 +805,8 @@ impl eframe::App for MacroForgeApp {
                                 {
                                     if let Some(path_str) = path.to_str() {
                                         if let Err(e) = macro_core::save_macro_to_file(path_str) {
-                                            self.status_message = format!("❌ Erreur sauvegarde: {}", e);
+                                            self.status_message =
+                                                format!("❌ Erreur sauvegarde: {}", e);
                                         } else {
                                             self.status_message =
                                                 "✅ Profil sauvegardé avec succès!".to_string();
@@ -844,7 +848,9 @@ impl eframe::App for MacroForgeApp {
                                 macro_core::clear_actions();
                                 self.actions_cache.clear();
                                 self.status_message = match self.lang {
-                                    Language::Fr => "Toutes les actions ont été effacées.".to_string(),
+                                    Language::Fr => {
+                                        "Toutes les actions ont été effacées.".to_string()
+                                    }
                                     Language::En => "All actions have been cleared.".to_string(),
                                 };
                             }
@@ -865,11 +871,7 @@ impl eframe::App for MacroForgeApp {
                     } else {
                         colors::ACCENT_PRIMARY
                     };
-                    ui.label(
-                        egui::RichText::new("●")
-                            .color(dot_color)
-                            .size(10.0),
-                    );
+                    ui.label(egui::RichText::new("●").color(dot_color).size(10.0));
                     ui.label(
                         egui::RichText::new(&self.status_message)
                             .color(colors::TEXT_SECONDARY)

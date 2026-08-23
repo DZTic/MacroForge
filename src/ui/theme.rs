@@ -48,10 +48,9 @@ pub fn configure_fonts(ctx: &Context) {
     {
         // 1. Segoe UI (Police système principale pour interface propre)
         if let Ok(font_data) = std::fs::read("C:\\Windows\\Fonts\\segoeui.ttf") {
-            fonts.font_data.insert(
-                "segoe_ui".to_owned(),
-                egui::FontData::from_owned(font_data),
-            );
+            fonts
+                .font_data
+                .insert("segoe_ui".to_owned(), egui::FontData::from_owned(font_data));
             if let Some(family) = fonts.families.get_mut(&FontFamily::Proportional) {
                 family.insert(0, "segoe_ui".to_owned());
             }
@@ -84,10 +83,9 @@ pub fn configure_fonts(ctx: &Context) {
 
         // 4. Consolas pour la typographie Monospace (Coordonnées, délais, VK codes)
         if let Ok(mono_data) = std::fs::read("C:\\Windows\\Fonts\\consola.ttf") {
-            fonts.font_data.insert(
-                "consolas".to_owned(),
-                egui::FontData::from_owned(mono_data),
-            );
+            fonts
+                .font_data
+                .insert("consolas".to_owned(), egui::FontData::from_owned(mono_data));
             if let Some(family) = fonts.families.get_mut(&FontFamily::Monospace) {
                 family.insert(0, "consolas".to_owned());
             }
@@ -255,4 +253,3 @@ mod tests {
         assert_eq!(ctx.style().visuals.panel_fill, colors::BG_PANEL);
     }
 }
-

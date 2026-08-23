@@ -67,11 +67,7 @@ impl<'a> Widget for StatusBadge<'a> {
                 Color32::from_rgba_premultiplied(245, 158, 11, 90),
                 Color32::from_rgba_premultiplied(245, 158, 11, 35),
                 Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(245, 158, 11, 140)),
-                if self.compact {
-                    "PAUSE"
-                } else {
-                    "EN PAUSE"
-                },
+                if self.compact { "PAUSE" } else { "EN PAUSE" },
             ),
             StatusKind::Idle => (
                 colors::TEXT_MUTED,
@@ -141,4 +137,3 @@ impl<'a> Widget for StatusBadge<'a> {
         response
     }
 }
-

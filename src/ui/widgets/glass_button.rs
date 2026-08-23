@@ -307,4 +307,3 @@ impl<'a> Widget for GlassButton<'a> {
         response
     }
 }
-
