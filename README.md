@@ -1,72 +1,67 @@
-# MacroForge 🛠️
+# MacroForge ⚡
 
-**MacroForge** is a high-performance macro engine for Windows, designed for precision, reliability, and FPS game support. Developed with **Tauri**, **Rust**, and **TypeScript**, it offers a robust solution for advanced automation.
+**MacroForge** est un moteur de macro ultra-haute performance pour Windows, développé à 100% en **Rust natif** avec **egui / eframe** et les API Win32 bas niveau. Conçu pour la vitesse d'exécution, la précision temporelle absolue et l'automatisation dans les jeux et applications.
 
-![MacroForge](public/logo.png) <!-- Optional: if the logo exists -->
+---
 
-## ✨ Key Features
+## ✨ Fonctionnalités Principales
 
-- 🌍 **Multilingual Support (i18n)**: Interface available in **French** and **English** with instant switching.
-- ⏱️ **High Precision Timing**: Absolute timeline system to eliminate time drift, even over long durations.
-- 🖱️ **Raw Input Mode (FPS)**: Captures mouse deltas directly via the Windows API, ideal for camera movements in games (Roblox, Minecraft, etc.).
-- 🖼️ **Computer Vision (GDI/Rayon)**: Ultra-fast image detection with parallelized search for minimal latency.
-- 🛑 **Visual Emergency Stop**: Define a "stop image" that immediately interrupts the macro if detected on screen.
-- 🗔 **Floating Interface (Toolbar)**: A compact toolbar to control your macros while staying focused on your task.
-- ↕️ **Intuitive Editing**: Reorganize actions via **Drag & Drop** and modify delays or coordinates with a single click.
-- 📺 **Monitoring Overlay**: Transparent interface displaying the currently executing action on top of your applications.
-- 💾 **Profile Management**: Export/Import your macros in `.mforge` (JSON) format.
+- 🚀 **100% Rust Autonome** : Zéro dépendance Node.js, Web, Vite ou WebView2. Binaire unique ultra-léger et démarrage instantané (< 50 ms).
+- 🌍 **Internationalisation Native (i18n)** : Interface complète en **Français** et **Anglais** commutable instantanément sans redémarrage.
+- ⏱️ **Précision Temporelle Absolue** : Horloge haute précision sans dérive temporelle pour les séquences longues.
+- 🖱️ **Mode Raw Input (FPS)** : Capture et injection des mouvements relatifs ($\Delta X, \Delta Y$) pour les caméras de jeux 3D.
+- 🖼️ **Vision par Ordinateur (GDI / Rayon)** : Détection d'image multi-threadée ultra-rapide (`WaitImage` & `StopImage`).
+- 🛑 **Arrêt d'Urgence Visuel & Clavier** : Interruption immédiate via touche **F4** ou détection de motif d'image critique.
+- 🗔 **Toolbar Flottante Native** : Mini-contrôleur compact multi-viewport déplaçable avec drag handle.
+- 👻 **Overlay Transparent Click-Through** : HUD temps réel au-dessus des jeux sans bloquer les clics (`WS_EX_TRANSPARENT`) et invisible pour les captures GDI (`WDA_EXCLUDEFROMCAPTURE`).
+- 📋 **Éditeur avec Drag & Drop** : Réorganisation intuitive des actions, filtres, recherche et duplication instantanée.
+- 💾 **Profils `.mforge`** : Sauvegarde et ouverture rapides via les boîtes de dialogue natives Windows (`rfd`).
 
-## 🚀 Installation
+---
 
-### Prerequisites
+## 🚀 Installation & Compilation
 
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Node.js](https://nodejs.org/) (LTS recommended)
-- Windows (required for low-level features)
+### Prérequis
 
-### Dependency Installation
+- [Rust & Cargo](https://www.rust-lang.org/tools/install) (Toolchain stable recommandée)
+- Système d'exploitation Windows 10/11 (64-bit)
 
-```bash
-npm install
-```
-
-### Launch in Development Mode
+### Lancer en Mode Développement
 
 ```bash
-npm run tauri dev
+cargo run
 ```
 
-### Build the Executable
+### Compiler le Binaire Release Optimisé
 
 ```bash
-npm run tauri build
+cargo build --release
 ```
 
-## 🛠️ Technical Stack
+Le fichier exécutable autonome est généré dans `target/release/macroforge.exe`.
 
-- **Backend**: Rust (Tauri v2)
-  - `rdev`: Global input capture.
-  - `winapi`: Raw Input, GDI, SendInput interactions.
-  - `rayon`: Parallelized image processing.
-- **Frontend**: TypeScript + Modern HTML/CSS
-  - `Vite 6`: Ultra-fast bundling.
-- **UI/UX**: Premium Design (Glassmorphism), smooth animations, and intelligent tooltip system.
+---
 
-## ⌨️ Hotkeys
+## 🛠️ Stack Technique
 
-- **F8**: Start / Stop recording.
-- **F9**: Force stop recording.
-- **F4**: Emergency stop of the currently playing macro.
+- **Moteur & UI** : Rust 2021 + `eframe` / `egui` (Rendu matériel Glow / OpenGL / DirectX)
+- **Capture & Injection d'Entrées** : `rdev` + Win32 `SendInput` / Raw Input
+- **Traitement d'Image & Vision** : `rayon` (parallélisation CPU) + `image` + Win32 GDI
+- **Dialogues de Fichiers** : `rfd` (Rust File Dialogs natif)
+- **Sérialisation** : `serde` + `serde_json`
 
-## 📖 Usage
+---
 
-1. **Recording**: Press **F8** to start.
-   - **FPS Note**: Hold **right-click** to capture relative movements (deltas) in games.
-2. **Editing**: Use the main list to reorder actions (Drag & Drop) or delete/edit them.
-3. **Toolbar**: Click "Toolbar" to switch to the floating mini-controller mode.
-4. **Image Search**: Add an "Image" action to wait for a visual element to appear before continuing.
-5. **Loops**: Enable "Loop" to repeat the macro indefinitely.
+## ⌨️ Raccourcis Clavier Globaux
 
-## ⚠️ Security and Ethics
+| Raccourci | Action |
+|:---|:---|
+| **F8** | Démarrer l'enregistrement en direct |
+| **F9** | Arrêter l'enregistrement |
+| **F4** | Arrêt d'urgence immédiat de la relecture |
 
-MacroForge is a powerful tool. Please use it responsibly. Automation in some games may violate their terms of service.
+---
+
+## ⚠️ Sécurité & Éthique
+
+MacroForge est un outil d'automatisation puissant. Veuillez l'utiliser de manière responsable. L'automatisation dans certains jeux en ligne peut être soumise à leurs conditions d'utilisation.
