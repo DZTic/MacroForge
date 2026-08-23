@@ -48,13 +48,18 @@ impl MacroForgeApp {
         // Appliquer le thème Glassmorphism et la typographie au contexte egui
         theme::apply_theme(&cc.egui_ctx);
 
-        let initial_loop = macro_core::get_loop_playback();
+        let settings = crate::ui::i18n::AppSettings::load();
+        let initial_loop = macro_core::get_loop_playback() || settings.loop_playback;
+        if settings.loop_playback {
+            macro_core::set_loop_playback(true);
+        }
+
         let initial_actions = {
             let state = MACRO_STATE.lock().unwrap();
             state.actions.clone()
         };
 
-        let lang = Language::Fr;
+        let lang = settings.language;
         let ready_msg = lang.ready_status().to_string();
         let total_actions = initial_actions.len();
 
@@ -67,7 +72,7 @@ impl MacroForgeApp {
             status_message: ready_msg,
 
             lang,
-            hide_mouse_moves: false,
+            hide_mouse_moves: settings.hide_mouse_moves,
             search_query: String::new(),
             jump_index: 1,
             scroll_target_index: None,
@@ -94,6 +99,15 @@ impl MacroForgeApp {
                 win32_configured: false,
             },
         }
+    }
+
+    fn save_current_settings(&self) {
+        let settings = crate::ui::i18n::AppSettings {
+            language: self.lang,
+            loop_playback: self.loop_playback,
+            hide_mouse_moves: self.hide_mouse_moves,
+        };
+        settings.save();
     }
 
     fn update_from_events(&mut self) {
@@ -384,8 +398,13 @@ impl eframe::App for MacroForgeApp {
                             Language::En => "🌐 EN",
                         })
                         .variant(ButtonVariant::Ghost);
-                        if ui.add(lang_btn).on_hover_text("Changer de langue (FR / EN)").clicked() {
+                        if ui
+                            .add(lang_btn)
+                            .on_hover_text("Changer de langue (FR / EN)")
+                            .clicked()
+                        {
                             self.lang.toggle();
+                            self.save_current_settings();
                         }
 
                         // Bouton Toolbar flottante
