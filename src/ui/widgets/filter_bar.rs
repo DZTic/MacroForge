@@ -44,11 +44,14 @@ impl<'a> Widget for FilterBar<'a> {
             .fill(colors::BG_PANEL)
             .stroke(Stroke::new(1.0_f32, colors::BORDER_CARD))
             .rounding(Rounding::same(8.0))
-            .inner_margin(Margin::symmetric(10.0, 6.0));
+            .inner_margin(Margin::symmetric(10.0, 5.0));
 
         frame
             .show(ui, |ui| {
+                ui.set_height(26.0);
                 ui.horizontal_centered(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 0.0);
+
                     // 1. Switch Masquer les déplacements souris
                     let toggle_label = if is_compact {
                         "Masquer souris"
@@ -60,9 +63,9 @@ impl<'a> Widget for FilterBar<'a> {
                         "Masquer les événements de déplacement continu de la souris pour simplifier la vue.",
                     );
 
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                    ui.add_space(4.0);
+                    draw_vseparator(ui);
+                    ui.add_space(4.0);
 
                     // 2. Recherche textuelle avec icône
                     ui.label(egui::RichText::new("🔍").color(colors::TEXT_MUTED).size(13.0));
@@ -85,9 +88,9 @@ impl<'a> Widget for FilterBar<'a> {
                         }
                     }
 
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                    ui.add_space(4.0);
+                    draw_vseparator(ui);
+                    ui.add_space(4.0);
 
                     // 3. Saut direct "Aller à n°"
                     ui.label(
@@ -140,6 +143,15 @@ impl<'a> Widget for FilterBar<'a> {
             })
             .response
     }
+}
+
+fn draw_vseparator(ui: &mut Ui) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(1.0, 18.0), egui::Sense::hover());
+    ui.painter().vline(
+        rect.center().x,
+        rect.y_range(),
+        Stroke::new(1.0_f32, colors::BORDER_CARD),
+    );
 }
 
 #[cfg(test)]
