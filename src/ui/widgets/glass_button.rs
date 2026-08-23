@@ -6,11 +6,11 @@ use eframe::egui::{
 /// Variantes de style pour les boutons Glassmorphism
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonVariant {
-    Primary,   // Accent bleu
+    Primary,   // Accent bleu électrique
     Success,   // Accent vert émeraude (Play)
-    Danger,    // Accent rouge vibrant (Record / Arrêt)
+    Danger,    // Accent rouge vif (Record / Arrêt)
     Warning,   // Accent ambre (Pause / Attention)
-    Secondary, // Neutre / Slate (Ouvrir, Sauvegarder, Paramètres)
+    Secondary, // Slate neutre (Ouvrir, Sauvegarder, Paramètres)
     Ghost,     // Discret sans fond fixe
 }
 
@@ -23,6 +23,7 @@ pub struct GlassButton<'a> {
     min_size: Vec2,
     selected: bool,
     enabled: bool,
+    compact: bool,
 }
 
 impl<'a> GlassButton<'a> {
@@ -32,9 +33,10 @@ impl<'a> GlassButton<'a> {
             icon: None,
             shortcut: None,
             variant: ButtonVariant::Secondary,
-            min_size: Vec2::new(0.0, 32.0),
+            min_size: Vec2::new(0.0, 30.0),
             selected: false,
             enabled: true,
+            compact: false,
         }
     }
 
@@ -67,27 +69,45 @@ impl<'a> GlassButton<'a> {
         self.enabled = enabled;
         self
     }
+
+    pub fn compact(mut self, compact: bool) -> Self {
+        self.compact = compact;
+        if compact {
+            self.min_size = Vec2::new(0.0, 26.0);
+        }
+        self
+    }
 }
 
 impl<'a> Widget for GlassButton<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
-        let padding = Vec2::new(12.0, 6.0);
-        let font_id = TextStyle::Button.resolve(ui.style());
+        let padding = if self.compact {
+            Vec2::new(8.0, 4.0)
+        } else {
+            Vec2::new(11.0, 5.5)
+        };
+
+        let font_id = if self.compact {
+            TextStyle::Small.resolve(ui.style())
+        } else {
+            TextStyle::Button.resolve(ui.style())
+        };
         let shortcut_font_id = TextStyle::Small.resolve(ui.style());
 
-        // Calcul de la taille du contenu
-        let mut text_width = 0.0;
+        // Construction du libellé
         let mut full_text = String::new();
         if let Some(icon) = self.icon {
             full_text.push_str(icon);
-            full_text.push(' ');
+            if !self.text.is_empty() {
+                full_text.push(' ');
+            }
         }
         full_text.push_str(self.text);
 
         let galley =
             ui.painter()
                 .layout_no_wrap(full_text.clone(), font_id.clone(), colors::TEXT_PRIMARY);
-        text_width += galley.size().x;
+        let mut text_width = galley.size().x;
 
         let shortcut_galley = self.shortcut.map(|sc| {
             ui.painter().layout_no_wrap(
@@ -119,7 +139,7 @@ impl<'a> Widget for GlassButton<'a> {
             let is_hovered = response.hovered() && self.enabled;
             let is_clicked = response.is_pointer_button_down_on() && self.enabled;
 
-            // Déterminer les couleurs de fond et de bordure selon la variante et l'état
+            // Couleurs de fond, de bordure et de texte selon la variante
             let (bg_fill, border_stroke, text_color) = match self.variant {
                 ButtonVariant::Primary => {
                     if is_clicked || self.selected {
@@ -136,9 +156,9 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(37, 99, 235, 200),
+                            Color32::from_rgba_premultiplied(37, 99, 235, 220),
                             Stroke::new(1.0_f32, colors::ACCENT_PRIMARY),
-                            colors::TEXT_PRIMARY,
+                            colors::TEXT_WHITE,
                         )
                     }
                 }
@@ -157,7 +177,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(16, 185, 129, 180),
+                            Color32::from_rgba_premultiplied(16, 185, 129, 210),
                             Stroke::new(1.0_f32, colors::ACCENT_SUCCESS),
                             colors::TEXT_WHITE,
                         )
@@ -178,7 +198,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(239, 68, 68, 180),
+                            Color32::from_rgba_premultiplied(239, 68, 68, 210),
                             Stroke::new(1.0_f32, colors::ACCENT_DANGER),
                             colors::TEXT_WHITE,
                         )
@@ -199,7 +219,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else {
                         (
-                            Color32::from_rgba_premultiplied(245, 158, 11, 180),
+                            Color32::from_rgba_premultiplied(245, 158, 11, 200),
                             Stroke::new(1.0_f32, colors::ACCENT_WARNING),
                             colors::TEXT_WHITE,
                         )
@@ -235,7 +255,7 @@ impl<'a> Widget for GlassButton<'a> {
                         )
                     } else if is_hovered {
                         (
-                            Color32::from_rgba_premultiplied(255, 255, 255, 20),
+                            Color32::from_rgba_premultiplied(255, 255, 255, 18),
                             Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
                             colors::TEXT_WHITE,
                         )
@@ -247,7 +267,7 @@ impl<'a> Widget for GlassButton<'a> {
 
             let rounding = Rounding::same(6.0);
 
-            // Rendu de l'arrière-plan du bouton
+            // Rendu du fond
             ui.painter().rect(rect, rounding, bg_fill, border_stroke);
 
             // Rendu du texte principal
@@ -269,12 +289,11 @@ impl<'a> Widget for GlassButton<'a> {
                     Vec2::new(sc_rect_width, sc_rect_height),
                 );
 
-                // Fond de la touche de raccourci (style kbd)
                 ui.painter().rect(
                     sc_rect,
                     Rounding::same(4.0),
-                    Color32::from_rgba_premultiplied(0, 0, 0, 80),
-                    Stroke::new(1.0_f32, Color32::from_white_alpha(30)),
+                    Color32::from_rgba_premultiplied(0, 0, 0, 90),
+                    Stroke::new(1.0_f32, Color32::from_white_alpha(35)),
                 );
 
                 let sc_pos = Pos2::new(
@@ -288,3 +307,4 @@ impl<'a> Widget for GlassButton<'a> {
         response
     }
 }
+

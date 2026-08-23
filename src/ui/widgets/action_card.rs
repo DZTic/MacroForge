@@ -59,37 +59,37 @@ impl<'a> ActionCard<'a> {
 
         let (icon, type_label, type_color, detail_str) = match &self.action.action_type {
             ActionType::KeyPress(name, vk, _) => (
-                "⌨️",
+                "⌨",
                 self.lang.action_key_press(),
                 colors::ACCENT_PRIMARY,
                 format!("{} (VK: {:#04X})", name, vk),
             ),
             ActionType::KeyRelease(name, vk, _) => (
-                "⌨️",
+                "⌨",
                 self.lang.action_key_release(),
                 colors::TEXT_SECONDARY,
                 format!("{} (VK: {:#04X})", name, vk),
             ),
             ActionType::MouseMove(x, y) => (
-                "🖱️",
+                "🖱",
                 self.lang.action_mouse_pos(),
                 colors::ACCENT_CYAN,
                 format!("X: {:.0}, Y: {:.0}", x, y),
             ),
             ActionType::MouseMoveRelative(dx, dy) => (
-                "🖱️",
+                "🖱",
                 self.lang.action_mouse_relative(),
                 colors::ACCENT_WARNING,
                 format!("ΔX: {}, ΔY: {}", dx, dy),
             ),
             ActionType::MousePress(btn, x, y) => (
-                "🖱️",
+                "🖱",
                 self.lang.action_mouse_press(),
                 colors::ACCENT_SUCCESS,
                 format!("Btn {} à ({:.0}, {:.0})", btn, x, y),
             ),
             ActionType::MouseRelease(btn, x, y) => (
-                "🖱️",
+                "🖱",
                 self.lang.action_mouse_release(),
                 colors::TEXT_SECONDARY,
                 format!("Btn {} à ({:.0}, {:.0})", btn, x, y),
@@ -101,16 +101,16 @@ impl<'a> ActionCard<'a> {
                 format!("ΔX: {:.1}, ΔY: {:.1}", dx, dy),
             ),
             ActionType::Wait(ms) => (
-                "⏱️",
+                "⏱",
                 self.lang.action_wait(),
                 colors::ACCENT_WARNING,
                 format!("Attente de {} ms", ms),
             ),
             ActionType::WaitImage(path, timeout) => (
-                "🖼️",
+                "🖼",
                 self.lang.action_wait_image(),
                 colors::ACCENT_PURPLE,
-                format!("Fichier: {} ({}ms)", path, timeout),
+                format!("{} ({}ms)", path, timeout),
             ),
         };
 
@@ -125,8 +125,8 @@ impl<'a> ActionCard<'a> {
             } else {
                 Stroke::new(1.0_f32, colors::BORDER_SUBTLE)
             })
-            .rounding(Rounding::same(8.0))
-            .inner_margin(Margin::symmetric(8.0, 6.0));
+            .rounding(Rounding::same(6.0))
+            .inner_margin(Margin::symmetric(8.0, 5.0));
 
         let card_response = card_frame
             .show(ui, |ui| {
@@ -136,7 +136,7 @@ impl<'a> ActionCard<'a> {
                         egui::Label::new(
                             egui::RichText::new("⠿")
                                 .color(colors::TEXT_MUTED)
-                                .size(15.0),
+                                .size(14.0),
                         )
                         .sense(egui::Sense::drag()),
                     );
@@ -169,7 +169,7 @@ impl<'a> ActionCard<'a> {
                             type_color.r(),
                             type_color.g(),
                             type_color.b(),
-                            35,
+                            30,
                         ))
                         .stroke(Stroke::new(
                             1.0_f32,
@@ -177,11 +177,11 @@ impl<'a> ActionCard<'a> {
                                 type_color.r(),
                                 type_color.g(),
                                 type_color.b(),
-                                90,
+                                80,
                             ),
                         ))
-                        .rounding(Rounding::same(5.0))
-                        .inner_margin(Margin::symmetric(6.0, 2.0));
+                        .rounding(Rounding::same(4.0))
+                        .inner_margin(Margin::symmetric(5.0, 1.5));
 
                     type_badge_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -189,7 +189,7 @@ impl<'a> ActionCard<'a> {
                             ui.label(
                                 egui::RichText::new(type_label)
                                     .color(type_color)
-                                    .size(12.0)
+                                    .size(11.5)
                                     .strong(),
                             );
                         });
@@ -202,14 +202,14 @@ impl<'a> ActionCard<'a> {
                         egui::RichText::new(detail_str)
                             .monospace()
                             .color(colors::TEXT_PRIMARY)
-                            .size(12.0),
+                            .size(11.5),
                     );
 
                     // Boutons d'actions et délai alignés à droite
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // 1. Bouton Supprimer
                         if ui
-                            .small_button("🗑️")
+                            .small_button("🗑")
                             .on_hover_text(self.lang.delete_tooltip())
                             .clicked()
                         {
@@ -227,7 +227,7 @@ impl<'a> ActionCard<'a> {
 
                         // 3. Bouton Éditer
                         if ui
-                            .small_button("✏️")
+                            .small_button("✏")
                             .on_hover_text(self.lang.edit_tooltip())
                             .clicked()
                         {
@@ -252,7 +252,7 @@ impl<'a> ActionCard<'a> {
                             event = Some(ActionCardEvent::MoveUp(self.index));
                         }
 
-                        ui.add_space(6.0);
+                        ui.add_space(4.0);
 
                         // 5. Ajustement direct du délai
                         let mut cur_delay = self.action.delay_ms;

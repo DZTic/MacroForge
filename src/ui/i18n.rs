@@ -279,36 +279,36 @@ impl Language {
 
     pub fn quick_add_key(&self) -> &'static str {
         match self {
-            Language::Fr => "+ ⌨️ Clavier",
-            Language::En => "+ ⌨️ Keyboard",
+            Language::Fr => "+ Clavier",
+            Language::En => "+ Keyboard",
         }
     }
 
     pub fn quick_add_mouse(&self) -> &'static str {
         match self {
-            Language::Fr => "+ 🖱️ Souris",
-            Language::En => "+ 🖱️ Mouse",
+            Language::Fr => "+ Souris",
+            Language::En => "+ Mouse",
         }
     }
 
     pub fn quick_add_wait(&self) -> &'static str {
         match self {
-            Language::Fr => "+ ⏱️ Pause",
-            Language::En => "+ ⏱️ Wait",
+            Language::Fr => "+ Pause",
+            Language::En => "+ Wait",
         }
     }
 
     pub fn quick_add_image(&self) -> &'static str {
         match self {
-            Language::Fr => "+ 🖼️ Image",
-            Language::En => "+ 🖼️ Image",
+            Language::Fr => "+ Image",
+            Language::En => "+ Image",
         }
     }
 
     pub fn toolbar_window_btn(&self) -> &'static str {
         match self {
-            Language::Fr => "🗔 Toolbar",
-            Language::En => "🗔 Toolbar",
+            Language::Fr => "Toolbar",
+            Language::En => "Toolbar",
         }
     }
 
@@ -343,8 +343,8 @@ impl Language {
     // --- Timeline & Filters ---
     pub fn timeline_heading(&self) -> &'static str {
         match self {
-            Language::Fr => "📋 Séquence d'Actions",
-            Language::En => "📋 Action Sequence",
+            Language::Fr => "Séquence d'Actions",
+            Language::En => "Action Sequence",
         }
     }
 
@@ -357,15 +357,15 @@ impl Language {
 
     pub fn filter_search_placeholder(&self) -> &'static str {
         match self {
-            Language::Fr => "🔍 Filtrer les actions...",
-            Language::En => "🔍 Filter actions...",
+            Language::Fr => "Rechercher une action...",
+            Language::En => "Search an action...",
         }
     }
 
     pub fn jump_to_action_label(&self) -> &'static str {
         match self {
             Language::Fr => "Aller à n°",
-            Language::En => "Jump to #",
+            Language::En => "Go to #",
         }
     }
 
@@ -527,15 +527,15 @@ impl Language {
 
     pub fn loop_mode_label(&self) -> &'static str {
         match self {
-            Language::Fr => "🔁 Mode Boucle",
-            Language::En => "🔁 Loop Mode",
+            Language::Fr => "Mode Boucle",
+            Language::En => "Loop Mode",
         }
     }
 
     pub fn stop_image_cfg_btn(&self) -> &'static str {
         match self {
-            Language::Fr => "🛑 Image d'arrêt",
-            Language::En => "🛑 Stop Image",
+            Language::Fr => "Image d'arrêt",
+            Language::En => "Stop Image",
         }
     }
 
@@ -551,15 +551,15 @@ impl Language {
     // --- Modals ---
     pub fn modal_add_action_title(&self) -> &'static str {
         match self {
-            Language::Fr => "➕ Ajouter une Action Manuelle",
-            Language::En => "➕ Add Manual Action",
+            Language::Fr => "Ajouter une Action",
+            Language::En => "Add Action",
         }
     }
 
     pub fn modal_edit_action_title(&self) -> &'static str {
         match self {
-            Language::Fr => "✏️ Modifier l'Action",
-            Language::En => "✏️ Edit Action",
+            Language::Fr => "Modifier l'Action",
+            Language::En => "Edit Action",
         }
     }
 
@@ -579,29 +579,29 @@ impl Language {
 
     pub fn tab_keyboard(&self) -> &'static str {
         match self {
-            Language::Fr => "⌨️ Clavier",
-            Language::En => "⌨️ Keyboard",
+            Language::Fr => "Clavier",
+            Language::En => "Keyboard",
         }
     }
 
     pub fn tab_mouse(&self) -> &'static str {
         match self {
-            Language::Fr => "🖱️ Souris",
-            Language::En => "🖱️ Mouse",
+            Language::Fr => "Souris",
+            Language::En => "Mouse",
         }
     }
 
     pub fn tab_wait(&self) -> &'static str {
         match self {
-            Language::Fr => "⏱️ Pause",
-            Language::En => "⏱️ Wait",
+            Language::Fr => "Pause",
+            Language::En => "Wait",
         }
     }
 
     pub fn tab_image(&self) -> &'static str {
         match self {
-            Language::Fr => "🖼️ Détection Image",
-            Language::En => "🖼️ Image Detection",
+            Language::Fr => "Image",
+            Language::En => "Image",
         }
     }
 

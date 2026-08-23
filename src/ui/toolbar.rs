@@ -96,13 +96,15 @@ impl FloatingToolbar {
                             if !is_recording {
                                 let rec_btn = GlassButton::new("")
                                     .icon("🔴")
+                                    .compact(true)
                                     .variant(ButtonVariant::Danger);
                                 if ui.add(rec_btn).on_hover_text("Enregistrer (F8)").clicked() {
                                     triggered_action = ToolbarAction::ToggleRecord;
                                 }
                             } else {
                                 let stop_btn = GlassButton::new("")
-                                    .icon("⏹️")
+                                    .icon("⏹")
+                                    .compact(true)
                                     .variant(ButtonVariant::Secondary);
                                 if ui
                                     .add(stop_btn)
@@ -116,7 +118,8 @@ impl FloatingToolbar {
                             // 3. Bouton Jouer / Arrêt d'urgence
                             if !is_playing {
                                 let play_btn = GlassButton::new("")
-                                    .icon("▶️")
+                                    .icon("▶")
+                                    .compact(true)
                                     .variant(ButtonVariant::Success);
                                 if ui.add(play_btn).on_hover_text("Rejouer (F4)").clicked() {
                                     triggered_action = ToolbarAction::TogglePlay;
@@ -124,6 +127,7 @@ impl FloatingToolbar {
                             } else {
                                 let stop_btn = GlassButton::new("")
                                     .icon("🛑")
+                                    .compact(true)
                                     .variant(ButtonVariant::Warning);
                                 if ui
                                     .add(stop_btn)
