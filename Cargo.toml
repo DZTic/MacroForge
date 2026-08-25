@@ -23,7 +23,8 @@ winapi = { version = "0.3", features = [
     "winuser",
     "windef",
     "wingdi",
-    "libloaderapi"
+    "libloaderapi",
+    "timeapi"
 ] }
 
 [profile.release]
