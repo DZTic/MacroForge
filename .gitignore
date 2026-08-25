@@ -32,6 +32,9 @@ test_accuracy*
 test_precision*
 test_*
 
+# --- Residus ancienne stack Tauri (generes localement) ---
+/src-tauri/
+
 # --- Outils de Session & Antigravity ---
 /.agents/
 /scratch/
