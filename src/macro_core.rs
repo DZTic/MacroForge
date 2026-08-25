@@ -16,10 +16,9 @@ use winapi::um::winuser::{
     GetWindowTextW, IsWindowVisible, MapVirtualKeyW, RegisterClassW, RegisterRawInputDevices,
     SendInput, CW_USEDEFAULT, INPUT, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT,
     KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC_EX, MAPVK_VSC_TO_VK_EX,
-    MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN,
-    MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEINPUT,
-    MSG, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT, SM_CXVIRTUALSCREEN,
-    SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WM_INPUT, WNDCLASSW,
+    MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_MOVE, MOUSEINPUT, MSG, RAWINPUT, RAWINPUTDEVICE,
+    RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WM_INPUT, WNDCLASSW,
 };
 
 /// Call once at startup — polls foreground window every 200ms and stores
@@ -87,41 +86,43 @@ pub fn send_mouse_move(x: i32, y: i32) {
 
 #[cfg(windows)]
 pub fn send_mouse_button(button: u8, down: bool, x: i32, y: i32) {
-    use winapi::um::winuser::{
-        GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-        SM_YVIRTUALSCREEN,
-    };
+    use winapi::um::winuser::{SendInput, INPUT, INPUT_MOUSE, MOUSEINPUT};
     unsafe {
-        let flag = match (button, down) {
-            (1, true) => MOUSEEVENTF_LEFTDOWN,
-            (1, false) => MOUSEEVENTF_LEFTUP,
-            (2, true) => MOUSEEVENTF_RIGHTDOWN,
-            (2, false) => MOUSEEVENTF_RIGHTUP,
-            (_, true) => MOUSEEVENTF_MIDDLEDOWN,
-            (_, false) => MOUSEEVENTF_MIDDLEUP,
-        };
-
-        let vx = GetSystemMetrics(SM_XVIRTUALSCREEN) as f64;
-        let vy = GetSystemMetrics(SM_YVIRTUALSCREEN) as f64;
-        let vw = GetSystemMetrics(SM_CXVIRTUALSCREEN) as f64;
-        let vh = GetSystemMetrics(SM_CYVIRTUALSCREEN) as f64;
-
-        let nx = (((x as f64 - vx) * 65536.0) / vw) as i32;
-        let ny = (((y as f64 - vy) * 65536.0) / vh) as i32;
+        // Un clic ne doit jamais déplacer le curseur : pas de MOUSEEVENTF_ABSOLUTE
+        // ni de MOUSEEVENTF_MOVE ici, sinon le curseur est téléporté aux
+        // coordonnées normalisées fournies (historiquement (0, 0)).
+        let _ = (x, y);
+        let flag = mouse_button_dwflags(button, down);
 
         let mut input = INPUT {
             type_: INPUT_MOUSE,
             u: std::mem::zeroed(),
         };
         *input.u.mi_mut() = MOUSEINPUT {
-            dx: nx,
-            dy: ny,
+            dx: 0,
+            dy: 0,
             mouseData: 0,
-            dwFlags: flag | MOUSEEVENTF_ABSOLUTE | 0x4000,
+            dwFlags: flag,
             time: 0,
             dwExtraInfo: 0,
         };
         SendInput(1, &mut input, std::mem::size_of::<INPUT>() as i32);
+    }
+}
+
+#[cfg(windows)]
+fn mouse_button_dwflags(builder_button: u8, down: bool) -> u32 {
+    use winapi::um::winuser::{
+        MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP,
+        MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP,
+    };
+    match (builder_button, down) {
+        (1, true) => MOUSEEVENTF_LEFTDOWN,
+        (1, false) => MOUSEEVENTF_LEFTUP,
+        (2, true) => MOUSEEVENTF_RIGHTDOWN,
+        (2, false) => MOUSEEVENTF_RIGHTUP,
+        (_, true) => MOUSEEVENTF_MIDDLEDOWN,
+        (_, false) => MOUSEEVENTF_MIDDLEUP,
     }
 }
 
@@ -972,7 +973,7 @@ pub fn play_macro() {
                                 y,
                                 detail: format!("Button {}", u),
                             });
-                            send_mouse_button(u, true, 0, 0);
+                            send_mouse_button(u, true, x as i32, y as i32);
                         }
                         ActionType::MouseRelease(u, x, y) => {
                             emit_playback_action(PlaybackActionPayload {
@@ -983,7 +984,7 @@ pub fn play_macro() {
                                 y,
                                 detail: format!("Button {}", u),
                             });
-                            send_mouse_button(u, false, 0, 0);
+                            send_mouse_button(u, false, x as i32, y as i32);
                         }
                         ActionType::Scroll(x, y) => {
                             emit_playback_action(PlaybackActionPayload {
@@ -1808,5 +1809,35 @@ mod tests {
 
         clear_actions();
         assert_eq!(get_actions_count(), 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_mouse_button_dwflags_do_not_move_cursor() {
+        // Les clics ne doivent contenir QUE le flag de bouton : ni MOVE, ni ABSOLUTE.
+        assert_eq!(
+            mouse_button_dwflags(1, true),
+            winapi::um::winuser::MOUSEEVENTF_LEFTDOWN
+        );
+        assert_eq!(
+            mouse_button_dwflags(1, false),
+            winapi::um::winuser::MOUSEEVENTF_LEFTUP
+        );
+        assert_eq!(
+            mouse_button_dwflags(2, true),
+            winapi::um::winuser::MOUSEEVENTF_RIGHTDOWN
+        );
+        assert_eq!(
+            mouse_button_dwflags(2, false),
+            winapi::um::winuser::MOUSEEVENTF_RIGHTUP
+        );
+        assert_eq!(
+            mouse_button_dwflags(3, true),
+            winapi::um::winuser::MOUSEEVENTF_MIDDLEDOWN
+        );
+        assert_eq!(
+            mouse_button_dwflags(42, false),
+            winapi::um::winuser::MOUSEEVENTF_MIDDLEUP
+        );
     }
 }
