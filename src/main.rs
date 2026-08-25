@@ -12,6 +12,16 @@ use std::sync::mpsc;
 use std::thread;
 
 fn main() -> eframe::Result<()> {
+    // Logging gated : niveau par defaut debug en dev, warn en release,
+    // surchargeable sans recompilation via la variable RUST_LOG (issue #30).
+    #[cfg(debug_assertions)]
+    let default_level = "debug";
+    #[cfg(not(debug_assertions))]
+    let default_level = "warn";
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_level))
+        .format_timestamp_millis()
+        .init();
+
     // 1. Initialiser le canal d'événements du moteur vers l'UI
     let (tx_events, rx_events) = mpsc::channel();
     macro_core::set_event_sender(tx_events);
@@ -23,7 +33,7 @@ fn main() -> eframe::Result<()> {
     // 3. Démarrer l'écouteur global clavier/souris rdev (F8 = Rec, F9 = Stop, F4 = Stop Playback)
     thread::spawn(|| {
         if let Err(error) = rdev::listen(macro_core::handle_rdev_event) {
-            eprintln!("Erreur lors de l'écoute rdev: {:?}", error);
+            log::error!("Erreur lors de l'écoute rdev: {:?}", error);
         }
     });
 

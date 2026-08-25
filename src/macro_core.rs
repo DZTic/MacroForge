@@ -1,4 +1,5 @@
 use crate::events::{EngineEvent, PlaybackActionPayload};
+use log::{debug, error, info, trace, warn};
 use rayon::prelude::*;
 use rdev::{Button, Event, EventType, Key as RdevKey};
 use serde::{Deserialize, Serialize};
@@ -488,7 +489,7 @@ fn spawn_raw_input_listener() {
         };
 
         if RegisterRawInputDevices(&rid, 1, std::mem::size_of::<RAWINPUTDEVICE>() as u32) == 0 {
-            println!("ERREUR: Impossible d'enregistrer les Raw Input Devices");
+            error!("Impossible d'enregistrer les Raw Input Devices");
             return;
         }
 
@@ -595,7 +596,7 @@ impl TimerResolutionGuard {
         // (~15,6 ms par defaut) pour des sleep(1 ms) reels.
         let active = unsafe { timeBeginPeriod(1) } == 0 /* TIMERR_NOERROR */;
         if !active {
-            eprintln!("AVERTISSEMENT: timeBeginPeriod(1) a echoue, gigue timer possible.");
+            warn!("timeBeginPeriod(1) a echoue, gigue timer possible.");
         }
         Self { active }
     }
@@ -827,7 +828,7 @@ pub fn play_macro() {
     }
 
     if state.actions.is_empty() {
-        println!("Lecture annulée : aucune action dans la macro.");
+        debug!("Lecture annulée : aucune action dans la macro.");
         return;
     }
 
@@ -850,7 +851,7 @@ pub fn play_macro() {
         let ts = || format!("[+{:.2}s]", playback_start.elapsed().as_secs_f64());
         let total_actions = actions_to_play.len();
 
-        println!(
+        info!(
             "{} === PLAYBACK DÉMARRÉ ({} actions) ===",
             ts(),
             total_actions
@@ -866,7 +867,7 @@ pub fn play_macro() {
         let mut stop_blackout_until: Option<Instant> = None;
         'main_loop: loop {
             iteration += 1;
-            println!("{} --- Itération #{} démarrée ---", ts(), iteration);
+            trace!("{} --- Itération #{} démarrée ---", ts(), iteration);
 
             let mut action_index = 0usize;
             let mut timeline_origin = Instant::now();
@@ -876,7 +877,7 @@ pub fn play_macro() {
                 action_index += 1;
 
                 if *stop_flag.lock().unwrap() {
-                    println!(
+                    debug!(
                         "{} [STOP] stop_flag détecté avant action #{} — arrêt.",
                         ts(),
                         action_index
@@ -894,14 +895,14 @@ pub fn play_macro() {
                         last_stop_check = now;
                         if check_image_present(path) {
                             if MACRO_STATE.lock().unwrap().loop_playback {
-                                println!(
+                                info!(
                                     "{} [STOP IMAGE] Détectée ! Redémarrage (Blackout 15s activé).",
                                     ts()
                                 );
                                 stop_blackout_until = Some(now + Duration::from_secs(15));
                                 continue 'main_loop;
                             } else {
-                                println!("{} [STOP IMAGE] Détectée ! Arrêt définitif.", ts());
+                                info!("{} [STOP IMAGE] Détectée ! Arrêt définitif.", ts());
                                 break 'main_loop;
                             }
                         }
@@ -936,7 +937,7 @@ pub fn play_macro() {
                             last_stop_check = now;
                             if check_image_present(path) {
                                 if MACRO_STATE.lock().unwrap().loop_playback {
-                                    println!("{} [STOP IMAGE] Détectée pendant attente ! Redémarrage (Blackout 15s).", ts());
+                                    info!("{} [STOP IMAGE] Détectée pendant attente ! Redémarrage (Blackout 15s).", ts());
                                     stop_blackout_until = Some(now + Duration::from_secs(15));
                                     continue 'main_loop;
                                 } else {
@@ -951,7 +952,7 @@ pub fn play_macro() {
                 {
                     match action.action_type.clone() {
                         ActionType::KeyPress(ref name, vk, is_ext) => {
-                            println!(
+                            trace!(
                                 "{} [#{}/{}] KeyPress '{}' delay={}ms",
                                 ts(),
                                 action_index,
@@ -970,7 +971,7 @@ pub fn play_macro() {
                             send_key(vk, false, is_ext);
                         }
                         ActionType::KeyRelease(ref name, vk, is_ext) => {
-                            println!(
+                            trace!(
                                 "{} [#{}/{}] KeyRelease '{}' delay={}ms",
                                 ts(),
                                 action_index,
@@ -1048,7 +1049,7 @@ pub fn play_macro() {
                             }
                         }
                         ActionType::WaitImage(ref path, timeout) => {
-                            println!(
+                            trace!(
                                 "{} [#{}/{}] WaitImage '{}' timeout={}ms",
                                 ts(),
                                 action_index,
@@ -1084,7 +1085,7 @@ pub fn play_macro() {
                                             rb
                                         }
                                         Err(e) => {
-                                            println!("{} WaitImage: ERREUR chargement image intégrée: {} — action ignorée.", ts(), e);
+                                            error!("{} WaitImage: ERREUR chargement image intégrée: {} — action ignorée.", ts(), e);
                                             continue;
                                         }
                                     }
@@ -1096,7 +1097,7 @@ pub fn play_macro() {
                                             rb
                                         }
                                         Err(e) => {
-                                            println!("{} WaitImage: ERREUR ouverture image '{}': {} — action ignorée.", ts(), path, e);
+                                            error!("{} WaitImage: ERREUR ouverture image '{}': {} — action ignorée.", ts(), path, e);
                                             continue;
                                         }
                                     }
@@ -1292,7 +1293,7 @@ pub fn play_macro() {
                             }
                         }
                         ActionType::Wait(ms) => {
-                            println!(
+                            trace!(
                                 "{} [#{}/{}] Wait {}ms",
                                 ts(),
                                 action_index,
@@ -1357,7 +1358,7 @@ pub fn play_macro() {
 
         let mut state = MACRO_STATE.lock().unwrap();
         state.is_playing = false;
-        println!("{} === PLAYBACK TERMINÉ ===", ts());
+        info!("{} === PLAYBACK TERMINÉ ===", ts());
 
         notify_event(EngineEvent::PlaybackStateChanged(false));
     });

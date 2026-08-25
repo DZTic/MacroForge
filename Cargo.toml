@@ -17,6 +17,8 @@ lazy_static = "1.5.0"
 xcap = "0.9.3"
 rayon = "1.10.0"
 rfd = "0.15"
+log = "0.4"
+env_logger = "0.11"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
