@@ -1116,55 +1116,62 @@ impl eframe::App for MacroForgeApp {
                     let is_unfiltered =
                         !self.hide_mouse_moves && self.search_query.trim().is_empty();
 
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .id_salt("timeline_scroll_area")
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
+                    // Virtualisation de la liste (issue #10) : seules les cartes
+                    // visibles dans la fenetre sont layoutees/dessinees par frame.
+                    const ROW_HEIGHT: f32 = 34.0;
+                    let total_rows = if is_unfiltered {
+                        total_count
+                    } else {
+                        filtered_indices.len()
+                    };
 
+                    let mut timeline_scroll = egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .id_salt("timeline_scroll_area");
+                    if let Some(target) = self.scroll_target_index {
+                        let target_row = if is_unfiltered {
+                            Some(target)
+                        } else {
+                            filtered_indices.iter().position(|&i| i == target)
+                        };
+                        if let Some(row) = target_row {
+                            // Lignes a hauteur fixe : offset = row * ROW_HEIGHT.
+                            timeline_scroll = timeline_scroll
+                                .scroll_offset(egui::vec2(0.0, row as f32 * ROW_HEIGHT));
+                        }
+                    }
+
+                    timeline_scroll.show_rows(ui, ROW_HEIGHT, total_rows, |ui, row_range| {
+                        ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
+
+                        for row in row_range {
                             if is_unfiltered {
-                                for (idx, action) in self.actions_cache.iter_mut().enumerate() {
+                                let idx = row;
+                                if let Some(action) = self.actions_cache.get(idx) {
                                     let card = ActionCard::new(idx, action)
                                         .selected(self.selected_action_index == Some(idx))
                                         .lang(self.lang)
                                         .bounds(idx == 0, idx == total_count - 1);
-                                    let (resp, ev) = card.show(ui);
-                                    if let Some(target) = self.scroll_target_index {
-                                        if target == idx {
-                                            resp.scroll_to_me(Some(egui::Align::Center));
-                                        }
-                                    }
+                                    let (_, ev) = card.show(ui);
                                     if let Some(e) = ev {
                                         card_event_to_process = Some(e);
                                     }
                                 }
-                            } else {
-                                // Affichage de la vue filtrée
-                                for &original_idx in filtered_indices.iter() {
-                                    if let Some(action) = self.actions_cache.get(original_idx) {
-                                        let is_selected =
-                                            self.selected_action_index == Some(original_idx);
-                                        let card = ActionCard::new(original_idx, action)
-                                            .selected(is_selected)
-                                            .lang(self.lang)
-                                            .bounds(
-                                                original_idx == 0,
-                                                original_idx == total_count - 1,
-                                            );
-
-                                        let (resp, ev) = card.show(ui);
-                                        if let Some(target) = self.scroll_target_index {
-                                            if target == original_idx {
-                                                resp.scroll_to_me(Some(egui::Align::Center));
-                                            }
-                                        }
-                                        if let Some(e) = ev {
-                                            card_event_to_process = Some(e);
-                                        }
+                            } else if let Some(&original_idx) = filtered_indices.get(row) {
+                                let is_selected = self.selected_action_index == Some(original_idx);
+                                if let Some(action) = self.actions_cache.get(original_idx) {
+                                    let card = ActionCard::new(original_idx, action)
+                                        .selected(is_selected)
+                                        .lang(self.lang)
+                                        .bounds(original_idx == 0, original_idx == total_count - 1);
+                                    let (_, ev) = card.show(ui);
+                                    if let Some(e) = ev {
+                                        card_event_to_process = Some(e);
                                     }
                                 }
                             }
-                        });
+                        }
+                    });
 
                     // Nettoyer l'état de glisser-déposer si le pointeur est relâché
                     if ctx.input(|i| i.pointer.any_released()) {
