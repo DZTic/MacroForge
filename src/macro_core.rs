@@ -4,6 +4,7 @@ use rdev::{Button, Event, EventType, Key as RdevKey};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -314,8 +315,13 @@ lazy_static::lazy_static! {
 #[cfg(windows)]
 lazy_static::lazy_static! {
     pub static ref LAST_GAME_HWND: Mutex<isize> = Mutex::new(0);
-    pub static ref RAW_INPUT_FLAG: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
+
+#[cfg(windows)]
+static RAW_INPUT_FLAG: AtomicBool = AtomicBool::new(false);
+
+#[cfg(windows)]
+static RAW_INPUT_LISTENER_INIT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 
 #[cfg(windows)]
 const HID_USAGE_PAGE_GENERIC: u16 = 0x01;
@@ -370,14 +376,13 @@ pub fn emergency_stop() {
         s.is_recording = false;
         rec
     };
-    if was_recording {
-        #[cfg(windows)]
-        {
-            let mut flag = RAW_INPUT_FLAG.lock().unwrap();
-            *flag = false;
+        if was_recording {
+            #[cfg(windows)]
+            {
+                RAW_INPUT_FLAG.store(false, Ordering::SeqCst);
+            }
+            emit_recording_state(false);
         }
-        emit_recording_state(false);
-    }
 }
 
 /// Écouteur global ultra-réactif des raccourcis Windows (F8: Rec/Stop, F9: Stop Rec, F4: Arrêt Urgence)
@@ -430,8 +435,14 @@ pub fn start_global_hotkey_listener() {
 
 #[cfg(windows)]
 fn spawn_raw_input_listener() {
-    let flag = RAW_INPUT_FLAG.clone();
-    *flag.lock().unwrap() = true;
+    // Créé une seule fois pour la durée de vie du processus (issue #31) :
+    // chaque start_recording() réutilise ce thread/fenêtre permanent.
+    if RAW_INPUT_LISTENER_INIT.get().is_some() {
+        return;
+    }
+    RAW_INPUT_LISTENER_INIT
+        .set(())
+        .expect("Raw Input listener déjà initialisé");
 
     thread::spawn(move || unsafe {
         let h_instance = GetModuleHandleW(std::ptr::null());
@@ -481,10 +492,6 @@ fn spawn_raw_input_listener() {
 
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, hwnd, 0, 0) != 0 {
-            if !*flag.lock().unwrap() {
-                break;
-            }
-
             if msg.message == WM_INPUT {
                 let mut size: u32 = 0;
                 GetRawInputData(
@@ -717,7 +724,10 @@ fn rdev_key_to_name_and_scan(key: &RdevKey) -> (String, u16, bool) {
 }
 
 pub fn start_recording() {
-    println!("Démarrage de l'enregistrement (Raw Input Mode)...");
+    #[cfg(windows)]
+    {
+        RAW_INPUT_FLAG.store(true, Ordering::SeqCst);
+    }
     {
         let mut state = MACRO_STATE.lock().unwrap();
         state.is_recording = true;
@@ -771,8 +781,7 @@ pub fn stop_recording() -> usize {
 
     #[cfg(windows)]
     {
-        let mut flag = RAW_INPUT_FLAG.lock().unwrap();
-        *flag = false;
+        RAW_INPUT_FLAG.store(false, Ordering::SeqCst);
     }
 
     emit_recording_state(false);
