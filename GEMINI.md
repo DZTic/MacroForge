@@ -6,7 +6,7 @@ Ce fichier définit les règles et directives d'ingénierie globale pour l'espac
 
 Ce projet utilise le système de **Custom Agents Antigravity** situés dans [`.agents/agents/`](./.agents/agents/).
 Lors de la résolution de tâches complexes, privilégier la division du travail :
-- **Backend / Tauri / Win32** : Se référer à [`.agents/agents/rust-core.md`](./.agents/agents/rust-core.md).
+- **Backend / Win32** : Se référer à [`.agents/agents/rust-core.md`](./.agents/agents/rust-core.md).
 - **Interface Utilisateur Native (egui / eframe)** : Se référer à [`.agents/agents/rust-core.md`](./.agents/agents/rust-core.md).
 - **Vision par Ordinateur / Pattern Matching / Entrées FPS** : Se référer à [`.agents/agents/vision-automation.md`](./.agents/agents/vision-automation.md).
 - **Contrôle Qualité / Sécurité Windows / Cas Limites** : Se référer à [`.agents/agents/qa-security.md`](./.agents/agents/qa-security.md).
