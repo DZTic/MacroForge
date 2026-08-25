@@ -3,8 +3,8 @@ use rayon::prelude::*;
 use rdev::{Button, Event, EventType, Key as RdevKey};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -376,13 +376,13 @@ pub fn emergency_stop() {
         s.is_recording = false;
         rec
     };
-        if was_recording {
-            #[cfg(windows)]
-            {
-                RAW_INPUT_FLAG.store(false, Ordering::SeqCst);
-            }
-            emit_recording_state(false);
+    if was_recording {
+        #[cfg(windows)]
+        {
+            RAW_INPUT_FLAG.store(false, Ordering::SeqCst);
         }
+        emit_recording_state(false);
+    }
 }
 
 /// Écouteur global ultra-réactif des raccourcis Windows (F8: Rec/Stop, F9: Stop Rec, F4: Arrêt Urgence)
