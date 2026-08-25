@@ -36,6 +36,9 @@ pub struct MacroForgeApp {
     filtered_cache_valid: bool,
     last_filter_query: Option<String>,
     last_filter_hide_moves: Option<bool>,
+    // Version de la liste d'actions : incrémentée à chaque mutation (issue #15)
+    actions_version: u64,
+    last_filter_actions_version: u64,
     jump_index: usize,
     scroll_target_index: Option<usize>,
 
@@ -92,6 +95,8 @@ impl MacroForgeApp {
             filtered_cache_valid: false,
             last_filter_query: None,
             last_filter_hide_moves: None,
+            actions_version: 0,
+            last_filter_actions_version: 0,
             jump_index: 1,
             scroll_target_index: None,
             selected_action_index: None,
@@ -202,13 +207,17 @@ impl MacroForgeApp {
     }
 
     fn invalidate_filtered_cache(&mut self) {
+        // Toute mutation de la liste incrémente la version : le cache du filtre
+        // est mécaniquement obsolète même si un chemin oubliait ce flag (issue #15).
+        self.actions_version = self.actions_version.wrapping_add(1);
         self.filtered_cache_valid = false;
     }
 
     /// Reconstruit les indices visibles uniquement si le cache est invalide.
     fn ensure_filtered_indices(&mut self) {
         let filter_changed = self.last_filter_query.as_deref() != Some(self.search_query.trim())
-            || self.last_filter_hide_moves != Some(self.hide_mouse_moves);
+            || self.last_filter_hide_moves != Some(self.hide_mouse_moves)
+            || self.last_filter_actions_version != self.actions_version;
         if self.filtered_cache_valid && !filter_changed {
             return;
         }
@@ -232,6 +241,7 @@ impl MacroForgeApp {
         self.filtered_cache_valid = true;
         self.last_filter_query = Some(self.search_query.trim().to_string());
         self.last_filter_hide_moves = Some(hide_moves);
+        self.last_filter_actions_version = self.actions_version;
     }
 
     /// Normalise la requete une seule fois par recalcul du cache (issue #32).
@@ -243,9 +253,108 @@ impl MacroForgeApp {
 
     /// Matche la forme entiere ou decimale : 10 matche 10.5 comme avant.
     fn number_matches_query(raw: &str, value: f64) -> bool {
+        let bytes = raw.as_bytes();
         let as_int = value as i64;
-        raw.contains(&as_int.to_string())
-            || (value != as_int as f64 && raw.contains(&value.to_string()))
+        if Self::contains_int(bytes, as_int) {
+            return true;
+        }
+        let frac = value - as_int as f64;
+        if frac <= 0.0 {
+            return false;
+        }
+        // Forme decimale "123.45" construite dans un buffer pile, sans format!.
+        let mut buf = [0u8; 32];
+        let mut len = Self::write_int_into(&mut buf, as_int);
+        buf[len] = b'.';
+        len += 1;
+        len += Self::write_frac_into(&mut buf[len..], frac);
+        bytes.len() >= len && bytes.windows(len).any(|w| w == &buf[..len])
+    }
+
+    /// Ecrit la representation decimale de n dans buf, retourne la longueur ecrite.
+    fn write_int_into(buf: &mut [u8], n: i64) -> usize {
+        if n == 0 {
+            buf[0] = b'0';
+            return 1;
+        }
+        let mut scratch = [0u8; 20];
+        let mut len = 0usize;
+        let mut m = n;
+        let negative = m < 0;
+        while m != 0 {
+            scratch[len] = b'0' + (m % 10).unsigned_abs() as u8;
+            len += 1;
+            m /= 10;
+        }
+        let mut out = 0usize;
+        if negative {
+            buf[out] = b'-';
+            out += 1;
+        }
+        while len > 0 {
+            len -= 1;
+            buf[out] = scratch[len];
+            out += 1;
+        }
+        out
+    }
+
+    /// Ecrit les decimales significatives d'une fraction (ex : 0.45 -> "45").
+    fn write_frac_into(buf: &mut [u8], mut frac: f64) -> usize {
+        let mut len = 0usize;
+        while frac > 0.0 && len < buf.len() && len < 12 {
+            frac *= 10.0;
+            let digit = frac as u8;
+            buf[len] = b'0' + digit.min(9);
+            len += 1;
+            frac -= digit as f64;
+        }
+        while len > 0 && buf[len - 1] == b'0' {
+            len -= 1;
+        }
+        len
+    }
+
+    /// Recherche sans allocation d'un entier dans une requete (issue #15).
+    fn contains_int(bytes: &[u8], n: i64) -> bool {
+        let mut buf = [0u8; 21];
+        let len = Self::write_int_into(&mut buf, n);
+        bytes.len() >= len && bytes.windows(len).any(|w| w == &buf[..len])
+    }
+
+    /// Recherche sans allocation de la representation hexadecimale minuscule de vk.
+    fn contains_hex_u16(bytes: &[u8], vk: u16) -> bool {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut buf = [0u8; 4];
+        let mut len = 0usize;
+        let mut v = vk;
+        if v == 0 {
+            buf[0] = b'0';
+            len = 1;
+        } else {
+            while v != 0 {
+                buf[len] = HEX[(v % 16) as usize];
+                len += 1;
+                v /= 16;
+            }
+            buf[..len].reverse();
+        }
+        bytes.len() >= len && bytes.windows(len).any(|w| w == &buf[..len])
+    }
+
+    /// Equivalent sans allocation de raw.contains(format!("btn {b}")).
+    fn contains_btn(bytes: &[u8], btn: u8) -> bool {
+        const PREFIX: &[u8] = b"btn ";
+        let digit = b'0' + btn.min(9);
+        for i in 0..bytes.len() {
+            if bytes[i] == PREFIX[0]
+                && bytes[i..].starts_with(PREFIX)
+                && bytes.get(i + PREFIX.len()) == Some(&digit)
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// Matche un texte en minuscules sans re-allouer la requete.
@@ -267,15 +376,16 @@ impl MacroForgeApp {
         }
 
         let raw = &q.raw;
+        let raw_bytes = raw.as_bytes();
         match &action.action_type {
             ActionType::KeyPress(name, vk, _) => {
                 Self::text_matches_query(name, raw)
-                    || raw.contains(&format!("{:x}", vk))
+                    || Self::contains_hex_u16(raw_bytes, *vk)
                     || raw.contains("keypress")
             }
             ActionType::KeyRelease(name, vk, _) => {
                 Self::text_matches_query(name, raw)
-                    || raw.contains(&format!("{:x}", vk))
+                    || Self::contains_hex_u16(raw_bytes, *vk)
                     || raw.contains("keyrelease")
             }
             ActionType::MouseMove(x, y) => {
@@ -291,14 +401,14 @@ impl MacroForgeApp {
                     || Self::number_matches_query(raw, f64::from(*dy))
             }
             ActionType::MousePress(btn, x, y) => {
-                raw.contains(&format!("btn {}", btn))
+                Self::contains_btn(raw_bytes, *btn)
                     || raw.contains("click")
                     || raw.contains("clic")
                     || Self::number_matches_query(raw, *x)
                     || Self::number_matches_query(raw, *y)
             }
             ActionType::MouseRelease(btn, _, _) => {
-                raw.contains(&format!("btn {}", btn)) || raw.contains("release")
+                Self::contains_btn(raw_bytes, *btn) || raw.contains("release")
             }
             ActionType::Scroll(dx, dy) => {
                 raw.contains("scroll")
@@ -307,11 +417,13 @@ impl MacroForgeApp {
                     || Self::number_matches_query(raw, *dy)
             }
             ActionType::Wait(ms) => {
-                raw.contains(&ms.to_string()) || raw.contains("wait") || raw.contains("pause")
+                Self::contains_int(raw_bytes, *ms as i64)
+                    || raw.contains("wait")
+                    || raw.contains("pause")
             }
             ActionType::WaitImage(path, timeout) => {
                 Self::text_matches_query(path, raw)
-                    || raw.contains(&timeout.to_string())
+                    || Self::contains_int(raw_bytes, *timeout as i64)
                     || raw.contains("image")
             }
         }
@@ -1273,6 +1385,8 @@ mod tests {
             filtered_cache_valid: false,
             last_filter_query: None,
             last_filter_hide_moves: None,
+            actions_version: 0,
+            last_filter_actions_version: 0,
             jump_index: 1,
             scroll_target_index: None,
             selected_action_index: None,
@@ -1303,6 +1417,8 @@ mod tests {
             filtered_cache_valid: false,
             last_filter_query: None,
             last_filter_hide_moves: None,
+            actions_version: 0,
+            last_filter_actions_version: 0,
             jump_index: 1,
             scroll_target_index: None,
             selected_action_index: None,
@@ -1380,5 +1496,49 @@ mod tests {
         app.hide_mouse_moves = true;
         app.ensure_filtered_indices();
         assert_eq!(app.filtered_indices, vec![0]);
+    }
+
+    #[test]
+    fn test_filter_cache_invalidated_on_actions_version_bump() {
+        let mut app = make_test_app(vec![sample_action(ActionType::Wait(100))]);
+        app.ensure_filtered_indices();
+        assert!(app.filtered_cache_valid);
+
+        // Mutation sans changer la requete : la version d'actions force le recalcul.
+        app.actions_cache.push(sample_action(ActionType::Wait(200)));
+        app.invalidate_filtered_cache();
+        assert_ne!(app.last_filter_actions_version, app.actions_version);
+        app.ensure_filtered_indices();
+        assert_eq!(app.filtered_indices, vec![0, 1]);
+        assert_eq!(app.last_filter_actions_version, app.actions_version);
+    }
+
+    #[test]
+    fn test_number_matching_no_alloc_equivalence() {
+        // Entier : "10" doit matcher 10 et 10.5 (comportement historique).
+        assert!(MacroForgeApp::number_matches_query("10", 10.0));
+        assert!(MacroForgeApp::number_matches_query("10", 10.5));
+        assert!(!MacroForgeApp::number_matches_query("11", 10.0));
+        // Semantique historique substring : "10.6".contains("10") == vrai.
+        assert!(MacroForgeApp::number_matches_query("10.6", 10.5));
+        // Decimal exact.
+        assert!(MacroForgeApp::number_matches_query("10.5", 10.5));
+        assert!(!MacroForgeApp::number_matches_query("12.6", 10.5));
+        // Negatifs.
+        assert!(MacroForgeApp::number_matches_query("-3", -3.0));
+        assert!(!MacroForgeApp::number_matches_query("-4", -3.0));
+        // Zero.
+        assert!(MacroForgeApp::number_matches_query("0", 0.0));
+    }
+
+    #[test]
+    fn test_btn_and_hex_matching_no_alloc() {
+        assert!(MacroForgeApp::contains_btn(b"btn 2", 2));
+        // Semantique historique substring : "btn 22" contient "btn 2".
+        assert!(MacroForgeApp::contains_btn(b"btn 22", 2));
+        assert!(!MacroForgeApp::contains_btn(b"btn 3", 2));
+        assert!(MacroForgeApp::contains_hex_u16(b"1b", 0x1B));
+        assert!(MacroForgeApp::contains_hex_u16(b"vk: ff", 0xFF));
+        assert!(!MacroForgeApp::contains_hex_u16(b"1c", 0x1B));
     }
 }
