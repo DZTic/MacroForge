@@ -12,6 +12,11 @@ use crate::ui::widgets::{
 use eframe::egui::{self, Color32, Frame, Margin, Rounding, Stroke};
 use std::sync::mpsc::Receiver;
 
+/// Requete de recherche pre-normalisee : construite une seule fois par recalcul du cache.
+struct SearchQuery {
+    raw: String,
+}
+
 pub struct MacroForgeApp {
     rx_events: Receiver<EngineEvent>,
     is_recording: bool,
@@ -26,6 +31,11 @@ pub struct MacroForgeApp {
     // Filtres & Recherche
     hide_mouse_moves: bool,
     search_query: String,
+    // Cache du filtrage : recalcule seulement quand la liste ou le filtre change (issue #32)
+    filtered_indices: Vec<usize>,
+    filtered_cache_valid: bool,
+    last_filter_query: Option<String>,
+    last_filter_hide_moves: Option<bool>,
     jump_index: usize,
     scroll_target_index: Option<usize>,
 
@@ -78,6 +88,10 @@ impl MacroForgeApp {
             lang,
             hide_mouse_moves: settings.hide_mouse_moves,
             search_query: String::new(),
+            filtered_indices: Vec::new(),
+            filtered_cache_valid: false,
+            last_filter_query: None,
+            last_filter_hide_moves: None,
             jump_index: 1,
             scroll_target_index: None,
             selected_action_index: None,
@@ -184,69 +198,123 @@ impl MacroForgeApp {
     fn refresh_actions(&mut self) {
         self.actions_cache = macro_core::get_actions();
         self.toolbar.total_actions = self.actions_cache.len();
+        self.invalidate_filtered_cache();
     }
 
-    fn matches_filter(&self, action: &MacroAction) -> bool {
-        // 1. Filtre mouvement souris
-        if self.hide_mouse_moves {
+    fn invalidate_filtered_cache(&mut self) {
+        self.filtered_cache_valid = false;
+    }
+
+    /// Reconstruit les indices visibles uniquement si le cache est invalide.
+    fn ensure_filtered_indices(&mut self) {
+        let filter_changed = self.last_filter_query.as_deref() != Some(self.search_query.trim())
+            || self.last_filter_hide_moves != Some(self.hide_mouse_moves);
+        if self.filtered_cache_valid && !filter_changed {
+            return;
+        }
+
+        let query = Self::build_search_query(&self.search_query);
+        let hide_moves = self.hide_mouse_moves;
+
+        self.filtered_indices = self
+            .actions_cache
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, act)| {
+                if Self::action_matches_filter(act, hide_moves, &query) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        self.filtered_cache_valid = true;
+        self.last_filter_query = Some(self.search_query.trim().to_string());
+        self.last_filter_hide_moves = Some(hide_moves);
+    }
+
+    /// Normalise la requete une seule fois par recalcul du cache (issue #32).
+    fn build_search_query(input: &str) -> SearchQuery {
+        SearchQuery {
+            raw: input.trim().to_lowercase(),
+        }
+    }
+
+    /// Matche la forme entiere ou decimale : 10 matche 10.5 comme avant.
+    fn number_matches_query(raw: &str, value: f64) -> bool {
+        let as_int = value as i64;
+        raw.contains(&as_int.to_string())
+            || (value != as_int as f64 && raw.contains(&value.to_string()))
+    }
+
+    /// Matche un texte en minuscules sans re-allouer la requete.
+    fn text_matches_query(text: &str, raw: &str) -> bool {
+        text.to_lowercase().contains(raw)
+    }
+
+    /// Filtrage d'une action, comportement identique a l'ancien matches_filter.
+    fn action_matches_filter(action: &MacroAction, hide_moves: bool, q: &SearchQuery) -> bool {
+        if hide_moves {
             match &action.action_type {
                 ActionType::MouseMove(_, _) | ActionType::MouseMoveRelative(_, _) => return false,
                 _ => {}
             }
         }
 
-        // 2. Filtre recherche textuelle
-        if !self.search_query.trim().is_empty() {
-            let q = self.search_query.trim().to_lowercase();
-            let matches = match &action.action_type {
-                ActionType::KeyPress(name, vk, _) => {
-                    name.to_lowercase().contains(&q)
-                        || format!("{:x}", vk).contains(&q)
-                        || "keypress".contains(&q)
-                }
-                ActionType::KeyRelease(name, vk, _) => {
-                    name.to_lowercase().contains(&q)
-                        || format!("{:x}", vk).contains(&q)
-                        || "keyrelease".contains(&q)
-                }
-                ActionType::MouseMove(x, y) => {
-                    format!("{} {}", x, y).contains(&q)
-                        || "move".contains(&q)
-                        || "souris".contains(&q)
-                }
-                ActionType::MouseMoveRelative(dx, dy) => {
-                    format!("{} {}", dx, dy).contains(&q)
-                        || "rel".contains(&q)
-                        || "relative".contains(&q)
-                }
-                ActionType::MousePress(btn, _, _) => {
-                    format!("btn {}", btn).contains(&q)
-                        || "click".contains(&q)
-                        || "clic".contains(&q)
-                }
-                ActionType::MouseRelease(btn, _, _) => {
-                    format!("btn {}", btn).contains(&q) || "release".contains(&q)
-                }
-                ActionType::Scroll(dx, dy) => {
-                    format!("{} {}", dx, dy).contains(&q)
-                        || "scroll".contains(&q)
-                        || "molette".contains(&q)
-                }
-                ActionType::Wait(ms) => {
-                    format!("{}", ms).contains(&q) || "wait".contains(&q) || "pause".contains(&q)
-                }
-                ActionType::WaitImage(path, timeout) => {
-                    path.to_lowercase().contains(&q)
-                        || format!("{}", timeout).contains(&q)
-                        || "image".contains(&q)
-                }
-            };
-            if !matches {
-                return false;
-            }
+        if q.raw.is_empty() {
+            return true;
         }
 
-        true
+        let raw = &q.raw;
+        match &action.action_type {
+            ActionType::KeyPress(name, vk, _) => {
+                Self::text_matches_query(name, raw)
+                    || raw.contains(&format!("{:x}", vk))
+                    || raw.contains("keypress")
+            }
+            ActionType::KeyRelease(name, vk, _) => {
+                Self::text_matches_query(name, raw)
+                    || raw.contains(&format!("{:x}", vk))
+                    || raw.contains("keyrelease")
+            }
+            ActionType::MouseMove(x, y) => {
+                raw.contains("move")
+                    || raw.contains("souris")
+                    || Self::number_matches_query(raw, *x)
+                    || Self::number_matches_query(raw, *y)
+            }
+            ActionType::MouseMoveRelative(dx, dy) => {
+                raw.contains("rel")
+                    || raw.contains("relative")
+                    || Self::number_matches_query(raw, f64::from(*dx))
+                    || Self::number_matches_query(raw, f64::from(*dy))
+            }
+            ActionType::MousePress(btn, x, y) => {
+                raw.contains(&format!("btn {}", btn))
+                    || raw.contains("click")
+                    || raw.contains("clic")
+                    || Self::number_matches_query(raw, *x)
+                    || Self::number_matches_query(raw, *y)
+            }
+            ActionType::MouseRelease(btn, _, _) => {
+                raw.contains(&format!("btn {}", btn)) || raw.contains("release")
+            }
+            ActionType::Scroll(dx, dy) => {
+                raw.contains("scroll")
+                    || raw.contains("molette")
+                    || Self::number_matches_query(raw, *dx)
+                    || Self::number_matches_query(raw, *dy)
+            }
+            ActionType::Wait(ms) => {
+                raw.contains(&ms.to_string()) || raw.contains("wait") || raw.contains("pause")
+            }
+            ActionType::WaitImage(path, timeout) => {
+                Self::text_matches_query(path, raw)
+                    || raw.contains(&timeout.to_string())
+                    || raw.contains("image")
+            }
+        }
     }
 }
 
@@ -755,6 +823,7 @@ impl eframe::App for MacroForgeApp {
                         {
                             macro_core::clear_actions();
                             self.actions_cache.clear();
+                            self.invalidate_filtered_cache();
                             self.status_message = match self.lang {
                                 Language::Fr => "Toutes les actions ont été effacées.".to_string(),
                                 Language::En => "All actions have been cleared.".to_string(),
@@ -884,6 +953,7 @@ impl eframe::App for MacroForgeApp {
                             if ui.add(clear_btn).clicked() {
                                 macro_core::clear_actions();
                                 self.actions_cache.clear();
+                                self.invalidate_filtered_cache();
                                 self.status_message = match self.lang {
                                     Language::Fr => {
                                         "Toutes les actions ont été effacées.".to_string()
@@ -952,18 +1022,9 @@ impl eframe::App for MacroForgeApp {
 
                 // Filtrage des actions
                 let total_count = self.actions_cache.len();
-                let filtered_indices: Vec<usize> = self
-                    .actions_cache
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, act)| {
-                        if self.matches_filter(act) {
-                            Some(idx)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
+                // Cache : recalcul seulement si la liste ou le filtre a change (issue #32)
+                self.ensure_filtered_indices();
+                let filtered_indices = &self.filtered_indices;
                 let visible_count = filtered_indices.len();
 
                 let mut jump_triggered = false;
@@ -1079,7 +1140,7 @@ impl eframe::App for MacroForgeApp {
                                 }
                             } else {
                                 // Affichage de la vue filtrée
-                                for &original_idx in &filtered_indices {
+                                for &original_idx in filtered_indices.iter() {
                                     if let Some(action) = self.actions_cache.get(original_idx) {
                                         let is_selected =
                                             self.selected_action_index == Some(original_idx);
@@ -1208,6 +1269,10 @@ mod tests {
             lang: Language::Fr,
             hide_mouse_moves: false,
             search_query: String::new(),
+            filtered_indices: Vec::new(),
+            filtered_cache_valid: false,
+            last_filter_query: None,
+            last_filter_hide_moves: None,
             jump_index: 1,
             scroll_target_index: None,
             selected_action_index: None,
@@ -1220,5 +1285,100 @@ mod tests {
 
         assert!(app.main_window_visible);
         assert!(!app.toolbar.is_visible);
+    }
+
+    fn make_test_app(actions: Vec<MacroAction>) -> MacroForgeApp {
+        let (_tx, rx) = mpsc::channel();
+        MacroForgeApp {
+            rx_events: rx,
+            is_recording: false,
+            is_playing: false,
+            loop_playback: false,
+            actions_cache: actions,
+            status_message: "Ready".to_string(),
+            lang: Language::Fr,
+            hide_mouse_moves: false,
+            search_query: String::new(),
+            filtered_indices: Vec::new(),
+            filtered_cache_valid: false,
+            last_filter_query: None,
+            last_filter_hide_moves: None,
+            jump_index: 1,
+            scroll_target_index: None,
+            selected_action_index: None,
+            action_modal: ActionEditorModal::new(),
+            stop_image_modal: StopImageConfigModal::new(),
+            toolbar: crate::ui::FloatingToolbar::new(),
+            main_window_visible: true,
+            overlay: crate::ui::TransparentOverlay::new(),
+        }
+    }
+
+    fn sample_action(action_type: ActionType) -> MacroAction {
+        MacroAction {
+            action_type,
+            delay_ms: 0,
+        }
+    }
+
+    #[test]
+    fn test_filtered_cache_recomputed_only_on_invalidation() {
+        let mut app = make_test_app(vec![
+            sample_action(ActionType::KeyPress("A".to_string(), 0x41, false)),
+            sample_action(ActionType::MouseMove(120.0, 240.0)),
+        ]);
+
+        app.ensure_filtered_indices();
+        assert_eq!(app.filtered_indices, vec![0, 1]);
+
+        // Aucun changement : le cache reste valide, aucun recalcul necessaire
+        app.ensure_filtered_indices();
+        assert!(app.filtered_cache_valid);
+
+        // Mutation de la liste : invalidation puis recalcul complet
+        app.actions_cache.push(sample_action(ActionType::Wait(500)));
+        app.invalidate_filtered_cache();
+        app.ensure_filtered_indices();
+        assert_eq!(app.filtered_indices, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_search_matches_previous_behavior() {
+        let mut app = make_test_app(vec![
+            sample_action(ActionType::KeyPress("Escape".to_string(), 0x1B, false)),
+            sample_action(ActionType::MouseMove(10.0, 20.0)),
+            sample_action(ActionType::MousePress(0, 10.5, 20.25)),
+            sample_action(ActionType::Scroll(0.0, -3.0)),
+            sample_action(ActionType::Wait(750)),
+        ]);
+
+        app.search_query = "ESC".to_string();
+        app.ensure_filtered_indices();
+        assert_eq!(app.filtered_indices, vec![0]);
+
+        app.search_query = "move".to_string();
+        app.ensure_filtered_indices();
+        assert_eq!(app.filtered_indices, vec![1]);
+
+        app.search_query = "10".to_string();
+        app.ensure_filtered_indices();
+        assert!(app.filtered_indices.contains(&1) && app.filtered_indices.contains(&2));
+
+        app.search_query = "pause".to_string();
+        app.ensure_filtered_indices();
+        assert_eq!(app.filtered_indices, vec![4]);
+    }
+
+    #[test]
+    fn test_hide_mouse_moves_filters_absolute_and_relative() {
+        let mut app = make_test_app(vec![
+            sample_action(ActionType::KeyPress("A".to_string(), 0x41, false)),
+            sample_action(ActionType::MouseMove(1.0, 2.0)),
+            sample_action(ActionType::MouseMoveRelative(3, 4)),
+        ]);
+
+        app.hide_mouse_moves = true;
+        app.ensure_filtered_indices();
+        assert_eq!(app.filtered_indices, vec![0]);
     }
 }
