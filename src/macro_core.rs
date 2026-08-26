@@ -176,10 +176,30 @@ pub fn send_key(vk: u16, key_up: bool, is_extended: bool) {
     }
 }
 
-/// Capture rapide d'un rectangle de l'écran via GDI (Windows uniquement)
-/// Retourne les pixels en format BGRA
 #[cfg(windows)]
-pub fn capture_screen_gdi(x: i32, y: i32, width: i32, height: i32) -> Option<Vec<u8>> {
+thread_local! {
+    static TLS_SCREEN_BUFFER: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Capture rapide d'un rectangle de l'écran via GDI (Windows uniquement) dans un buffer existant.
+/// Évite toute réallocation si le buffer a déjà la capacité requise (width * height * 4 octets).
+/// Retourne true si la capture a réussi, false sinon.
+#[cfg(windows)]
+pub fn capture_screen_gdi_into(
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    buffer: &mut Vec<u8>,
+) -> bool {
+    if width <= 0 || height <= 0 {
+        return false;
+    }
+    let required_len = (width as usize) * (height as usize) * 4;
+    if buffer.len() != required_len {
+        buffer.resize(required_len, 0);
+    }
+
     use std::ptr::null_mut;
     use winapi::um::wingdi::{
         BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits,
@@ -190,14 +210,32 @@ pub fn capture_screen_gdi(x: i32, y: i32, width: i32, height: i32) -> Option<Vec
     unsafe {
         let hdc_screen = GetDC(null_mut());
         if hdc_screen.is_null() {
-            return None;
+            return false;
         }
 
         let hdc_mem = CreateCompatibleDC(hdc_screen);
+        if hdc_mem.is_null() {
+            ReleaseDC(null_mut(), hdc_screen);
+            return false;
+        }
+
         let hbm = CreateCompatibleBitmap(hdc_screen, width, height);
+        if hbm.is_null() {
+            DeleteDC(hdc_mem);
+            ReleaseDC(null_mut(), hdc_screen);
+            return false;
+        }
+
         let old_obj = SelectObject(hdc_mem, hbm as *mut _);
 
-        BitBlt(hdc_mem, 0, 0, width, height, hdc_screen, x, y, SRCCOPY);
+        let blt_ok = BitBlt(hdc_mem, 0, 0, width, height, hdc_screen, x, y, SRCCOPY);
+        if blt_ok == 0 {
+            SelectObject(hdc_mem, old_obj);
+            DeleteObject(hbm as *mut _);
+            DeleteDC(hdc_mem);
+            ReleaseDC(null_mut(), hdc_screen);
+            return false;
+        }
 
         let mut bmi = BITMAPINFOHEADER {
             biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
@@ -213,24 +251,12 @@ pub fn capture_screen_gdi(x: i32, y: i32, width: i32, height: i32) -> Option<Vec
             biClrImportant: 0,
         };
 
-        // Reutilisation du buffer entre captures consecutives de meme taille
-        // (issue #11) : evite l'alloc/liberation d'un grand buffer par frame.
-        let mut cache_guard = SCREEN_BUFFER_CACHE.lock().unwrap();
-        if cache_guard
-            .as_ref()
-            .map(|(w, h, _)| *w != width || *h != height)
-            .unwrap_or(true)
-        {
-            *cache_guard = Some((width, height, vec![0u8; (width * height * 4) as usize]));
-        }
-        let pixels = &mut cache_guard.as_mut().unwrap().2;
-
-        GetDIBits(
+        let lines_copied = GetDIBits(
             hdc_mem,
             hbm,
             0,
             height as u32,
-            pixels.as_mut_ptr() as *mut _,
+            buffer.as_mut_ptr() as *mut _,
             &mut bmi as *mut _ as *mut _,
             DIB_RGB_COLORS,
         );
@@ -240,8 +266,38 @@ pub fn capture_screen_gdi(x: i32, y: i32, width: i32, height: i32) -> Option<Vec
         DeleteDC(hdc_mem);
         ReleaseDC(null_mut(), hdc_screen);
 
-        Some(pixels.clone())
+        lines_copied != 0
     }
+}
+
+/// Capture rapide d'un rectangle de l'écran via GDI en passant une closure sans allouer de copie du buffer.
+#[cfg(windows)]
+pub fn with_screen_capture_gdi<R>(
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    f: impl FnOnce(&[u8]) -> R,
+) -> Option<R> {
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+
+    TLS_SCREEN_BUFFER.with(|cell| {
+        let mut buf = cell.borrow_mut();
+        if capture_screen_gdi_into(x, y, width, height, &mut buf) {
+            Some(f(&buf))
+        } else {
+            None
+        }
+    })
+}
+
+/// Capture rapide d'un rectangle de l'écran via GDI (Windows uniquement).
+/// Retourne les pixels en format BGRA dans un nouveau Vec<u8>.
+#[cfg(windows)]
+pub fn capture_screen_gdi(x: i32, y: i32, width: i32, height: i32) -> Option<Vec<u8>> {
+    with_screen_capture_gdi(x, y, width, height, |buf| buf.to_vec())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -323,8 +379,6 @@ lazy_static::lazy_static! {
     pub static ref EVENT_SENDER: Mutex<Option<Sender<EngineEvent>>> = Mutex::new(None);
     pub static ref EGUI_CTX: Mutex<Option<eframe::egui::Context>> = Mutex::new(None);
     pub static ref IMAGE_CACHE: Mutex<HashMap<String, Arc<image::RgbaImage>>> = Mutex::new(HashMap::new());
-    #[cfg(windows)]
-    static ref SCREEN_BUFFER_CACHE: Mutex<Option<(i32, i32, Vec<u8>)>> = Mutex::new(None);
     static ref LAST_RECORD_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
@@ -629,6 +683,140 @@ fn pixels_match(r1: u8, g1: u8, b1: u8, r2: u8, g2: u8, b2: u8, tolerance: u8) -
     (r1 as i16 - r2 as i16).unsigned_abs() <= tolerance as u16
         && (g1 as i16 - g2 as i16).unsigned_abs() <= tolerance as u16
         && (b1 as i16 - b2 as i16).unsigned_abs() <= tolerance as u16
+}
+
+/// Recherche parallèle (via Rayon) d'un template RGBA dans une capture d'écran BGRA.
+/// Retourne les coordonnées (x, y) de la première occurrence trouvée.
+/// Optimisations :
+/// - Rejet précoce sur points stratégiques (coin haut-gauche (0,0), centre, coin bas-droit).
+/// - Vérification complète par grille espacée (step_by 2) pour accélérer le matching.
+pub fn find_template_in_bgra(
+    screen_raw: &[u8],
+    screen_width: usize,
+    screen_height: usize,
+    template_raw: &[u8],
+    template_width: usize,
+    template_height: usize,
+    tolerance: u8,
+) -> Option<(usize, usize)> {
+    if template_width == 0
+        || template_height == 0
+        || template_width > screen_width
+        || template_height > screen_height
+    {
+        return None;
+    }
+    if screen_raw.len() < screen_width * screen_height * 4
+        || template_raw.len() < template_width * template_height * 4
+    {
+        return None;
+    }
+
+    let t_mid_y = template_height / 2;
+    let t_mid_x = template_width / 2;
+    let t_mid_idx = (t_mid_y * template_width + t_mid_x) * 4;
+
+    let t_last_y = template_height - 1;
+    let t_last_x = template_width - 1;
+    let t_last_idx = (t_last_y * template_width + t_last_x) * 4;
+
+    (0..=(screen_height - template_height))
+        .into_par_iter()
+        .find_map_any(|sy| {
+            let monitor_row_start = sy * screen_width * 4;
+            for sx in 0..=(screen_width - template_width) {
+                let monitor_pixel_idx = monitor_row_start + sx * 4;
+
+                // 1. Point 1 : Coin supérieur gauche (0, 0)
+                let (sr, sg, sb) = (
+                    screen_raw[monitor_pixel_idx + 2],
+                    screen_raw[monitor_pixel_idx + 1],
+                    screen_raw[monitor_pixel_idx],
+                );
+                if !pixels_match(
+                    sr,
+                    sg,
+                    sb,
+                    template_raw[0],
+                    template_raw[1],
+                    template_raw[2],
+                    tolerance,
+                ) {
+                    continue;
+                }
+
+                // 2. Point 2 : Centre
+                let s_mid_idx = ((sy + t_mid_y) * screen_width + (sx + t_mid_x)) * 4;
+                let (smr, smg, smb) = (
+                    screen_raw[s_mid_idx + 2],
+                    screen_raw[s_mid_idx + 1],
+                    screen_raw[s_mid_idx],
+                );
+                if !pixels_match(
+                    smr,
+                    smg,
+                    smb,
+                    template_raw[t_mid_idx],
+                    template_raw[t_mid_idx + 1],
+                    template_raw[t_mid_idx + 2],
+                    tolerance,
+                ) {
+                    continue;
+                }
+
+                // 3. Point 3 : Coin inférieur droit
+                let s_last_idx = ((sy + t_last_y) * screen_width + (sx + t_last_x)) * 4;
+                let (slr, slg, slb) = (
+                    screen_raw[s_last_idx + 2],
+                    screen_raw[s_last_idx + 1],
+                    screen_raw[s_last_idx],
+                );
+                if !pixels_match(
+                    slr,
+                    slg,
+                    slb,
+                    template_raw[t_last_idx],
+                    template_raw[t_last_idx + 1],
+                    template_raw[t_last_idx + 2],
+                    tolerance,
+                ) {
+                    continue;
+                }
+
+                // 4. Vérification complète sur grille (step_by 2)
+                let mut matched = true;
+                'tmatch: for ty in (0..template_height).step_by(2) {
+                    let t_row_start = ty * template_width * 4;
+                    let s_row_start = (sy + ty) * screen_width * 4;
+                    for tx in (0..template_width).step_by(2) {
+                        let t_idx = t_row_start + tx * 4;
+                        let s_idx = s_row_start + (sx + tx) * 4;
+                        let (cur_r, cur_g, cur_b) = (
+                            screen_raw[s_idx + 2],
+                            screen_raw[s_idx + 1],
+                            screen_raw[s_idx],
+                        );
+                        if !pixels_match(
+                            cur_r,
+                            cur_g,
+                            cur_b,
+                            template_raw[t_idx],
+                            template_raw[t_idx + 1],
+                            template_raw[t_idx + 2],
+                            tolerance,
+                        ) {
+                            matched = false;
+                            break 'tmatch;
+                        }
+                    }
+                }
+
+                if matched {
+                    return Some((sx, sy));
+                }
+            }
+            None
+        })
 }
 
 fn rdev_key_to_name_and_scan(key: &RdevKey) -> (String, u16, bool) {
@@ -1142,150 +1330,27 @@ pub fn play_macro() {
                                         let vw = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
                                         let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
 
-                                        if let Some(screen_raw) = capture_screen_gdi(vx, vy, vw, vh)
-                                        {
-                                            let mw_usize = vw as usize;
-                                            let mh_usize = vh as usize;
-
-                                            let res = (0..=(mh_usize - th))
-                                                .into_par_iter()
-                                                .find_map_any(|sy| {
-                                                    // Early-exit ligne (issue #11) : si le
-                                                    // premier pixel du template ne matche pas,
-                                                    // aucune position de depart sur cette ligne.
-                                                    let first_idx = sy * mw_usize * 4;
-                                                    if !pixels_match(
-                                                        screen_raw[first_idx + 2],
-                                                        screen_raw[first_idx + 1],
-                                                        screen_raw[first_idx],
-                                                        template_raw[0],
-                                                        template_raw[1],
-                                                        template_raw[2],
+                                        if vw > 0 && vh > 0 {
+                                            let found_pos = with_screen_capture_gdi(
+                                                vx,
+                                                vy,
+                                                vw,
+                                                vh,
+                                                |screen_raw| {
+                                                    find_template_in_bgra(
+                                                        screen_raw,
+                                                        vw as usize,
+                                                        vh as usize,
+                                                        template_raw,
+                                                        tw,
+                                                        th,
                                                         25,
-                                                    ) {
-                                                        return None;
-                                                    }
-                                                    // Early-exit ligne (issue #11).
-                                                    let first_idx = sy * mw_usize * 4;
-                                                    if !pixels_match(
-                                                        screen_raw[first_idx + 2],
-                                                        screen_raw[first_idx + 1],
-                                                        screen_raw[first_idx],
-                                                        template_raw[0],
-                                                        template_raw[1],
-                                                        template_raw[2],
-                                                        25,
-                                                    ) {
-                                                        return None;
-                                                    }
-                                                    let monitor_row_start = sy * mw_usize * 4;
-                                                    for sx in 0..=(mw_usize - tw) {
-                                                        let monitor_pixel_idx =
-                                                            monitor_row_start + sx * 4;
+                                                    )
+                                                },
+                                            )
+                                            .flatten();
 
-                                                        let (sr, sg, sb) = (
-                                                            screen_raw[monitor_pixel_idx + 2],
-                                                            screen_raw[monitor_pixel_idx + 1],
-                                                            screen_raw[monitor_pixel_idx],
-                                                        );
-
-                                                        if !pixels_match(
-                                                            sr,
-                                                            sg,
-                                                            sb,
-                                                            template_raw[0],
-                                                            template_raw[1],
-                                                            template_raw[2],
-                                                            25,
-                                                        ) {
-                                                            continue;
-                                                        }
-
-                                                        let t_mid_y = th / 2;
-                                                        let t_mid_x = tw / 2;
-                                                        let s_mid_idx = ((sy + t_mid_y) * mw_usize
-                                                            + (sx + t_mid_x))
-                                                            * 4;
-                                                        let t_mid_idx =
-                                                            (t_mid_y * tw + t_mid_x) * 4;
-                                                        let (smr, smg, smb) = (
-                                                            screen_raw[s_mid_idx + 2],
-                                                            screen_raw[s_mid_idx + 1],
-                                                            screen_raw[s_mid_idx],
-                                                        );
-                                                        if !pixels_match(
-                                                            smr,
-                                                            smg,
-                                                            smb,
-                                                            template_raw[t_mid_idx],
-                                                            template_raw[t_mid_idx + 1],
-                                                            template_raw[t_mid_idx + 2],
-                                                            25,
-                                                        ) {
-                                                            continue;
-                                                        }
-
-                                                        let t_last_y = th - 1;
-                                                        let t_last_x = tw - 1;
-                                                        let s_last_idx = ((sy + t_last_y)
-                                                            * mw_usize
-                                                            + (sx + t_last_x))
-                                                            * 4;
-                                                        let t_last_idx =
-                                                            (t_last_y * tw + t_last_x) * 4;
-                                                        let (slr, slg, slb) = (
-                                                            screen_raw[s_last_idx + 2],
-                                                            screen_raw[s_last_idx + 1],
-                                                            screen_raw[s_last_idx],
-                                                        );
-                                                        if !pixels_match(
-                                                            slr,
-                                                            slg,
-                                                            slb,
-                                                            template_raw[t_last_idx],
-                                                            template_raw[t_last_idx + 1],
-                                                            template_raw[t_last_idx + 2],
-                                                            25,
-                                                        ) {
-                                                            continue;
-                                                        }
-
-                                                        let mut matched = true;
-                                                        'tmatch: for ty in (0..th).step_by(2) {
-                                                            let t_row_start = ty * tw * 4;
-                                                            let s_row_start =
-                                                                (sy + ty) * mw_usize * 4;
-                                                            for tx in (0..tw).step_by(2) {
-                                                                let t_idx = t_row_start + tx * 4;
-                                                                let s_idx =
-                                                                    s_row_start + (sx + tx) * 4;
-                                                                let (cur_r, cur_g, cur_b) = (
-                                                                    screen_raw[s_idx + 2],
-                                                                    screen_raw[s_idx + 1],
-                                                                    screen_raw[s_idx],
-                                                                );
-                                                                if !pixels_match(
-                                                                    cur_r,
-                                                                    cur_g,
-                                                                    cur_b,
-                                                                    template_raw[t_idx],
-                                                                    template_raw[t_idx + 1],
-                                                                    template_raw[t_idx + 2],
-                                                                    25,
-                                                                ) {
-                                                                    matched = false;
-                                                                    break 'tmatch;
-                                                                }
-                                                            }
-                                                        }
-                                                        if matched {
-                                                            return Some((sx, sy));
-                                                        }
-                                                    }
-                                                    None
-                                                });
-
-                                            if res.is_some() {
+                                            if found_pos.is_some() {
                                                 found = true;
                                                 break 'wait;
                                             }
@@ -1558,89 +1623,34 @@ fn check_image_present(path: &str) -> bool {
 
     #[cfg(windows)]
     {
-        use winapi::um::winuser::GetSystemMetrics;
+        use winapi::um::winuser::{
+            GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+            SM_YVIRTUALSCREEN,
+        };
         let vx = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
         let vy = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
         let vw = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
         let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
 
-        if let Some(screen_raw) = capture_screen_gdi(vx, vy, vw, vh) {
-            let mw_usize = vw as usize;
-            let mh_usize = vh as usize;
-
-            if th > mh_usize || tw > mw_usize {
-                return false;
-            }
-
-            let res = (0..=(mh_usize - th)).into_par_iter().find_map_any(|sy| {
-                let monitor_row_start = sy * mw_usize * 4;
-                for sx in 0..=(mw_usize - tw) {
-                    let monitor_pixel_idx = monitor_row_start + sx * 4;
-                    let (sr, sg, sb) = (
-                        screen_raw[monitor_pixel_idx + 2],
-                        screen_raw[monitor_pixel_idx + 1],
-                        screen_raw[monitor_pixel_idx],
-                    );
-
-                    if !pixels_match(
-                        sr,
-                        sg,
-                        sb,
-                        template_raw[0],
-                        template_raw[1],
-                        template_raw[2],
-                        25,
-                    ) {
-                        continue;
-                    }
-
-                    let t_mid_y = th / 2;
-                    let t_mid_x = tw / 2;
-                    let s_mid_idx = ((sy + t_mid_y) * mw_usize + (sx + t_mid_x)) * 4;
-                    let t_mid_idx = (t_mid_y * tw + t_mid_x) * 4;
-                    let (smr, smg, smb) = (
-                        screen_raw[s_mid_idx + 2],
-                        screen_raw[s_mid_idx + 1],
-                        screen_raw[s_mid_idx],
-                    );
-                    if !pixels_match(
-                        smr,
-                        smg,
-                        smb,
-                        template_raw[t_mid_idx],
-                        template_raw[t_mid_idx + 1],
-                        template_raw[t_mid_idx + 2],
-                        25,
-                    ) {
-                        continue;
-                    }
-
-                    let t_last_y = th - 1;
-                    let t_last_x = tw - 1;
-                    let s_last_idx = ((sy + t_last_y) * mw_usize + (sx + t_last_x)) * 4;
-                    let t_last_idx = (t_last_y * tw + t_last_x) * 4;
-                    let (slr, slg, slb) = (
-                        screen_raw[s_last_idx + 2],
-                        screen_raw[s_last_idx + 1],
-                        screen_raw[s_last_idx],
-                    );
-                    if pixels_match(
-                        slr,
-                        slg,
-                        slb,
-                        template_raw[t_last_idx],
-                        template_raw[t_last_idx + 1],
-                        template_raw[t_last_idx + 2],
-                        25,
-                    ) {
-                        return Some((sx, sy));
-                    }
-                }
-                None
-            });
-            return res.is_some();
+        if vw <= 0 || vh <= 0 {
+            return false;
         }
+
+        with_screen_capture_gdi(vx, vy, vw, vh, |screen_raw| {
+            find_template_in_bgra(
+                screen_raw,
+                vw as usize,
+                vh as usize,
+                template_raw,
+                tw,
+                th,
+                25,
+            )
+            .is_some()
+        })
+        .unwrap_or(false)
     }
+    #[cfg(not(windows))]
     false
 }
 
@@ -1927,5 +1937,229 @@ mod tests {
             mouse_button_dwflags(42, false),
             winapi::um::winuser::MOUSEEVENTF_MIDDLEUP
         );
+    }
+
+    #[test]
+    fn test_find_template_in_bgra_exact_match_at_origin() {
+        let sw = 10;
+        let sh = 10;
+        let tw = 3;
+        let th = 3;
+        let mut screen_bgra = vec![0u8; sw * sh * 4];
+        let mut template_rgba = vec![0u8; tw * th * 4];
+
+        // Template couleur uniforme rouge (R=255, G=0, B=0, A=255)
+        for i in 0..(tw * th) {
+            template_rgba[i * 4] = 255;
+            template_rgba[i * 4 + 1] = 0;
+            template_rgba[i * 4 + 2] = 0;
+            template_rgba[i * 4 + 3] = 255;
+        }
+
+        // Placer le pattern rouge en (0, 0) dans l'écran BGRA (B=0, G=0, R=255, A=255)
+        for ty in 0..th {
+            for tx in 0..tw {
+                let idx = (ty * sw + tx) * 4;
+                screen_bgra[idx] = 0; // B
+                screen_bgra[idx + 1] = 0; // G
+                screen_bgra[idx + 2] = 255; // R
+                screen_bgra[idx + 3] = 255; // A
+            }
+        }
+
+        let result = find_template_in_bgra(&screen_bgra, sw, sh, &template_rgba, tw, th, 10);
+        assert_eq!(result, Some((0, 0)));
+    }
+
+    #[test]
+    fn test_find_template_in_bgra_offset_position() {
+        let sw = 100;
+        let sh = 80;
+        let tw = 8;
+        let th = 6;
+        let mut screen_bgra = vec![128u8; sw * sh * 4]; // Fond gris
+        let mut template_rgba = vec![0u8; tw * th * 4];
+
+        let target_x = 42;
+        let target_y = 35;
+
+        // Créer un motif distinct dans le template
+        for ty in 0..th {
+            for tx in 0..tw {
+                let t_idx = (ty * tw + tx) * 4;
+                let r = (tx * 20 + 10) as u8;
+                let g = (ty * 30 + 20) as u8;
+                let b = 200u8;
+                template_rgba[t_idx] = r;
+                template_rgba[t_idx + 1] = g;
+                template_rgba[t_idx + 2] = b;
+                template_rgba[t_idx + 3] = 255;
+
+                // Copier dans l'écran à la position cible en format BGRA
+                let s_idx = ((target_y + ty) * sw + (target_x + tx)) * 4;
+                screen_bgra[s_idx] = b;
+                screen_bgra[s_idx + 1] = g;
+                screen_bgra[s_idx + 2] = r;
+                screen_bgra[s_idx + 3] = 255;
+            }
+        }
+
+        let result = find_template_in_bgra(&screen_bgra, sw, sh, &template_rgba, tw, th, 5);
+        assert_eq!(result, Some((target_x, target_y)));
+    }
+
+    #[test]
+    fn test_find_template_in_bgra_bottom_right_corner() {
+        let sw = 50;
+        let sh = 40;
+        let tw = 5;
+        let th = 4;
+        let mut screen_bgra = vec![50u8; sw * sh * 4];
+        let mut template_rgba = vec![0u8; tw * th * 4];
+
+        let target_x = sw - tw;
+        let target_y = sh - th;
+
+        for ty in 0..th {
+            for tx in 0..tw {
+                let t_idx = (ty * tw + tx) * 4;
+                template_rgba[t_idx] = 10;
+                template_rgba[t_idx + 1] = 220;
+                template_rgba[t_idx + 2] = 80;
+                template_rgba[t_idx + 3] = 255;
+
+                let s_idx = ((target_y + ty) * sw + (target_x + tx)) * 4;
+                screen_bgra[s_idx] = 80; // B
+                screen_bgra[s_idx + 1] = 220; // G
+                screen_bgra[s_idx + 2] = 10; // R
+                screen_bgra[s_idx + 3] = 255;
+            }
+        }
+
+        let result = find_template_in_bgra(&screen_bgra, sw, sh, &template_rgba, tw, th, 10);
+        assert_eq!(result, Some((target_x, target_y)));
+    }
+
+    #[test]
+    fn test_find_template_in_bgra_tolerance_and_no_match() {
+        let sw = 20;
+        let sh = 20;
+        let tw = 4;
+        let th = 4;
+        let mut screen_bgra = vec![0u8; sw * sh * 4];
+        let mut template_rgba = vec![0u8; tw * th * 4];
+
+        // Template R=100, G=100, B=100
+        for i in 0..(tw * th) {
+            template_rgba[i * 4] = 100;
+            template_rgba[i * 4 + 1] = 100;
+            template_rgba[i * 4 + 2] = 100;
+            template_rgba[i * 4 + 3] = 255;
+        }
+
+        // Écran à (5, 5) avec R=115, G=110, B=90 (diff max = 15)
+        for ty in 0..th {
+            for tx in 0..tw {
+                let idx = ((5 + ty) * sw + (5 + tx)) * 4;
+                screen_bgra[idx] = 90; // B
+                screen_bgra[idx + 1] = 110; // G
+                screen_bgra[idx + 2] = 115; // R
+                screen_bgra[idx + 3] = 255;
+            }
+        }
+
+        // Tolérance 10 : échec
+        assert_eq!(
+            find_template_in_bgra(&screen_bgra, sw, sh, &template_rgba, tw, th, 10),
+            None
+        );
+
+        // Tolérance 20 : succès
+        assert_eq!(
+            find_template_in_bgra(&screen_bgra, sw, sh, &template_rgba, tw, th, 20),
+            Some((5, 5))
+        );
+    }
+
+    #[test]
+    fn test_find_template_in_bgra_out_of_bounds() {
+        let screen = vec![0u8; 100];
+        let template = vec![0u8; 100];
+        assert_eq!(
+            find_template_in_bgra(&screen, 5, 5, &template, 10, 10, 25),
+            None
+        );
+        assert_eq!(
+            find_template_in_bgra(&screen, 5, 5, &template, 0, 5, 25),
+            None
+        );
+        assert_eq!(
+            find_template_in_bgra(&screen, 5, 5, &template, 5, 0, 25),
+            None
+        );
+    }
+
+    #[test]
+    fn test_find_template_perf_1080p_and_4k() {
+        // 1080p : 1920x1080
+        let sw_1080 = 1920;
+        let sh_1080 = 1080;
+        let tw = 32;
+        let th = 32;
+        let mut screen_1080 = vec![30u8; sw_1080 * sh_1080 * 4];
+        let mut template = vec![0u8; tw * th * 4];
+
+        let target_x = 1200;
+        let target_y = 750;
+
+        for ty in 0..th {
+            for tx in 0..tw {
+                let t_idx = (ty * tw + tx) * 4;
+                template[t_idx] = 200;
+                template[t_idx + 1] = 100;
+                template[t_idx + 2] = 50;
+                template[t_idx + 3] = 255;
+
+                let s_idx = ((target_y + ty) * sw_1080 + (target_x + tx)) * 4;
+                screen_1080[s_idx] = 50;
+                screen_1080[s_idx + 1] = 100;
+                screen_1080[s_idx + 2] = 200;
+                screen_1080[s_idx + 3] = 255;
+            }
+        }
+
+        let start_1080 = Instant::now();
+        let found_1080 =
+            find_template_in_bgra(&screen_1080, sw_1080, sh_1080, &template, tw, th, 25);
+        let elapsed_1080 = start_1080.elapsed();
+        assert_eq!(found_1080, Some((target_x, target_y)));
+        println!("Benchmark 1080p matching time: {:?}", elapsed_1080);
+        assert!(
+            elapsed_1080.as_millis() < 50,
+            "1080p template matching should be ultra fast (< 50ms, target < 16ms), took {:?}",
+            elapsed_1080
+        );
+
+        // 4K : 3840x2160
+        let sw_4k = 3840;
+        let sh_4k = 2160;
+        let mut screen_4k = vec![30u8; sw_4k * sh_4k * 4];
+        let target_4k_x = 2800;
+        let target_4k_y = 1500;
+        for ty in 0..th {
+            for tx in 0..tw {
+                let s_idx = ((target_4k_y + ty) * sw_4k + (target_4k_x + tx)) * 4;
+                screen_4k[s_idx] = 50;
+                screen_4k[s_idx + 1] = 100;
+                screen_4k[s_idx + 2] = 200;
+                screen_4k[s_idx + 3] = 255;
+            }
+        }
+
+        let start_4k = Instant::now();
+        let found_4k = find_template_in_bgra(&screen_4k, sw_4k, sh_4k, &template, tw, th, 25);
+        let elapsed_4k = start_4k.elapsed();
+        assert_eq!(found_4k, Some((target_4k_x, target_4k_y)));
+        println!("Benchmark 4K matching time: {:?}", elapsed_4k);
     }
 }
