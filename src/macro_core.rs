@@ -213,7 +213,18 @@ pub fn capture_screen_gdi(x: i32, y: i32, width: i32, height: i32) -> Option<Vec
             biClrImportant: 0,
         };
 
-        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        // Reutilisation du buffer entre captures consecutives de meme taille
+        // (issue #11) : evite l'alloc/liberation d'un grand buffer par frame.
+        let mut cache_guard = SCREEN_BUFFER_CACHE.lock().unwrap();
+        if cache_guard
+            .as_ref()
+            .map(|(w, h, _)| *w != width || *h != height)
+            .unwrap_or(true)
+        {
+            *cache_guard = Some((width, height, vec![0u8; (width * height * 4) as usize]));
+        }
+        let pixels = &mut cache_guard.as_mut().unwrap().2;
+
         GetDIBits(
             hdc_mem,
             hbm,
@@ -229,7 +240,7 @@ pub fn capture_screen_gdi(x: i32, y: i32, width: i32, height: i32) -> Option<Vec
         DeleteDC(hdc_mem);
         ReleaseDC(null_mut(), hdc_screen);
 
-        Some(pixels)
+        Some(pixels.clone())
     }
 }
 
@@ -312,6 +323,8 @@ lazy_static::lazy_static! {
     pub static ref EVENT_SENDER: Mutex<Option<Sender<EngineEvent>>> = Mutex::new(None);
     pub static ref EGUI_CTX: Mutex<Option<eframe::egui::Context>> = Mutex::new(None);
     pub static ref IMAGE_CACHE: Mutex<HashMap<String, Arc<image::RgbaImage>>> = Mutex::new(HashMap::new());
+    #[cfg(windows)]
+    static ref SCREEN_BUFFER_CACHE: Mutex<Option<(i32, i32, Vec<u8>)>> = Mutex::new(None);
     static ref LAST_RECORD_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
@@ -1137,6 +1150,34 @@ pub fn play_macro() {
                                             let res = (0..=(mh_usize - th))
                                                 .into_par_iter()
                                                 .find_map_any(|sy| {
+                                                    // Early-exit ligne (issue #11) : si le
+                                                    // premier pixel du template ne matche pas,
+                                                    // aucune position de depart sur cette ligne.
+                                                    let first_idx = sy * mw_usize * 4;
+                                                    if !pixels_match(
+                                                        screen_raw[first_idx + 2],
+                                                        screen_raw[first_idx + 1],
+                                                        screen_raw[first_idx],
+                                                        template_raw[0],
+                                                        template_raw[1],
+                                                        template_raw[2],
+                                                        25,
+                                                    ) {
+                                                        return None;
+                                                    }
+                                                    // Early-exit ligne (issue #11).
+                                                    let first_idx = sy * mw_usize * 4;
+                                                    if !pixels_match(
+                                                        screen_raw[first_idx + 2],
+                                                        screen_raw[first_idx + 1],
+                                                        screen_raw[first_idx],
+                                                        template_raw[0],
+                                                        template_raw[1],
+                                                        template_raw[2],
+                                                        25,
+                                                    ) {
+                                                        return None;
+                                                    }
                                                     let monitor_row_start = sy * mw_usize * 4;
                                                     for sx in 0..=(mw_usize - tw) {
                                                         let monitor_pixel_idx =
