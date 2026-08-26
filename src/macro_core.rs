@@ -12,6 +12,8 @@ use std::time::{Duration, Instant};
 #[cfg(windows)]
 use winapi::um::libloaderapi::GetModuleHandleW;
 #[cfg(windows)]
+use winapi::um::timeapi::{timeBeginPeriod, timeEndPeriod};
+#[cfg(windows)]
 use winapi::um::winuser::{
     CreateWindowExW, DefWindowProcW, GetForegroundWindow, GetMessageW, GetRawInputData,
     GetWindowTextW, IsWindowVisible, MapVirtualKeyW, RegisterClassW, RegisterRawInputDevices,
@@ -578,6 +580,36 @@ fn emit_playback_action(payload: PlaybackActionPayload) {
     notify_event(EngineEvent::PlaybackAction(payload));
 }
 
+/// Garde RAII de la résolution timer Windows : passe la granularite scheduler
+/// a 1 ms pendant le playback et restaure systematiquement l'etat initial
+/// (issue #12), y compris en cas d'arret d'urgence ou de panic.
+#[cfg(windows)]
+struct TimerResolutionGuard {
+    active: bool,
+}
+
+#[cfg(windows)]
+impl TimerResolutionGuard {
+    fn new() -> Self {
+        // timeBeginPeriod(1) abaisse la granularite du scheduler Windows
+        // (~15,6 ms par defaut) pour des sleep(1 ms) reels.
+        let active = unsafe { timeBeginPeriod(1) } == 0 /* TIMERR_NOERROR */;
+        if !active {
+            eprintln!("AVERTISSEMENT: timeBeginPeriod(1) a echoue, gigue timer possible.");
+        }
+        Self { active }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for TimerResolutionGuard {
+    fn drop(&mut self) {
+        if self.active {
+            unsafe { timeEndPeriod(1) };
+        }
+    }
+}
+
 #[inline]
 fn pixels_match(r1: u8, g1: u8, b1: u8, r2: u8, g2: u8, b2: u8, tolerance: u8) -> bool {
     (r1 as i16 - r2 as i16).unsigned_abs() <= tolerance as u16
@@ -810,6 +842,11 @@ pub fn play_macro() {
 
     thread::spawn(move || {
         let playback_start = Instant::now();
+        // Resolution timer 1 ms pour toute la duree du playback (issue #12).
+        // Le garde RAII garantit timeEndPeriod(1) meme sur break 'main_loop,
+        // arret F4 ou unwind panic.
+        #[cfg(windows)]
+        let _timer_guard = TimerResolutionGuard::new();
         let ts = || format!("[+{:.2}s]", playback_start.elapsed().as_secs_f64());
         let total_actions = actions_to_play.len();
 
