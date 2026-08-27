@@ -432,8 +432,10 @@ impl MacroForgeApp {
 
 impl eframe::App for MacroForgeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Garantir le maintien du thème sombre Dark Glassmorphism face aux variations du thème Windows
-        theme::apply_visuals(ctx);
+        // Maintien du thème sombre uniquement en cas de réinitialisation externe (issue #20)
+        if !ctx.style().visuals.dark_mode {
+            theme::apply_visuals(ctx);
+        }
 
         self.update_from_events();
 

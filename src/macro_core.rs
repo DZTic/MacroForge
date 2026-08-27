@@ -4,7 +4,7 @@ use rayon::prelude::*;
 use rdev::{Button, Event, EventType, Key as RdevKey};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -21,8 +21,7 @@ use winapi::um::winuser::{
     SendInput, CW_USEDEFAULT, INPUT, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT,
     KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC_EX, MAPVK_VSC_TO_VK_EX,
     MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_MOVE, MOUSEINPUT, MSG, RAWINPUT, RAWINPUTDEVICE,
-    RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WM_INPUT, WNDCLASSW,
+    RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT, WM_INPUT, WNDCLASSW,
 };
 
 /// Call once at startup — polls foreground window every 200ms and stores
@@ -50,7 +49,7 @@ pub fn start_focus_tracker() {
                 if IsWindowVisible(hwnd) == 0 {
                     continue;
                 }
-                *LAST_GAME_HWND.lock().unwrap() = hwnd as isize;
+                LAST_GAME_HWND.store(hwnd as isize, Ordering::Relaxed);
             }
         }
     });
@@ -326,7 +325,7 @@ pub struct MacroState {
     pub last_event_time: Option<Instant>,
     pub recording_start_time: Option<Instant>,
     pub expected_time_cursor: f64,
-    pub stop_playback_flag: Arc<Mutex<bool>>,
+    pub stop_playback_flag: Arc<AtomicBool>,
     pub last_x: f64,
     pub last_y: f64,
     pub last_move_record_time: Option<Instant>,
@@ -355,7 +354,7 @@ impl MacroState {
             last_event_time: None,
             recording_start_time: None,
             expected_time_cursor: 0.0,
-            stop_playback_flag: Arc::new(Mutex::new(false)),
+            stop_playback_flag: Arc::new(AtomicBool::new(false)),
             last_x: 0.0,
             last_y: 0.0,
             last_move_record_time: None,
@@ -383,12 +382,14 @@ lazy_static::lazy_static! {
 }
 
 #[cfg(windows)]
-lazy_static::lazy_static! {
-    pub static ref LAST_GAME_HWND: Mutex<isize> = Mutex::new(0);
-}
+pub static LAST_GAME_HWND: AtomicIsize = AtomicIsize::new(0);
 
 #[cfg(windows)]
 static RAW_INPUT_FLAG: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
+static RAW_INPUT_RECORDING: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
+static RIGHT_MOUSE_DOWN: AtomicBool = AtomicBool::new(false);
 
 #[cfg(windows)]
 static RAW_INPUT_LISTENER_INIT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
@@ -450,6 +451,8 @@ pub fn emergency_stop() {
         #[cfg(windows)]
         {
             RAW_INPUT_FLAG.store(false, Ordering::SeqCst);
+            RAW_INPUT_RECORDING.store(false, Ordering::SeqCst);
+            RIGHT_MOUSE_DOWN.store(false, Ordering::SeqCst);
         }
         emit_recording_state(false);
     }
@@ -561,75 +564,74 @@ fn spawn_raw_input_listener() {
         }
 
         let mut msg: MSG = std::mem::zeroed();
+        let mut raw_buf = std::mem::MaybeUninit::<RAWINPUT>::uninit();
+        let mut size = std::mem::size_of::<RAWINPUT>() as u32;
+
         while GetMessageW(&mut msg, hwnd, 0, 0) != 0 {
             if msg.message == WM_INPUT {
-                let mut size: u32 = 0;
-                GetRawInputData(
+                let ret = GetRawInputData(
                     msg.lParam as *mut _,
                     RID_INPUT,
-                    std::ptr::null_mut(),
+                    raw_buf.as_mut_ptr() as *mut _,
                     &mut size,
                     std::mem::size_of::<RAWINPUTHEADER>() as u32,
                 );
 
-                let mut buffer = vec![0u8; size as usize];
-                if GetRawInputData(
-                    msg.lParam as *mut _,
-                    RID_INPUT,
-                    buffer.as_mut_ptr() as *mut _,
-                    &mut size,
-                    std::mem::size_of::<RAWINPUTHEADER>() as u32,
-                ) == size
-                {
-                    let raw = &*(buffer.as_ptr() as *const RAWINPUT);
-                    let mouse = raw.data.mouse();
-                    let dx = mouse.lLastX;
-                    let dy = mouse.lLastY;
+                if ret != u32::MAX && ret > 0 {
+                    let raw = &*raw_buf.as_ptr();
+                    if raw.header.dwType == winapi::um::winuser::RIM_TYPEMOUSE {
+                        let mouse = raw.data.mouse();
+                        let dx = mouse.lLastX;
+                        let dy = mouse.lLastY;
 
-                    if dx != 0 || dy != 0 {
-                        let mut state = MACRO_STATE.lock().unwrap();
-                        if state.is_recording && state.is_right_mouse_down {
-                            state.last_x += dx as f64;
-                            state.last_y += dy as f64;
+                        // Filtrage atomique ultra-rapide sans lock si inactif (issue #18 et #19)
+                        if (dx != 0 || dy != 0)
+                            && RAW_INPUT_RECORDING.load(Ordering::Relaxed)
+                            && RIGHT_MOUSE_DOWN.load(Ordering::Relaxed)
+                        {
+                            let mut state = MACRO_STATE.lock().unwrap();
+                            if state.is_recording && state.is_right_mouse_down {
+                                state.last_x += dx as f64;
+                                state.last_y += dy as f64;
 
-                            state.pending_dx += dx;
-                            state.pending_dy += dy;
+                                state.pending_dx += dx;
+                                state.pending_dy += dy;
 
-                            let now = Instant::now();
-                            let should_record = if let Some(last_move) = state.last_move_record_time
-                            {
-                                now.duration_since(last_move).as_millis() >= 8
-                            } else {
-                                true
-                            };
+                                let now = Instant::now();
+                                let should_record =
+                                    if let Some(last_move) = state.last_move_record_time {
+                                        now.duration_since(last_move).as_millis() >= 8
+                                    } else {
+                                        true
+                                    };
 
-                            if should_record {
-                                let snap_dx = state.pending_dx;
-                                let snap_dy = state.pending_dy;
-                                state.pending_dx = 0;
-                                state.pending_dy = 0;
+                                if should_record {
+                                    let snap_dx = state.pending_dx;
+                                    let snap_dy = state.pending_dy;
+                                    state.pending_dx = 0;
+                                    state.pending_dy = 0;
 
-                                state.last_move_record_time = Some(now);
-                                let delay_ms = if let Some(start) = state.recording_start_time {
-                                    let elapsed_f64 =
-                                        now.duration_since(start).as_secs_f64() * 1000.0;
-                                    let diff = elapsed_f64 - state.expected_time_cursor;
-                                    let d = diff.round() as u64;
-                                    state.expected_time_cursor += d as f64;
-                                    d
-                                } else {
-                                    0
-                                };
-                                state.last_event_time = Some(now);
+                                    state.last_move_record_time = Some(now);
+                                    let delay_ms = if let Some(start) = state.recording_start_time {
+                                        let elapsed_f64 =
+                                            now.duration_since(start).as_secs_f64() * 1000.0;
+                                        let diff = elapsed_f64 - state.expected_time_cursor;
+                                        let d = diff.round() as u64;
+                                        state.expected_time_cursor += d as f64;
+                                        d
+                                    } else {
+                                        0
+                                    };
+                                    state.last_event_time = Some(now);
 
-                                state.actions.push(MacroAction {
-                                    action_type: ActionType::MouseMoveRelative(snap_dx, snap_dy),
-                                    delay_ms,
-                                });
+                                    state.actions.push(MacroAction {
+                                        action_type: ActionType::MouseMoveRelative(
+                                            snap_dx, snap_dy,
+                                        ),
+                                        delay_ms,
+                                    });
+                                }
                             }
-                        } else if state.is_recording {
-                            state.pending_dx = 0;
-                            state.pending_dy = 0;
                         }
                     }
                 }
@@ -819,140 +821,136 @@ pub fn find_template_in_bgra(
         })
 }
 
-fn rdev_key_to_name_and_scan(key: &RdevKey) -> (String, u16, bool) {
-    let name = format!("{:?}", key);
+fn rdev_key_to_name_and_scan(key: &RdevKey) -> (std::borrow::Cow<'static, str>, u16, bool) {
     let mut is_extended = false;
-    let vk: u16 = match key {
-        RdevKey::Return => 0x0D,
-        RdevKey::Space => 0x20,
-        RdevKey::Backspace => 0x08,
-        RdevKey::Tab => 0x09,
-        RdevKey::Escape => 0x1B,
+    let (name, vk): (std::borrow::Cow<'static, str>, u16) = match key {
+        RdevKey::Return => ("Return".into(), 0x0D),
+        RdevKey::Space => ("Space".into(), 0x20),
+        RdevKey::Backspace => ("Backspace".into(), 0x08),
+        RdevKey::Tab => ("Tab".into(), 0x09),
+        RdevKey::Escape => ("Escape".into(), 0x1B),
         RdevKey::Delete => {
             is_extended = true;
-            0x2E
+            ("Delete".into(), 0x2E)
         }
         RdevKey::Home => {
             is_extended = true;
-            0x24
+            ("Home".into(), 0x24)
         }
         RdevKey::End => {
             is_extended = true;
-            0x23
+            ("End".into(), 0x23)
         }
         RdevKey::PageUp => {
             is_extended = true;
-            0x21
+            ("PageUp".into(), 0x21)
         }
         RdevKey::PageDown => {
             is_extended = true;
-            0x22
+            ("PageDown".into(), 0x22)
         }
         RdevKey::UpArrow => {
             is_extended = true;
-            0x26
+            ("UpArrow".into(), 0x26)
         }
         RdevKey::DownArrow => {
             is_extended = true;
-            0x28
+            ("DownArrow".into(), 0x28)
         }
         RdevKey::LeftArrow => {
             is_extended = true;
-            0x25
+            ("LeftArrow".into(), 0x25)
         }
         RdevKey::RightArrow => {
             is_extended = true;
-            0x27
+            ("RightArrow".into(), 0x27)
         }
-        RdevKey::ShiftLeft => 0xA0,
-        RdevKey::ShiftRight => 0xA1,
-        RdevKey::ControlLeft => 0xA2,
+        RdevKey::ShiftLeft => ("ShiftLeft".into(), 0xA0),
+        RdevKey::ShiftRight => ("ShiftRight".into(), 0xA1),
+        RdevKey::ControlLeft => ("ControlLeft".into(), 0xA2),
         RdevKey::ControlRight => {
             is_extended = true;
-            0xA3
+            ("ControlRight".into(), 0xA3)
         }
-        RdevKey::Alt => 0x12,
+        RdevKey::Alt => ("Alt".into(), 0x12),
         RdevKey::AltGr => {
             is_extended = true;
-            0xA5
+            ("AltGr".into(), 0xA5)
         }
         RdevKey::MetaLeft => {
             is_extended = true;
-            0x5B
+            ("MetaLeft".into(), 0x5B)
         }
         RdevKey::MetaRight => {
             is_extended = true;
-            0x5C
+            ("MetaRight".into(), 0x5C)
         }
-        RdevKey::CapsLock => 0x14,
-        RdevKey::F1 => 0x70,
-        RdevKey::F2 => 0x71,
-        RdevKey::F3 => 0x72,
-        RdevKey::F4 => 0x73,
-        RdevKey::F5 => 0x74,
-        RdevKey::F6 => 0x75,
-        RdevKey::F7 => 0x76,
-        RdevKey::F8 => 0x77,
-        RdevKey::F9 => 0x78,
-        RdevKey::F10 => 0x79,
-        RdevKey::F11 => 0x7A,
-        RdevKey::F12 => 0x7B,
-        RdevKey::KeyA => 0x41,
-        RdevKey::KeyB => 0x42,
-        RdevKey::KeyC => 0x43,
-        RdevKey::KeyD => 0x44,
-        RdevKey::KeyE => 0x45,
-        RdevKey::KeyF => 0x46,
-        RdevKey::KeyG => 0x47,
-        RdevKey::KeyH => 0x48,
-        RdevKey::KeyI => 0x49,
-        RdevKey::KeyJ => 0x4A,
-        RdevKey::KeyK => 0x4B,
-        RdevKey::KeyL => 0x4C,
-        RdevKey::KeyM => 0x4D,
-        RdevKey::KeyN => 0x4E,
-        RdevKey::KeyO => 0x4F,
-        RdevKey::KeyP => 0x50,
-        RdevKey::KeyQ => 0x51,
-        RdevKey::KeyR => 0x52,
-        RdevKey::KeyS => 0x53,
-        RdevKey::KeyT => 0x54,
-        RdevKey::KeyU => 0x55,
-        RdevKey::KeyV => 0x56,
-        RdevKey::KeyW => 0x57,
-        RdevKey::KeyX => 0x58,
-        RdevKey::KeyY => 0x59,
-        RdevKey::KeyZ => 0x5A,
-        RdevKey::Num0 => 0x30,
-        RdevKey::Num1 => 0x31,
-        RdevKey::Num2 => 0x32,
-        RdevKey::Num3 => 0x33,
-        RdevKey::Num4 => 0x34,
-        RdevKey::Num5 => 0x35,
-        RdevKey::Num6 => 0x36,
-        RdevKey::Num7 => 0x37,
-        RdevKey::Num8 => 0x38,
-        RdevKey::Num9 => 0x39,
-        RdevKey::Comma => 0xBC,
-        RdevKey::Dot => 0xBE,
-        RdevKey::Minus => 0xBD,
-        RdevKey::Equal => 0xBB,
-        RdevKey::SemiColon => 0xBA,
-        RdevKey::Quote => 0xDE,
-        RdevKey::BackSlash => 0xDC,
-        RdevKey::Slash => 0xBF,
-        RdevKey::BackQuote => 0xC0,
+        RdevKey::CapsLock => ("CapsLock".into(), 0x14),
+        RdevKey::F1 => ("F1".into(), 0x70),
+        RdevKey::F2 => ("F2".into(), 0x71),
+        RdevKey::F3 => ("F3".into(), 0x72),
+        RdevKey::F4 => ("F4".into(), 0x73),
+        RdevKey::F5 => ("F5".into(), 0x74),
+        RdevKey::F6 => ("F6".into(), 0x75),
+        RdevKey::F7 => ("F7".into(), 0x76),
+        RdevKey::F8 => ("F8".into(), 0x77),
+        RdevKey::F9 => ("F9".into(), 0x78),
+        RdevKey::F10 => ("F10".into(), 0x79),
+        RdevKey::F11 => ("F11".into(), 0x7A),
+        RdevKey::F12 => ("F12".into(), 0x7B),
+        RdevKey::KeyA => ("KeyA".into(), 0x41),
+        RdevKey::KeyB => ("KeyB".into(), 0x42),
+        RdevKey::KeyC => ("KeyC".into(), 0x43),
+        RdevKey::KeyD => ("KeyD".into(), 0x44),
+        RdevKey::KeyE => ("KeyE".into(), 0x45),
+        RdevKey::KeyF => ("KeyF".into(), 0x46),
+        RdevKey::KeyG => ("KeyG".into(), 0x47),
+        RdevKey::KeyH => ("KeyH".into(), 0x48),
+        RdevKey::KeyI => ("KeyI".into(), 0x49),
+        RdevKey::KeyJ => ("KeyJ".into(), 0x4A),
+        RdevKey::KeyK => ("KeyK".into(), 0x4B),
+        RdevKey::KeyL => ("KeyL".into(), 0x4C),
+        RdevKey::KeyM => ("KeyM".into(), 0x4D),
+        RdevKey::KeyN => ("KeyN".into(), 0x4E),
+        RdevKey::KeyO => ("KeyO".into(), 0x4F),
+        RdevKey::KeyP => ("KeyP".into(), 0x50),
+        RdevKey::KeyQ => ("KeyQ".into(), 0x51),
+        RdevKey::KeyR => ("KeyR".into(), 0x52),
+        RdevKey::KeyS => ("KeyS".into(), 0x53),
+        RdevKey::KeyT => ("KeyT".into(), 0x54),
+        RdevKey::KeyU => ("KeyU".into(), 0x55),
+        RdevKey::KeyV => ("KeyV".into(), 0x56),
+        RdevKey::KeyW => ("KeyW".into(), 0x57),
+        RdevKey::KeyX => ("KeyX".into(), 0x58),
+        RdevKey::KeyY => ("KeyY".into(), 0x59),
+        RdevKey::KeyZ => ("KeyZ".into(), 0x5A),
+        RdevKey::Num0 => ("Num0".into(), 0x30),
+        RdevKey::Num1 => ("Num1".into(), 0x31),
+        RdevKey::Num2 => ("Num2".into(), 0x32),
+        RdevKey::Num3 => ("Num3".into(), 0x33),
+        RdevKey::Num4 => ("Num4".into(), 0x34),
+        RdevKey::Num5 => ("Num5".into(), 0x35),
+        RdevKey::Num6 => ("Num6".into(), 0x36),
+        RdevKey::Num7 => ("Num7".into(), 0x37),
+        RdevKey::Num8 => ("Num8".into(), 0x38),
+        RdevKey::Num9 => ("Num9".into(), 0x39),
+        RdevKey::Comma => ("Comma".into(), 0xBC),
+        RdevKey::Dot => ("Dot".into(), 0xBE),
+        RdevKey::Minus => ("Minus".into(), 0xBD),
+        RdevKey::Equal => ("Equal".into(), 0xBB),
+        RdevKey::SemiColon => ("SemiColon".into(), 0xBA),
+        RdevKey::Quote => ("Quote".into(), 0xDE),
+        RdevKey::BackSlash => ("BackSlash".into(), 0xDC),
+        RdevKey::Slash => ("Slash".into(), 0xBF),
+        RdevKey::BackQuote => ("BackQuote".into(), 0xC0),
         RdevKey::Unknown(sc) => {
             #[cfg(windows)]
-            unsafe {
-                MapVirtualKeyW(*sc, MAPVK_VSC_TO_VK_EX) as u16
-            }
+            let vk = unsafe { MapVirtualKeyW(*sc, MAPVK_VSC_TO_VK_EX) as u16 };
             #[cfg(not(windows))]
-            {
-                *sc as u16
-            }
+            let vk = *sc as u16;
+            (format!("Unknown({})", sc).into(), vk)
         }
-        _ => 0,
+        _ => (format!("{:?}", key).into(), 0),
     };
     (name, vk, is_extended)
 }
@@ -961,6 +959,8 @@ pub fn start_recording() {
     #[cfg(windows)]
     {
         RAW_INPUT_FLAG.store(true, Ordering::SeqCst);
+        RAW_INPUT_RECORDING.store(true, Ordering::SeqCst);
+        RIGHT_MOUSE_DOWN.store(false, Ordering::SeqCst);
     }
     {
         let mut state = MACRO_STATE.lock().unwrap();
@@ -1016,10 +1016,41 @@ pub fn stop_recording() -> usize {
     #[cfg(windows)]
     {
         RAW_INPUT_FLAG.store(false, Ordering::SeqCst);
+        RAW_INPUT_RECORDING.store(false, Ordering::SeqCst);
+        RIGHT_MOUSE_DOWN.store(false, Ordering::SeqCst);
     }
 
     emit_recording_state(false);
     count
+}
+
+#[cfg(windows)]
+pub fn get_screen_capture_bounds() -> (i32, i32, i32, i32) {
+    let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+    if !hwnd.is_null() && unsafe { IsWindowVisible(hwnd) } != 0 {
+        let mut rect = winapi::shared::windef::RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if unsafe { winapi::um::winuser::GetWindowRect(hwnd, &mut rect) } != 0 {
+            let width = rect.right - rect.left;
+            let height = rect.bottom - rect.top;
+            if width > 100 && height > 100 {
+                return (rect.left, rect.top, width, height);
+            }
+        }
+    }
+    use winapi::um::winuser::{
+        GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+        SM_YVIRTUALSCREEN,
+    };
+    let vx = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
+    let vy = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
+    let vw = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
+    let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
+    (vx, vy, vw, vh)
 }
 
 pub fn play_macro() {
@@ -1036,7 +1067,7 @@ pub fn play_macro() {
     state.is_playing = true;
     let actions_to_play = state.actions.clone();
     let stop_flag = Arc::clone(&state.stop_playback_flag);
-    *stop_flag.lock().unwrap() = false;
+    stop_flag.store(false, Ordering::SeqCst);
 
     drop(state);
 
@@ -1066,6 +1097,8 @@ pub fn play_macro() {
 
         let mut last_stop_check = Instant::now();
         let mut stop_blackout_until: Option<Instant> = None;
+        let mut last_mouse_emit = Instant::now() - Duration::from_secs(1);
+
         'main_loop: loop {
             iteration += 1;
             trace!("{} --- Itération #{} démarrée ---", ts(), iteration);
@@ -1077,7 +1110,7 @@ pub fn play_macro() {
             for action in &actions_to_play {
                 action_index += 1;
 
-                if *stop_flag.lock().unwrap() {
+                if stop_flag.load(Ordering::Relaxed) {
                     debug!(
                         "{} [STOP] stop_flag détecté avant action #{} — arrêt.",
                         ts(),
@@ -1126,7 +1159,7 @@ pub fn play_macro() {
                         std::hint::spin_loop();
                     }
 
-                    if *stop_flag.lock().unwrap() {
+                    if stop_flag.load(Ordering::Relaxed) {
                         break 'main_loop;
                     }
 
@@ -1191,25 +1224,37 @@ pub fn play_macro() {
                             send_key(vk, true, is_ext);
                         }
                         ActionType::MouseMoveRelative(dx, dy) => {
-                            emit_playback_action(PlaybackActionPayload {
-                                index: action_index,
-                                total: total_actions,
-                                action_type: "MoveRel".into(),
-                                x: dx as f64,
-                                y: dy as f64,
-                                detail: format!("Relative {}x{}", dx, dy),
-                            });
+                            let now = Instant::now();
+                            if action_index == total_actions
+                                || now.duration_since(last_mouse_emit) >= Duration::from_millis(33)
+                            {
+                                last_mouse_emit = now;
+                                emit_playback_action(PlaybackActionPayload {
+                                    index: action_index,
+                                    total: total_actions,
+                                    action_type: "MoveRel".into(),
+                                    x: dx as f64,
+                                    y: dy as f64,
+                                    detail: format!("Relative {}x{}", dx, dy),
+                                });
+                            }
                             send_mouse_relative(dx, dy);
                         }
                         ActionType::MouseMove(x, y) => {
-                            emit_playback_action(PlaybackActionPayload {
-                                index: action_index,
-                                total: total_actions,
-                                action_type: "Move".into(),
-                                x,
-                                y,
-                                detail: format!("Pos {}x{}", x, y),
-                            });
+                            let now = Instant::now();
+                            if action_index == total_actions
+                                || now.duration_since(last_mouse_emit) >= Duration::from_millis(33)
+                            {
+                                last_mouse_emit = now;
+                                emit_playback_action(PlaybackActionPayload {
+                                    index: action_index,
+                                    total: total_actions,
+                                    action_type: "Move".into(),
+                                    x,
+                                    y,
+                                    detail: format!("Pos {}x{}", x, y),
+                                });
+                            }
                             send_mouse_move(x as i32, y as i32);
                         }
                         ActionType::MousePress(u, x, y) => {
@@ -1318,17 +1363,13 @@ pub fn play_macro() {
                                 let start_wait = Instant::now();
 
                                 'wait: while (start_wait.elapsed().as_millis() as u64) < timeout {
-                                    if *stop_flag.lock().unwrap() {
+                                    if stop_flag.load(Ordering::Relaxed) {
                                         break 'main_loop;
                                     }
 
                                     #[cfg(windows)]
                                     {
-                                        use winapi::um::winuser::GetSystemMetrics;
-                                        let vx = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
-                                        let vy = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
-                                        let vw = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
-                                        let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
+                                        let (vx, vy, vw, vh) = get_screen_capture_bounds();
 
                                         if vw > 0 && vh > 0 {
                                             let found_pos = with_screen_capture_gdi(
@@ -1416,7 +1457,7 @@ pub fn play_macro() {
                             });
                             let start_wait = Instant::now();
                             while start_wait.elapsed().as_millis() < ms as u128 {
-                                if *stop_flag.lock().unwrap() {
+                                if stop_flag.load(Ordering::Relaxed) {
                                     break 'main_loop;
                                 }
 
@@ -1450,7 +1491,7 @@ pub fn play_macro() {
                 }
             }
 
-            if *stop_flag.lock().unwrap() {
+            if stop_flag.load(Ordering::Relaxed) {
                 break 'main_loop;
             }
 
@@ -1482,7 +1523,7 @@ pub fn set_loop_playback(looping: bool) {
 
 pub fn stop_playback() {
     let state = MACRO_STATE.lock().unwrap();
-    *state.stop_playback_flag.lock().unwrap() = true;
+    state.stop_playback_flag.store(true, Ordering::SeqCst);
 }
 
 pub fn get_stop_image() -> (Option<String>, u64) {
@@ -1623,14 +1664,7 @@ fn check_image_present(path: &str) -> bool {
 
     #[cfg(windows)]
     {
-        use winapi::um::winuser::{
-            GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-            SM_YVIRTUALSCREEN,
-        };
-        let vx = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
-        let vy = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
-        let vw = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
-        let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
+        let (vx, vy, vw, vh) = get_screen_capture_bounds();
 
         if vw <= 0 || vh <= 0 {
             return false;
@@ -1694,7 +1728,7 @@ pub fn handle_rdev_event(event: Event) {
                 state.key_press_times.entry(vk)
             {
                 e.insert(Instant::now());
-                Some(ActionType::KeyPress(name, vk, is_ext))
+                Some(ActionType::KeyPress(name.into_owned(), vk, is_ext))
             } else {
                 None
             }
@@ -1704,7 +1738,7 @@ pub fn handle_rdev_event(event: Event) {
             if vk == 0 || vk == 0x77 || vk == 0x78 || vk == 0x73 {
                 None
             } else {
-                Some(ActionType::KeyRelease(name, vk, is_ext))
+                Some(ActionType::KeyRelease(name.into_owned(), vk, is_ext))
             }
         }
         EventType::MouseMove { x, y } => {
@@ -1752,6 +1786,8 @@ pub fn handle_rdev_event(event: Event) {
             state.is_mouse_down = true;
             if let Button::Right = b {
                 state.is_right_mouse_down = true;
+                #[cfg(windows)]
+                RIGHT_MOUSE_DOWN.store(true, Ordering::SeqCst);
             }
             let u = match b {
                 Button::Left => 1,
@@ -1765,6 +1801,8 @@ pub fn handle_rdev_event(event: Event) {
             state.is_mouse_down = false;
             if let Button::Right = b {
                 state.is_right_mouse_down = false;
+                #[cfg(windows)]
+                RIGHT_MOUSE_DOWN.store(false, Ordering::SeqCst);
             }
             let u = match b {
                 Button::Left => 1,
@@ -2161,5 +2199,63 @@ mod tests {
         let elapsed_4k = start_4k.elapsed();
         assert_eq!(found_4k, Some((target_4k_x, target_4k_y)));
         println!("Benchmark 4K matching time: {:?}", elapsed_4k);
+    }
+
+    #[test]
+    fn test_stop_playback_flag_atomic_reactivity() {
+        let flag = Arc::new(AtomicBool::new(false));
+        assert!(!flag.load(Ordering::Relaxed));
+
+        flag.store(true, Ordering::SeqCst);
+        assert!(flag.load(Ordering::Relaxed));
+
+        flag.store(false, Ordering::SeqCst);
+        assert!(!flag.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_rdev_key_static_names() {
+        let (name_a, vk_a, is_ext_a) = rdev_key_to_name_and_scan(&RdevKey::KeyA);
+        assert_eq!(name_a, "KeyA");
+        assert_eq!(vk_a, 0x41);
+        assert!(!is_ext_a);
+
+        let (name_del, vk_del, is_ext_del) = rdev_key_to_name_and_scan(&RdevKey::Delete);
+        assert_eq!(name_del, "Delete");
+        assert_eq!(vk_del, 0x2E);
+        assert!(is_ext_del);
+
+        let (name_f4, vk_f4, _) = rdev_key_to_name_and_scan(&RdevKey::F4);
+        assert_eq!(name_f4, "F4");
+        assert_eq!(vk_f4, 0x73);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_raw_input_atomic_flags_consistency() {
+        RAW_INPUT_RECORDING.store(false, Ordering::SeqCst);
+        RIGHT_MOUSE_DOWN.store(false, Ordering::SeqCst);
+
+        assert!(!RAW_INPUT_RECORDING.load(Ordering::Relaxed));
+        assert!(!RIGHT_MOUSE_DOWN.load(Ordering::Relaxed));
+
+        RAW_INPUT_RECORDING.store(true, Ordering::SeqCst);
+        RIGHT_MOUSE_DOWN.store(true, Ordering::SeqCst);
+
+        assert!(RAW_INPUT_RECORDING.load(Ordering::Relaxed));
+        assert!(RIGHT_MOUSE_DOWN.load(Ordering::Relaxed));
+
+        // Reset
+        RAW_INPUT_RECORDING.store(false, Ordering::SeqCst);
+        RIGHT_MOUSE_DOWN.store(false, Ordering::SeqCst);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_get_screen_capture_bounds_positive_dimensions() {
+        let (x, y, w, h) = get_screen_capture_bounds();
+        let _ = (x, y);
+        assert!(w > 0, "Largeur de capture d'écran doit être positive");
+        assert!(h > 0, "Hauteur de capture d'écran doit être positive");
     }
 }

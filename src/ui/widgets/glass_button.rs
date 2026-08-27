@@ -94,26 +94,26 @@ impl<'a> Widget for GlassButton<'a> {
         };
         let shortcut_font_id = TextStyle::Small.resolve(ui.style());
 
-        // Construction du libellé
-        let mut full_text = String::new();
-        if let Some(icon) = self.icon {
-            full_text.push_str(icon);
-            if !self.text.is_empty() {
-                full_text.push(' ');
+        // Construction du libellé optimisée (issue #21)
+        let full_text = match (self.icon, self.text) {
+            (Some(icon), text) if !text.is_empty() => {
+                let mut s = String::with_capacity(icon.len() + 1 + text.len());
+                s.push_str(icon);
+                s.push(' ');
+                s.push_str(text);
+                s
             }
-        }
-        full_text.push_str(self.text);
+            (Some(icon), _) => icon.to_string(),
+            (None, text) => text.to_string(),
+        };
 
-        let galley =
-            ui.painter()
-                .layout_no_wrap(full_text.clone(), font_id.clone(), colors::TEXT_PRIMARY);
+        let galley = ui
+            .painter()
+            .layout_no_wrap(full_text, font_id, colors::TEXT_PRIMARY);
 
         let shortcut_galley = self.shortcut.map(|sc| {
-            ui.painter().layout_no_wrap(
-                sc.to_string(),
-                shortcut_font_id.clone(),
-                colors::TEXT_PRIMARY,
-            )
+            ui.painter()
+                .layout_no_wrap(sc.to_string(), shortcut_font_id, colors::TEXT_PRIMARY)
         });
 
         let mut total_content_width = galley.size().x;

@@ -1,6 +1,6 @@
 # 🔇 Issue #13 : Logs Asynchrones / Gating Debug
 
-- **Statut** : 📝 À faire
+- **Statut** : ✅ Résolu (intégré)
 - **Priorité** : 🟡 Moyenne
 - **Composants** : `macro_core.rs`, println!, I/O console synchrone
 - **Agents Référents** : `.agents/agents/rust-core.md`, `.agents/agents/qa-security.md`

@@ -1,6 +1,6 @@
 # ⏱️ Issue #12 : Granularité Timer Windows (timeBeginPeriod)
 
-- **Statut** : 📝 À faire
+- **Statut** : ✅ Résolu (intégré)
 - **Priorité** : 🟠 Haute
 - **Composants** : `macro_core.rs`, thread::sleep, winmm timeBeginPeriod
 - **Agents Référents** : `.agents/agents/rust-core.md`
