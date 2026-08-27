@@ -57,6 +57,9 @@ pub struct MacroForgeApp {
 
     // Overlay transparent click-through
     overlay: crate::ui::TransparentOverlay,
+
+    // Horodatage du démarrage de la lecture pour éviter les auto-clics résiduels
+    playback_started_at: Option<std::time::Instant>,
 }
 
 impl MacroForgeApp {
@@ -123,6 +126,8 @@ impl MacroForgeApp {
                 target_y: None,
                 win32_configured: false,
             },
+
+            playback_started_at: None,
         }
     }
 
@@ -165,15 +170,18 @@ impl MacroForgeApp {
                     self.is_playing = play;
                     self.overlay.is_visible = play;
                     if play {
+                        self.playback_started_at = Some(std::time::Instant::now());
                         self.status_message = match self.lang {
                             Language::Fr => {
-                                "▶️ Lecture en cours (F4 pour arrêt d'urgence)...".to_string()
+                                "▶️ Lecture en cours (F7: Pause, F4: Arrêt Urgence)...".to_string()
                             }
                             Language::En => {
-                                "▶️ Playback in progress (F4 for emergency stop)...".to_string()
+                                "▶️ Playback in progress (F7: Pause, F4: Emergency Stop)..."
+                                    .to_string()
                             }
                         };
                     } else {
+                        self.playback_started_at = None;
                         self.status_message = match self.lang {
                             Language::Fr => "⏹️ Lecture terminée.".to_string(),
                             Language::En => "⏹️ Playback finished.".to_string(),
@@ -448,13 +456,16 @@ impl eframe::App for MacroForgeApp {
             self.main_window_visible = false;
         }
 
-        // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F4: Stop Playback)
+        // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F7: Play/Stop, F4: Stop Playback)
         if !self.action_modal.is_listening_key {
             if ctx.input(|i| i.key_pressed(egui::Key::F8)) {
                 macro_core::toggle_recording();
             }
             if ctx.input(|i| i.key_pressed(egui::Key::F9)) && self.is_recording {
                 macro_core::stop_recording();
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::F7)) {
+                macro_core::toggle_playback();
             }
             if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
                 macro_core::emergency_stop();
@@ -505,7 +516,14 @@ impl eframe::App for MacroForgeApp {
                 macro_core::play_macro();
             }
             crate::ui::ToolbarAction::EmergencyStop => {
-                macro_core::emergency_stop();
+                let can_stop = if let Some(started) = self.playback_started_at {
+                    started.elapsed() >= std::time::Duration::from_millis(300)
+                } else {
+                    true
+                };
+                if can_stop {
+                    macro_core::emergency_stop();
+                }
             }
             crate::ui::ToolbarAction::OpenMainWindow => {
                 self.main_window_visible = true;
@@ -806,11 +824,11 @@ impl eframe::App for MacroForgeApp {
                         if !self.is_playing {
                             let btn = GlassButton::new(self.lang.play_btn())
                                 .icon("▶")
-                                .shortcut("F4 stop")
+                                .shortcut("F7")
                                 .variant(ButtonVariant::Success);
                             if ui
                                 .add(btn)
-                                .on_hover_text("Exécuter la séquence de macro enregistrée")
+                                .on_hover_text("Exécuter la séquence de macro enregistrée (F7)")
                                 .clicked()
                             {
                                 macro_core::play_macro();
@@ -825,7 +843,14 @@ impl eframe::App for MacroForgeApp {
                                 .on_hover_text("Arrêter immédiatement la relecture (F4)")
                                 .clicked()
                             {
-                                macro_core::emergency_stop();
+                                let can_stop = if let Some(started) = self.playback_started_at {
+                                    started.elapsed() >= std::time::Duration::from_millis(300)
+                                } else {
+                                    true
+                                };
+                                if can_stop {
+                                    macro_core::emergency_stop();
+                                }
                             }
                         }
 
@@ -971,7 +996,7 @@ impl eframe::App for MacroForgeApp {
                             if !self.is_playing {
                                 let btn = GlassButton::new(self.lang.play_btn())
                                     .icon("▶")
-                                    .shortcut("F4 stop")
+                                    .shortcut("F7")
                                     .compact(true)
                                     .variant(ButtonVariant::Success);
                                 if ui.add(btn).clicked() {
@@ -984,7 +1009,14 @@ impl eframe::App for MacroForgeApp {
                                     .compact(true)
                                     .variant(ButtonVariant::Warning);
                                 if ui.add(btn).clicked() {
-                                    macro_core::emergency_stop();
+                                    let can_stop = if let Some(started) = self.playback_started_at {
+                                        started.elapsed() >= std::time::Duration::from_millis(300)
+                                    } else {
+                                        true
+                                    };
+                                    if can_stop {
+                                        macro_core::emergency_stop();
+                                    }
                                 }
                             }
 
@@ -1404,6 +1436,7 @@ mod tests {
             toolbar: crate::ui::FloatingToolbar::new(),
             main_window_visible: true,
             overlay: crate::ui::TransparentOverlay::new(),
+            playback_started_at: None,
         };
 
         assert!(app.main_window_visible);
@@ -1436,6 +1469,7 @@ mod tests {
             toolbar: crate::ui::FloatingToolbar::new(),
             main_window_visible: true,
             overlay: crate::ui::TransparentOverlay::new(),
+            playback_started_at: None,
         }
     }
 

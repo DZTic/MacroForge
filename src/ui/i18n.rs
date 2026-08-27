@@ -98,7 +98,7 @@ impl Language {
                 "title_stop_image_status" => "Indique si une image d'arrêt d'urgence est active (celle-ci arrêtera la macro si elle est détectée à l'écran)",
                 "title_clear_stop_image" => "Supprimer l'image d'arrêt",
                 "title_record" => "Démarre ou arrête l'enregistrement en temps réel (Raccourci: F8)",
-                "title_play" => "Lance l'exécution de la macro actuelle (Raccourci stop: F4)",
+                "title_play" => "Lance l'exécution de la macro actuelle (Raccourci: F7 / Arrêt: F4)",
                 "title_move_action" => "Maintenir pour déplacer l'ordre de cette action",
                 "title_delay_before" => "Délai avant cette action",
                 "title_edit_action" => "Modifier les paramètres de cette action",
@@ -200,7 +200,7 @@ impl Language {
                 "title_stop_image_status" => "Indicates if an emergency stop image is active (it will stop the macro if detected on screen)",
                 "title_clear_stop_image" => "Remove stop image",
                 "title_record" => "Start or stop real-time recording (Shortcut: F8)",
-                "title_play" => "Start macro playback (Shortcut to stop: F4)",
+                "title_play" => "Start macro playback (Shortcut: F7 / Stop: F4)",
                 "title_move_action" => "Hold to drag and reorder this action",
                 "title_delay_before" => "Delay before this action",
                 "title_edit_action" => "Edit action settings",
@@ -542,9 +542,9 @@ impl Language {
     pub fn ready_status(&self) -> &'static str {
         match self {
             Language::Fr => {
-                "Prêt. Appuyez sur F8 pour démarrer l'enregistrement ou F4 pour rejouer."
+                "Prêt. Appuyez sur F8 pour enregistrer, F7 pour rejouer, F4 pour arrêt d'urgence."
             }
-            Language::En => "Ready. Press F8 to start recording or F4 to replay.",
+            Language::En => "Ready. Press F8 to record, F7 to replay, F4 for emergency stop.",
         }
     }
 
@@ -769,8 +769,8 @@ impl Language {
 
     pub fn toolbar_play_tip(&self) -> &'static str {
         match self {
-            Language::Fr => "Rejouer la macro (F4)",
-            Language::En => "Play macro (F4)",
+            Language::Fr => "Rejouer la macro (F7)",
+            Language::En => "Play macro (F7)",
         }
     }
 

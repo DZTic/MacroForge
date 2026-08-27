@@ -90,11 +90,11 @@ pub fn send_mouse_move(x: i32, y: i32) {
 #[cfg(windows)]
 pub fn send_mouse_button(button: u8, down: bool, x: i32, y: i32) {
     use winapi::um::winuser::{SendInput, INPUT, INPUT_MOUSE, MOUSEINPUT};
+    // S'assurer que le curseur est positionné sur la cible si des coordonnées valides sont fournies
+    if x > 0 || y > 0 {
+        send_mouse_move(x, y);
+    }
     unsafe {
-        // Un clic ne doit jamais déplacer le curseur : pas de MOUSEEVENTF_ABSOLUTE
-        // ni de MOUSEEVENTF_MOVE ici, sinon le curseur est téléporté aux
-        // coordonnées normalisées fournies (historiquement (0, 0)).
-        let _ = (x, y);
         let flag = mouse_button_dwflags(button, down);
 
         let mut input = INPUT {
@@ -152,6 +152,7 @@ pub fn send_mouse_relative(dx: i32, dy: i32) {
 #[cfg(windows)]
 pub fn send_key(vk: u16, key_up: bool, is_extended: bool) {
     unsafe {
+        use winapi::um::winuser::KEYEVENTF_SCANCODE;
         let scan = MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC_EX) as u16;
         let mut flags = 0;
         if key_up {
@@ -160,12 +161,17 @@ pub fn send_key(vk: u16, key_up: bool, is_extended: bool) {
         if is_extended {
             flags |= KEYEVENTF_EXTENDEDKEY;
         }
+        // Pour une compatibilité maximale (jeux DirectX / DirectInput / Win32),
+        // si le scan code matériel est résolu, injecter avec KEYEVENTF_SCANCODE.
+        if scan != 0 {
+            flags |= KEYEVENTF_SCANCODE;
+        }
         let mut input = INPUT {
             type_: INPUT_KEYBOARD,
             u: std::mem::zeroed(),
         };
         *input.u.ki_mut() = KEYBDINPUT {
-            wVk: vk,
+            wVk: if scan == 0 { vk } else { 0 },
             wScan: scan,
             dwFlags: flags,
             time: 0,
@@ -438,6 +444,19 @@ pub fn toggle_recording() {
     }
 }
 
+/// Bascule atomique de la relecture de macro (Play / Stop)
+pub fn toggle_playback() {
+    let is_playing = {
+        let state = MACRO_STATE.lock().unwrap();
+        state.is_playing
+    };
+    if is_playing {
+        stop_playback();
+    } else {
+        play_macro();
+    }
+}
+
 /// Arrêt d'urgence immédiat de toute relecture ou enregistrement
 pub fn emergency_stop() {
     stop_playback();
@@ -458,7 +477,7 @@ pub fn emergency_stop() {
     }
 }
 
-/// Écouteur global ultra-réactif des raccourcis Windows (F8: Rec/Stop, F9: Stop Rec, F4: Arrêt Urgence)
+/// Écouteur global ultra-réactif des raccourcis Windows (F8: Rec/Stop, F9: Stop Rec, F7: Play/Stop, F4: Arrêt Urgence)
 /// Utilise GetAsyncKeyState avec détection de front montant et anti-rebond (debounce).
 /// Fonctionne de manière universelle dans tous les jeux (Plein écran, fenêtré, DirectX, Vulkan, etc.)
 #[cfg(windows)]
@@ -469,9 +488,11 @@ pub fn start_global_hotkey_listener() {
     thread::spawn(|| {
         let mut was_f8 = false;
         let mut was_f9 = false;
+        let mut was_f7 = false;
         let mut was_f4 = false;
         let mut last_f8_time = Instant::now() - Duration::from_secs(1);
         let mut last_f9_time = Instant::now() - Duration::from_secs(1);
+        let mut last_f7_time = Instant::now() - Duration::from_secs(1);
         let mut last_f4_time = Instant::now() - Duration::from_secs(1);
 
         loop {
@@ -494,7 +515,15 @@ pub fn start_global_hotkey_listener() {
                 }
                 was_f9 = is_f9;
 
-                // 3. VK_F4 (0x73) -> Arrêt d'urgence
+                // 3. VK_F7 (0x76) -> Lancer / Basculer la relecture
+                let is_f7 = (GetAsyncKeyState(0x76) as u16 & 0x8000) != 0;
+                if is_f7 && !was_f7 && last_f7_time.elapsed() >= Duration::from_millis(250) {
+                    last_f7_time = Instant::now();
+                    toggle_playback();
+                }
+                was_f7 = is_f7;
+
+                // 4. VK_F4 (0x73) -> Arrêt d'urgence
                 let is_f4 = (GetAsyncKeyState(0x73) as u16 & 0x8000) != 0;
                 if is_f4 && !was_f4 && last_f4_time.elapsed() >= Duration::from_millis(250) {
                     last_f4_time = Instant::now();
@@ -1080,6 +1109,33 @@ pub fn play_macro() {
         // arret F4 ou unwind panic.
         #[cfg(windows)]
         let _timer_guard = TimerResolutionGuard::new();
+
+        // Si la fenêtre active est MacroForge, redonner automatiquement le focus à l'application cible
+        #[cfg(windows)]
+        unsafe {
+            use winapi::um::winuser::{
+                GetForegroundWindow, GetWindowTextW, IsWindowVisible, SetForegroundWindow,
+            };
+            let cur_hwnd = GetForegroundWindow();
+            if !cur_hwnd.is_null() {
+                let mut buf = [0u16; 256];
+                let len = GetWindowTextW(cur_hwnd, buf.as_mut_ptr(), buf.len() as i32);
+                let title = if len > 0 {
+                    String::from_utf16_lossy(&buf[..len as usize])
+                } else {
+                    String::new()
+                };
+                if title.contains("MacroForge") {
+                    let target_hwnd =
+                        LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+                    if !target_hwnd.is_null() && IsWindowVisible(target_hwnd) != 0 {
+                        SetForegroundWindow(target_hwnd);
+                        thread::sleep(Duration::from_millis(150));
+                    }
+                }
+            }
+        }
+
         let ts = || format!("[+{:.2}s]", playback_start.elapsed().as_secs_f64());
         let total_actions = actions_to_play.len();
 
@@ -1701,6 +1757,11 @@ pub fn handle_rdev_event(event: Event) {
                 stop_recording();
                 return;
             }
+            RdevKey::F7 => {
+                #[cfg(not(windows))]
+                toggle_playback();
+                return;
+            }
             RdevKey::F4 => {
                 #[cfg(not(windows))]
                 emergency_stop();
@@ -1710,7 +1771,9 @@ pub fn handle_rdev_event(event: Event) {
         }
     }
 
-    if let EventType::KeyRelease(RdevKey::F8 | RdevKey::F9 | RdevKey::F4) = &event.event_type {
+    if let EventType::KeyRelease(RdevKey::F8 | RdevKey::F9 | RdevKey::F7 | RdevKey::F4) =
+        &event.event_type
+    {
         return;
     }
 
@@ -1722,7 +1785,7 @@ pub fn handle_rdev_event(event: Event) {
     let action_type_opt = match &event.event_type {
         EventType::KeyPress(key) => {
             let (name, vk, is_ext) = rdev_key_to_name_and_scan(key);
-            if vk == 0 || vk == 0x77 || vk == 0x78 || vk == 0x73 {
+            if vk == 0 || vk == 0x77 || vk == 0x78 || vk == 0x76 || vk == 0x73 {
                 None
             } else if let std::collections::hash_map::Entry::Vacant(e) =
                 state.key_press_times.entry(vk)
@@ -1735,7 +1798,7 @@ pub fn handle_rdev_event(event: Event) {
         }
         EventType::KeyRelease(key) => {
             let (name, vk, is_ext) = rdev_key_to_name_and_scan(key);
-            if vk == 0 || vk == 0x77 || vk == 0x78 || vk == 0x73 {
+            if vk == 0 || vk == 0x77 || vk == 0x78 || vk == 0x76 || vk == 0x73 {
                 None
             } else {
                 Some(ActionType::KeyRelease(name.into_owned(), vk, is_ext))
@@ -2228,6 +2291,43 @@ mod tests {
         let (name_f4, vk_f4, _) = rdev_key_to_name_and_scan(&RdevKey::F4);
         assert_eq!(name_f4, "F4");
         assert_eq!(vk_f4, 0x73);
+
+        let (name_f7, vk_f7, _) = rdev_key_to_name_and_scan(&RdevKey::F7);
+        assert_eq!(name_f7, "F7");
+        assert_eq!(vk_f7, 0x76);
+    }
+
+    #[test]
+    fn test_toggle_playback_state_machine() {
+        {
+            let mut state = MACRO_STATE.lock().unwrap();
+            state.is_playing = false;
+            state.actions.clear();
+        }
+
+        // Sans actions, toggle_playback ne démarre pas la lecture
+        toggle_playback();
+        assert!(!MACRO_STATE.lock().unwrap().is_playing);
+
+        // Avec une action valide
+        add_action(MacroAction {
+            action_type: ActionType::Wait(50),
+            delay_ms: 0,
+        });
+        toggle_playback();
+        assert!(MACRO_STATE.lock().unwrap().is_playing);
+
+        // Deuxième toggle arrête la lecture
+        toggle_playback();
+        assert!(MACRO_STATE
+            .lock()
+            .unwrap()
+            .stop_playback_flag
+            .load(Ordering::Relaxed));
+
+        // Nettoyage
+        clear_actions();
+        MACRO_STATE.lock().unwrap().is_playing = false;
     }
 
     #[cfg(windows)]
