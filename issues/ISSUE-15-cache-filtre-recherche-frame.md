@@ -1,6 +1,6 @@
 # 🔍 Issue #15 : Cache du Filtrage & Recherche (éviter recalcul par frame)
 
-- **Statut** : 📝 À faire
+- **Statut** : ✅ Résolu (intégré)
 - **Priorité** : 🟡 Moyenne
 - **Composants** : `app.rs`, matches_filter(), filtered_indices, Allocations
 - **Agents Référents** : `.agents/agents/rust-core.md`

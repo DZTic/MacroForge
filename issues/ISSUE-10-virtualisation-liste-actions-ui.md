@@ -1,6 +1,6 @@
 # ⚡ Issue #10 : Virtualisation de la Liste d'Actions (ScrollArea)
 
-- **Statut** : 📝 À faire
+- **Statut** : ✅ Résolu (intégré)
 - **Priorité** : 🟠 Haute
 - **Composants** : `app.rs`, egui ScrollArea, Rendu UI
 - **Agents Référents** : `.agents/agents/rust-core.md`

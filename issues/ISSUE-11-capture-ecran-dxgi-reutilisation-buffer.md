@@ -1,6 +1,6 @@
 # 🖼️ Issue #11 : Optimisation Capture Écran (Buffer Réutilisé / DXGI)
 
-- **Statut** : 📝 À faire
+- **Statut** : ✅ Résolu (intégré)
 - **Priorité** : 🟠 Haute
 - **Composants** : `macro_core.rs`, GDI BitBlt, rayon, WaitImage
 - **Agents Référents** : `.agents/agents/rust-core.md`
