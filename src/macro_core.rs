@@ -324,6 +324,10 @@ pub struct MacroAction {
     pub delay_ms: u64,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WindowLockConfig {
     pub enabled: bool,
@@ -334,6 +338,12 @@ pub struct WindowLockConfig {
     pub height: i32,
     pub force_foreground: bool,
     pub restore_if_maximized: bool,
+    #[serde(default)]
+    pub embed_in_macroforge: bool,
+    #[serde(default = "default_true")]
+    pub lock_window_styles: bool,
+    #[serde(default = "default_true")]
+    pub enforce_continuous_clamp: bool,
 }
 
 impl Default for WindowLockConfig {
@@ -347,8 +357,23 @@ impl Default for WindowLockConfig {
             height: 720,
             force_foreground: true,
             restore_if_maximized: true,
+            embed_in_macroforge: false,
+            lock_window_styles: true,
+            enforce_continuous_clamp: true,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct OriginalWindowState {
+    pub hwnd: isize,
+    pub parent_hwnd: isize,
+    pub style: isize,
+    pub ex_style: isize,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -424,6 +449,7 @@ lazy_static::lazy_static! {
     pub static ref EGUI_CTX: Mutex<Option<eframe::egui::Context>> = Mutex::new(None);
     pub static ref IMAGE_CACHE: Mutex<HashMap<String, Arc<image::RgbaImage>>> = Mutex::new(HashMap::new());
     static ref LAST_RECORD_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
+    static ref SAVED_WINDOW_STATES: Mutex<HashMap<isize, OriginalWindowState>> = Mutex::new(HashMap::new());
 }
 
 #[cfg(windows)]
@@ -1236,6 +1262,11 @@ pub fn play_macro() {
 
                 total_recorded_delay += action.delay_ms;
 
+                #[cfg(windows)]
+                if window_lock_cfg.enabled && window_lock_cfg.enforce_continuous_clamp {
+                    clamp_target_window_bounds(&window_lock_cfg);
+                }
+
                 if let Some(ref path) = stop_image_config {
                     let now = Instant::now();
                     let in_blackout = stop_blackout_until.map(|t| now < t).unwrap_or(false);
@@ -1846,10 +1877,133 @@ pub fn find_target_window_hwnd(config: &WindowLockConfig) -> Option<winapi::shar
 }
 
 #[cfg(windows)]
-pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
+pub fn get_macroforge_main_hwnd() -> Option<winapi::shared::windef::HWND> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::shared::minwindef::{BOOL, DWORD, LPARAM, TRUE};
+    use winapi::shared::windef::HWND;
     use winapi::um::winuser::{
-        GetWindowTextW, IsIconic, IsZoomed, SetForegroundWindow, SetWindowPos, ShowWindow,
-        SWP_FRAMECHANGED, SWP_NOZORDER, SWP_SHOWWINDOW, SW_RESTORE,
+        EnumWindows, FindWindowW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    let title: Vec<u16> = OsStr::new("MacroForge (Full Natif Windows)\0")
+        .encode_wide()
+        .collect();
+    unsafe {
+        let hwnd = FindWindowW(std::ptr::null(), title.as_ptr());
+        if !hwnd.is_null() && IsWindowVisible(hwnd) != 0 {
+            return Some(hwnd);
+        }
+
+        let current_pid = std::process::id();
+        struct SearchData {
+            pid: DWORD,
+            found_hwnd: Option<HWND>,
+        }
+        let mut data = SearchData {
+            pid: current_pid,
+            found_hwnd: None,
+        };
+
+        unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let sdata = &mut *(lparam as *mut SearchData);
+            let mut proc_id: DWORD = 0;
+            GetWindowThreadProcessId(hwnd, &mut proc_id);
+            if proc_id == sdata.pid && IsWindowVisible(hwnd) != 0 {
+                let mut buf = [0u16; 256];
+                let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+                let title_str = if len > 0 {
+                    String::from_utf16_lossy(&buf[..len as usize])
+                } else {
+                    String::new()
+                };
+                if title_str.contains("MacroForge")
+                    && !title_str.contains("Overlay")
+                    && !title_str.contains("Toolbar")
+                {
+                    sdata.found_hwnd = Some(hwnd);
+                    return 0;
+                }
+            }
+            TRUE
+        }
+
+        EnumWindows(Some(enum_proc), &mut data as *mut _ as LPARAM);
+        data.found_hwnd
+    }
+}
+
+#[cfg(not(windows))]
+pub fn get_macroforge_main_hwnd() -> Option<isize> {
+    None
+}
+
+#[cfg(windows)]
+pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
+    use winapi::shared::windef::{HWND, RECT};
+    use winapi::um::winuser::{
+        GetWindowRect, IsIconic, IsWindowVisible, IsZoomed, SetWindowPos, ShowWindow,
+        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_RESTORE,
+    };
+
+    let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
+    if hwnd.is_null() || unsafe { IsWindowVisible(hwnd) } == 0 {
+        return;
+    }
+
+    unsafe {
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(hwnd, &mut rect) != 0 {
+            let cur_w = rect.right - rect.left;
+            let cur_h = rect.bottom - rect.top;
+            let cur_x = rect.left;
+            let cur_y = rect.top;
+
+            let target_w = config.width.max(50);
+            let target_h = config.height.max(50);
+
+            let needs_clamp = IsZoomed(hwnd) != 0
+                || IsIconic(hwnd) != 0
+                || (cur_w - target_w).abs() > 4
+                || (cur_h - target_h).abs() > 4
+                || (!config.embed_in_macroforge
+                    && ((cur_x - config.x).abs() > 4 || (cur_y - config.y).abs() > 4));
+
+            if needs_clamp {
+                if IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0 {
+                    ShowWindow(hwnd, SW_RESTORE);
+                }
+                SetWindowPos(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    config.x,
+                    config.y,
+                    target_w,
+                    target_h,
+                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+                );
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn clamp_target_window_bounds(_config: &WindowLockConfig) {}
+
+#[cfg(windows)]
+pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
+    use winapi::shared::windef::RECT;
+    use winapi::um::winuser::{
+        GetParent, GetWindowLongPtrW, GetWindowRect, GetWindowTextW, IsIconic, IsZoomed,
+        SetForegroundWindow, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE,
+        GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SWP_SHOWWINDOW, SW_RESTORE, WS_CAPTION,
+        WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
+        WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
     };
 
     let hwnd = find_target_window_hwnd(config)
@@ -1859,11 +2013,69 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
     let height = config.height.max(50);
 
     unsafe {
+        // 1. Sauvegarder l'état initial s'il n'est pas déjà enregistré
+        {
+            let mut states = SAVED_WINDOW_STATES.lock().unwrap();
+            let key = hwnd as isize;
+            states.entry(key).or_insert_with(|| {
+                let parent = GetParent(hwnd);
+                let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+                let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+                let mut rect = RECT {
+                    left: 0,
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                };
+                GetWindowRect(hwnd, &mut rect);
+                OriginalWindowState {
+                    hwnd: key,
+                    parent_hwnd: parent as isize,
+                    style,
+                    ex_style,
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.right - rect.left,
+                    height: rect.bottom - rect.top,
+                }
+            });
+        }
+
+        // 2. Restaurer si maximisée ou minimisée (pour débloquer le mode plein écran initial)
         if config.restore_if_maximized && (IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0) {
             ShowWindow(hwnd, SW_RESTORE);
             thread::sleep(Duration::from_millis(60));
         }
 
+        // 3. Intégration en tant que fenêtre enfant (SetParent) si demandée
+        if config.embed_in_macroforge {
+            if let Some(parent_hwnd) = get_macroforge_main_hwnd() {
+                if parent_hwnd != hwnd {
+                    SetParent(hwnd, parent_hwnd);
+                }
+            }
+        }
+
+        // 4. Verrouillage strict des styles (suppression des bordures de redimensionnement et bouton maximiser/F11)
+        if config.lock_window_styles || config.embed_in_macroforge {
+            let mut current_style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+
+            if config.embed_in_macroforge {
+                current_style &= !(WS_POPUP
+                    | WS_CAPTION
+                    | WS_THICKFRAME
+                    | WS_MINIMIZEBOX
+                    | WS_MAXIMIZEBOX
+                    | WS_SYSMENU);
+                current_style |= WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
+            } else if config.lock_window_styles {
+                current_style &= !(WS_THICKFRAME | WS_MAXIMIZEBOX);
+            }
+
+            SetWindowLongPtrW(hwnd, GWL_STYLE, current_style as isize);
+        }
+
+        // 5. Application des dimensions et coordonnées
         let flags = SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED;
         let success = SetWindowPos(
             hwnd,
@@ -1879,7 +2091,7 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
             return Err("Échec de l'appel SetWindowPos sur la fenêtre cible.".to_string());
         }
 
-        if config.force_foreground {
+        if config.force_foreground && !config.embed_in_macroforge {
             SetForegroundWindow(hwnd);
             thread::sleep(Duration::from_millis(50));
         }
@@ -1895,12 +2107,14 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
         };
 
         info!(
-            "🎯 Fenêtre cible '{}' emprisonnée avec succès (taille: {}x{}, pos: {}, {})",
+            "🎯 Fenêtre cible '{}' emprisonnée avec succès (taille: {}x{}, pos: {}, {}, embed: {}, lock_styles: {})",
             title.trim(),
             width,
             height,
             config.x,
-            config.y
+            config.y,
+            config.embed_in_macroforge,
+            config.lock_window_styles
         );
     }
 
@@ -1909,6 +2123,60 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
 
 #[cfg(not(windows))]
 pub fn apply_window_lock(_config: &WindowLockConfig) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(windows)]
+pub fn restore_target_window(config: &WindowLockConfig) -> Result<(), String> {
+    use winapi::shared::windef::HWND;
+    use winapi::um::winuser::{
+        SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE,
+        SWP_FRAMECHANGED, SWP_NOZORDER, SWP_SHOWWINDOW, SW_SHOWNORMAL,
+    };
+
+    let hwnd = find_target_window_hwnd(config)
+        .ok_or_else(|| "Aucune fenêtre cible trouvée pour la restauration.".to_string())?;
+
+    unsafe {
+        let state_opt = {
+            let mut states = SAVED_WINDOW_STATES.lock().unwrap();
+            states.remove(&(hwnd as isize))
+        };
+
+        if let Some(state) = state_opt {
+            let parent = if state.parent_hwnd != 0 {
+                state.parent_hwnd as HWND
+            } else {
+                std::ptr::null_mut()
+            };
+
+            SetParent(hwnd, parent);
+            SetWindowLongPtrW(hwnd, GWL_STYLE, state.style);
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, state.ex_style);
+            ShowWindow(hwnd, SW_SHOWNORMAL);
+
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                state.x,
+                state.y,
+                state.width.max(100),
+                state.height.max(100),
+                SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED,
+            );
+
+            info!("🔓 Fenêtre cible rétablie dans son état d'origine.");
+        } else {
+            SetParent(hwnd, std::ptr::null_mut());
+            ShowWindow(hwnd, SW_SHOWNORMAL);
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn restore_target_window(_config: &WindowLockConfig) -> Result<(), String> {
     Ok(())
 }
 
@@ -2688,6 +2956,9 @@ mod tests {
         assert_eq!(default_cfg.y, 100);
         assert!(default_cfg.force_foreground);
         assert!(default_cfg.restore_if_maximized);
+        assert!(!default_cfg.embed_in_macroforge);
+        assert!(default_cfg.lock_window_styles);
+        assert!(default_cfg.enforce_continuous_clamp);
 
         let custom = WindowLockConfig {
             enabled: true,
@@ -2698,6 +2969,9 @@ mod tests {
             height: 1080,
             force_foreground: true,
             restore_if_maximized: false,
+            embed_in_macroforge: true,
+            lock_window_styles: true,
+            enforce_continuous_clamp: true,
         };
 
         set_window_lock(custom.clone());
@@ -2709,6 +2983,14 @@ mod tests {
         let deserialized: WindowLockConfig =
             serde_json::from_str(&json).expect("deserialize WindowLockConfig");
         assert_eq!(deserialized, custom);
+
+        // Backward compatibility deserialization test without new fields
+        let old_json = r#"{"enabled":true,"title_filter":"Old","x":10,"y":20,"width":800,"height":600,"force_foreground":false,"restore_if_maximized":false}"#;
+        let old_deserialized: WindowLockConfig =
+            serde_json::from_str(old_json).expect("deserialize old json");
+        assert!(!old_deserialized.embed_in_macroforge);
+        assert!(old_deserialized.lock_window_styles);
+        assert!(old_deserialized.enforce_continuous_clamp);
 
         // Reset
         set_window_lock(default_cfg);

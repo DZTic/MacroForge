@@ -14,6 +14,9 @@ pub struct WindowLockModal {
     pub height: i32,
     pub force_foreground: bool,
     pub restore_if_maximized: bool,
+    pub embed_in_macroforge: bool,
+    pub lock_window_styles: bool,
+    pub enforce_continuous_clamp: bool,
 
     // Cache des fenêtres détectées pour le sélecteur
     pub detected_windows: Vec<WindowInfo>,
@@ -42,6 +45,9 @@ impl WindowLockModal {
             height: current_cfg.height,
             force_foreground: current_cfg.force_foreground,
             restore_if_maximized: current_cfg.restore_if_maximized,
+            embed_in_macroforge: current_cfg.embed_in_macroforge,
+            lock_window_styles: current_cfg.lock_window_styles,
+            enforce_continuous_clamp: current_cfg.enforce_continuous_clamp,
             detected_windows: Vec::new(),
             selected_window_idx: None,
             test_status: None,
@@ -58,6 +64,9 @@ impl WindowLockModal {
         self.height = current_cfg.height;
         self.force_foreground = current_cfg.force_foreground;
         self.restore_if_maximized = current_cfg.restore_if_maximized;
+        self.embed_in_macroforge = current_cfg.embed_in_macroforge;
+        self.lock_window_styles = current_cfg.lock_window_styles;
+        self.enforce_continuous_clamp = current_cfg.enforce_continuous_clamp;
         self.test_status = None;
         self.refresh_windows();
         self.is_open = true;
@@ -375,13 +384,36 @@ impl WindowLockModal {
 
                 ui.add_space(8.0);
 
-                // --- 4. Options avancées ---
+                // --- 4. Options d'emprisonnement strict & protection ---
                 Frame::none()
                     .fill(colors::BG_CARD)
                     .stroke(Stroke::new(1.0_f32, colors::BORDER_CARD))
                     .rounding(Rounding::same(8.0))
                     .inner_margin(Margin::same(12.0))
                     .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new(lang.strict_lock_section())
+                                .strong()
+                                .color(colors::TEXT_PRIMARY)
+                                .size(13.0),
+                        );
+                        ui.add_space(6.0);
+
+                        ui.checkbox(
+                            &mut self.embed_in_macroforge,
+                            lang.embed_in_macroforge_label(),
+                        );
+                        ui.add_space(4.0);
+                        ui.checkbox(
+                            &mut self.lock_window_styles,
+                            lang.lock_window_styles_label(),
+                        );
+                        ui.add_space(4.0);
+                        ui.checkbox(
+                            &mut self.enforce_continuous_clamp,
+                            lang.enforce_continuous_clamp_label(),
+                        );
+                        ui.add_space(4.0);
                         ui.checkbox(&mut self.force_foreground, lang.force_foreground_label());
                         ui.add_space(4.0);
                         ui.checkbox(
@@ -407,11 +439,47 @@ impl WindowLockModal {
                             height: self.height,
                             force_foreground: self.force_foreground,
                             restore_if_maximized: self.restore_if_maximized,
+                            embed_in_macroforge: self.embed_in_macroforge,
+                            lock_window_styles: self.lock_window_styles,
+                            enforce_continuous_clamp: self.enforce_continuous_clamp,
                         };
                         match macro_core::apply_window_lock(&test_cfg) {
                             Ok(()) => {
                                 self.test_status =
                                     Some((true, lang.window_lock_success_test().to_string()));
+                            }
+                            Err(err) => {
+                                self.test_status = Some((
+                                    false,
+                                    format!("{} ({})", lang.window_lock_error_test(), err),
+                                ));
+                            }
+                        }
+                    }
+
+                    ui.add_space(4.0);
+
+                    let release_btn = GlassButton::new(lang.restore_target_window_btn())
+                        .icon("🔓")
+                        .variant(ButtonVariant::Ghost);
+                    if ui.add(release_btn).clicked() {
+                        let test_cfg = WindowLockConfig {
+                            enabled: true,
+                            title_filter: self.title_filter.clone(),
+                            x: self.x,
+                            y: self.y,
+                            width: self.width,
+                            height: self.height,
+                            force_foreground: self.force_foreground,
+                            restore_if_maximized: self.restore_if_maximized,
+                            embed_in_macroforge: self.embed_in_macroforge,
+                            lock_window_styles: self.lock_window_styles,
+                            enforce_continuous_clamp: self.enforce_continuous_clamp,
+                        };
+                        match macro_core::restore_target_window(&test_cfg) {
+                            Ok(()) => {
+                                self.test_status =
+                                    Some((true, lang.window_restored_success().to_string()));
                             }
                             Err(err) => {
                                 self.test_status = Some((
@@ -445,6 +513,9 @@ impl WindowLockModal {
                                 height: self.height,
                                 force_foreground: self.force_foreground,
                                 restore_if_maximized: self.restore_if_maximized,
+                                embed_in_macroforge: self.embed_in_macroforge,
+                                lock_window_styles: self.lock_window_styles,
+                                enforce_continuous_clamp: self.enforce_continuous_clamp,
                             };
                             macro_core::set_window_lock(new_cfg.clone());
 
