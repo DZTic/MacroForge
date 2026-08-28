@@ -1,6 +1,4 @@
-//! Module d'internationalisation (i18n) pour MacroForge
-//! Supporte le Français (FR) et l'Anglais (EN) avec typage strict et lookup universel.
-
+use crate::macro_core::WindowLockConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -15,6 +13,8 @@ pub struct AppSettings {
     pub language: Language,
     pub loop_playback: bool,
     pub hide_mouse_moves: bool,
+    #[serde(default)]
+    pub window_lock: WindowLockConfig,
 }
 
 impl Default for AppSettings {
@@ -23,6 +23,7 @@ impl Default for AppSettings {
             language: Language::Fr,
             loop_playback: false,
             hide_mouse_moves: false,
+            window_lock: WindowLockConfig::default(),
         }
     }
 }
@@ -808,6 +809,158 @@ impl Language {
             Language::En => format!("{} act.", count),
         }
     }
+
+    // --- Verrouillage / Emprisonnement de Fenêtre Cible ---
+    pub fn window_lock_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Fenêtre Cible",
+            Language::En => "Target Window",
+        }
+    }
+
+    pub fn window_lock_tooltip(&self) -> &'static str {
+        match self {
+            Language::Fr => {
+                "Emprisonner et redimensionner automatiquement la fenêtre cible au lancement (Taille fixe)"
+            }
+            Language::En => {
+                "Automatically lock and resize target window when macro starts (Fixed size)"
+            }
+        }
+    }
+
+    pub fn window_lock_modal_title(&self) -> &'static str {
+        match self {
+            Language::Fr => "🎯 Configuration de la Fenêtre Cible (Taille Fixe)",
+            Language::En => "🎯 Target Window Lock Configuration (Fixed Size)",
+        }
+    }
+
+    pub fn window_lock_enable(&self) -> &'static str {
+        match self {
+            Language::Fr => "Activer le verrouillage / redimensionnement automatique au lancement",
+            Language::En => "Enable automatic window lock & resize on macro start",
+        }
+    }
+
+    pub fn target_window_section(&self) -> &'static str {
+        match self {
+            Language::Fr => "Fenêtre Cible",
+            Language::En => "Target Window",
+        }
+    }
+
+    pub fn target_window_title_filter(&self) -> &'static str {
+        match self {
+            Language::Fr => "Titre ou filtre (laisser vide pour la fenêtre active) :",
+            Language::En => "Title or filter (leave empty for active window):",
+        }
+    }
+
+    pub fn detect_active_window_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Capturer la fenêtre active",
+            Language::En => "Capture active window",
+        }
+    }
+
+    pub fn refresh_windows_list_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Rafraîchir",
+            Language::En => "Refresh",
+        }
+    }
+
+    pub fn open_windows_list_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Fenêtres ouvertes détectées :",
+            Language::En => "Detected open windows:",
+        }
+    }
+
+    pub fn dimensions_section(&self) -> &'static str {
+        match self {
+            Language::Fr => "Dimensions & Position Cibles (Pixels)",
+            Language::En => "Target Dimensions & Position (Pixels)",
+        }
+    }
+
+    pub fn width_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Largeur :",
+            Language::En => "Width:",
+        }
+    }
+
+    pub fn height_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Hauteur :",
+            Language::En => "Height:",
+        }
+    }
+
+    pub fn pos_x_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Position X :",
+            Language::En => "Position X:",
+        }
+    }
+
+    pub fn pos_y_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Position Y :",
+            Language::En => "Position Y:",
+        }
+    }
+
+    pub fn center_screen_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Centrer sur l'écran",
+            Language::En => "Center on screen",
+        }
+    }
+
+    pub fn capture_current_size_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Capturer taille/pos actuelle",
+            Language::En => "Capture current size/pos",
+        }
+    }
+
+    pub fn test_window_lock_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Tester le positionnement",
+            Language::En => "Test positioning",
+        }
+    }
+
+    pub fn force_foreground_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Forcer la mise au premier plan (Focus)",
+            Language::En => "Force foreground focus",
+        }
+    }
+
+    pub fn restore_maximized_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Rétablir si maximisée ou minimisée",
+            Language::En => "Restore if maximized or minimized",
+        }
+    }
+
+    pub fn window_lock_success_test(&self) -> &'static str {
+        match self {
+            Language::Fr => "✅ Fenêtre positionnée et redimensionnée avec succès !",
+            Language::En => "✅ Target window positioned and resized successfully!",
+        }
+    }
+
+    pub fn window_lock_error_test(&self) -> &'static str {
+        match self {
+            Language::Fr => "❌ Impossible de positionner la fenêtre cible.",
+            Language::En => "❌ Could not position target window.",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -835,6 +988,8 @@ mod tests {
         assert_ne!(fr.quick_add_key(), en.quick_add_key());
         assert_ne!(fr.capture_key_btn(), en.capture_key_btn());
         assert_ne!(fr.capture_cursor_pos_btn(), en.capture_cursor_pos_btn());
+        assert_ne!(fr.window_lock_btn(), en.window_lock_btn());
+        assert_ne!(fr.window_lock_modal_title(), en.window_lock_modal_title());
     }
 
     #[test]
@@ -861,6 +1016,16 @@ mod tests {
             language: Language::En,
             loop_playback: true,
             hide_mouse_moves: true,
+            window_lock: WindowLockConfig {
+                enabled: true,
+                title_filter: "Game".to_string(),
+                x: 200,
+                y: 150,
+                width: 1600,
+                height: 900,
+                force_foreground: true,
+                restore_if_maximized: true,
+            },
         };
 
         let json = serde_json::to_string(&settings).unwrap();
@@ -868,5 +1033,6 @@ mod tests {
         assert_eq!(loaded.language, Language::En);
         assert!(loaded.loop_playback);
         assert!(loaded.hide_mouse_moves);
+        assert_eq!(loaded.window_lock, settings.window_lock);
     }
 }

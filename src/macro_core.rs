@@ -324,6 +324,43 @@ pub struct MacroAction {
     pub delay_ms: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WindowLockConfig {
+    pub enabled: bool,
+    pub title_filter: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub force_foreground: bool,
+    pub restore_if_maximized: bool,
+}
+
+impl Default for WindowLockConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            title_filter: String::new(),
+            x: 100,
+            y: 100,
+            width: 1280,
+            height: 720,
+            force_foreground: true,
+            restore_if_maximized: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WindowInfo {
+    pub hwnd: isize,
+    pub title: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
 pub struct MacroState {
     pub is_recording: bool,
     pub is_playing: bool,
@@ -343,6 +380,7 @@ pub struct MacroState {
     pub pending_dy: i32,
     pub stop_image_path: Option<String>,
     pub stop_image_timeout: u64,
+    pub window_lock: WindowLockConfig,
 }
 
 impl Default for MacroState {
@@ -372,6 +410,7 @@ impl MacroState {
             pending_dy: 0,
             stop_image_path: None,
             stop_image_timeout: 5000,
+            window_lock: WindowLockConfig::default(),
         }
     }
 }
@@ -1096,6 +1135,7 @@ pub fn play_macro() {
     state.is_playing = true;
     let actions_to_play = state.actions.clone();
     let stop_flag = Arc::clone(&state.stop_playback_flag);
+    let window_lock_cfg = state.window_lock.clone();
     stop_flag.store(false, Ordering::SeqCst);
 
     drop(state);
@@ -1110,27 +1150,46 @@ pub fn play_macro() {
         #[cfg(windows)]
         let _timer_guard = TimerResolutionGuard::new();
 
-        // Si la fenêtre active est MacroForge, redonner automatiquement le focus à l'application cible
+        // 1. Si le verrouillage de fenêtre est activé, emprisonner la fenêtre cible (taille et position fixe)
         #[cfg(windows)]
-        unsafe {
-            use winapi::um::winuser::{
-                GetForegroundWindow, GetWindowTextW, IsWindowVisible, SetForegroundWindow,
-            };
-            let cur_hwnd = GetForegroundWindow();
-            if !cur_hwnd.is_null() {
-                let mut buf = [0u16; 256];
-                let len = GetWindowTextW(cur_hwnd, buf.as_mut_ptr(), buf.len() as i32);
-                let title = if len > 0 {
-                    String::from_utf16_lossy(&buf[..len as usize])
-                } else {
-                    String::new()
+        if window_lock_cfg.enabled {
+            if let Err(e) = apply_window_lock(&window_lock_cfg) {
+                warn!(
+                    "Impossible d'emprisonner la fenêtre cible au lancement : {}",
+                    e
+                );
+            } else {
+                info!(
+                    "🎯 Fenêtre cible emprisonnée avec succès : {}x{} en ({}, {})",
+                    window_lock_cfg.width,
+                    window_lock_cfg.height,
+                    window_lock_cfg.x,
+                    window_lock_cfg.y
+                );
+                thread::sleep(Duration::from_millis(150));
+            }
+        } else {
+            // Si la fenêtre active est MacroForge, redonner automatiquement le focus à l'application cible
+            unsafe {
+                use winapi::um::winuser::{
+                    GetForegroundWindow, GetWindowTextW, IsWindowVisible, SetForegroundWindow,
                 };
-                if title.contains("MacroForge") {
-                    let target_hwnd =
-                        LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
-                    if !target_hwnd.is_null() && IsWindowVisible(target_hwnd) != 0 {
-                        SetForegroundWindow(target_hwnd);
-                        thread::sleep(Duration::from_millis(150));
+                let cur_hwnd = GetForegroundWindow();
+                if !cur_hwnd.is_null() {
+                    let mut buf = [0u16; 256];
+                    let len = GetWindowTextW(cur_hwnd, buf.as_mut_ptr(), buf.len() as i32);
+                    let title = if len > 0 {
+                        String::from_utf16_lossy(&buf[..len as usize])
+                    } else {
+                        String::new()
+                    };
+                    if title.contains("MacroForge") {
+                        let target_hwnd =
+                            LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+                        if !target_hwnd.is_null() && IsWindowVisible(target_hwnd) != 0 {
+                            SetForegroundWindow(target_hwnd);
+                            thread::sleep(Duration::from_millis(150));
+                        }
                     }
                 }
             }
@@ -1591,6 +1650,266 @@ pub fn set_stop_image(path: Option<String>, timeout: u64) {
     let mut state = MACRO_STATE.lock().unwrap();
     state.stop_image_path = path;
     state.stop_image_timeout = timeout;
+}
+
+pub fn get_window_lock() -> WindowLockConfig {
+    let state = MACRO_STATE.lock().unwrap();
+    state.window_lock.clone()
+}
+
+pub fn set_window_lock(config: WindowLockConfig) {
+    let mut state = MACRO_STATE.lock().unwrap();
+    state.window_lock = config;
+}
+
+#[cfg(windows)]
+pub fn get_primary_screen_dimensions() -> (i32, i32) {
+    use winapi::um::winuser::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+    unsafe {
+        let w = GetSystemMetrics(SM_CXSCREEN);
+        let h = GetSystemMetrics(SM_CYSCREEN);
+        (w, h)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn get_primary_screen_dimensions() -> (i32, i32) {
+    (1920, 1080)
+}
+
+#[cfg(windows)]
+pub fn list_open_windows() -> Vec<WindowInfo> {
+    use winapi::shared::minwindef::{BOOL, LPARAM, TRUE};
+    use winapi::shared::windef::{HWND, RECT};
+    use winapi::um::winuser::{
+        EnumWindows, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible,
+    };
+
+    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let list = &mut *(lparam as *mut Vec<WindowInfo>);
+
+        if IsWindowVisible(hwnd) == 0 {
+            return TRUE;
+        }
+
+        let len = GetWindowTextLengthW(hwnd);
+        if len <= 0 {
+            return TRUE;
+        }
+
+        let mut buf = vec![0u16; (len + 1) as usize];
+        let copied = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+        if copied <= 0 {
+            return TRUE;
+        }
+
+        let title = String::from_utf16_lossy(&buf[..copied as usize]);
+        let trimmed = title.trim();
+        if trimmed.is_empty()
+            || trimmed.contains("MacroForge")
+            || trimmed == "Program Manager"
+            || trimmed == "Settings"
+            || trimmed == "Windows Input Experience"
+        {
+            return TRUE;
+        }
+
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(hwnd, &mut rect) != 0 {
+            let width = rect.right - rect.left;
+            let height = rect.bottom - rect.top;
+            if width > 60 && height > 60 {
+                list.push(WindowInfo {
+                    hwnd: hwnd as isize,
+                    title: trimmed.to_string(),
+                    x: rect.left,
+                    y: rect.top,
+                    width,
+                    height,
+                });
+            }
+        }
+
+        TRUE
+    }
+
+    let mut windows: Vec<WindowInfo> = Vec::new();
+    unsafe {
+        EnumWindows(Some(enum_proc), &mut windows as *mut _ as LPARAM);
+    }
+    windows
+}
+
+#[cfg(not(windows))]
+pub fn list_open_windows() -> Vec<WindowInfo> {
+    Vec::new()
+}
+
+#[cfg(windows)]
+pub fn capture_active_window_info() -> Option<WindowInfo> {
+    use winapi::shared::windef::{HWND, RECT};
+    use winapi::um::winuser::{
+        GetForegroundWindow, GetWindowRect, GetWindowTextW, IsWindowVisible,
+    };
+
+    unsafe {
+        let mut hwnd = GetForegroundWindow();
+        if !hwnd.is_null() {
+            let mut buf = [0u16; 256];
+            let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+            let title = if len > 0 {
+                String::from_utf16_lossy(&buf[..len as usize])
+            } else {
+                String::new()
+            };
+            if title.contains("MacroForge") {
+                let last_hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
+                if !last_hwnd.is_null() && IsWindowVisible(last_hwnd) != 0 {
+                    hwnd = last_hwnd;
+                }
+            }
+        } else {
+            let last_hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
+            if !last_hwnd.is_null() && IsWindowVisible(last_hwnd) != 0 {
+                hwnd = last_hwnd;
+            }
+        }
+
+        if hwnd.is_null() || IsWindowVisible(hwnd) == 0 {
+            return None;
+        }
+
+        let mut buf = [0u16; 256];
+        let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+        let title = if len > 0 {
+            String::from_utf16_lossy(&buf[..len as usize])
+        } else {
+            String::new()
+        };
+
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(hwnd, &mut rect) != 0 {
+            let width = rect.right - rect.left;
+            let height = rect.bottom - rect.top;
+            return Some(WindowInfo {
+                hwnd: hwnd as isize,
+                title: title.trim().to_string(),
+                x: rect.left,
+                y: rect.top,
+                width,
+                height,
+            });
+        }
+    }
+    None
+}
+
+#[cfg(not(windows))]
+pub fn capture_active_window_info() -> Option<WindowInfo> {
+    None
+}
+
+#[cfg(windows)]
+pub fn find_target_window_hwnd(config: &WindowLockConfig) -> Option<winapi::shared::windef::HWND> {
+    use winapi::shared::windef::HWND;
+    use winapi::um::winuser::IsWindowVisible;
+
+    let filter = config.title_filter.trim().to_lowercase();
+    if !filter.is_empty() {
+        let windows = list_open_windows();
+        for w in windows {
+            if w.title.to_lowercase().contains(&filter) {
+                let hwnd = w.hwnd as HWND;
+                if !hwnd.is_null() && unsafe { IsWindowVisible(hwnd) } != 0 {
+                    return Some(hwnd);
+                }
+            }
+        }
+    }
+
+    let last_hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
+    if !last_hwnd.is_null() && unsafe { IsWindowVisible(last_hwnd) } != 0 {
+        return Some(last_hwnd);
+    }
+
+    None
+}
+
+#[cfg(windows)]
+pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
+    use winapi::um::winuser::{
+        GetWindowTextW, IsIconic, IsZoomed, SetForegroundWindow, SetWindowPos, ShowWindow,
+        SWP_FRAMECHANGED, SWP_NOZORDER, SWP_SHOWWINDOW, SW_RESTORE,
+    };
+
+    let hwnd = find_target_window_hwnd(config)
+        .ok_or_else(|| "Aucune fenêtre cible trouvée ou active.".to_string())?;
+
+    let width = config.width.max(50);
+    let height = config.height.max(50);
+
+    unsafe {
+        if config.restore_if_maximized && (IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0) {
+            ShowWindow(hwnd, SW_RESTORE);
+            thread::sleep(Duration::from_millis(60));
+        }
+
+        let flags = SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED;
+        let success = SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            config.x,
+            config.y,
+            width,
+            height,
+            flags,
+        );
+
+        if success == 0 {
+            return Err("Échec de l'appel SetWindowPos sur la fenêtre cible.".to_string());
+        }
+
+        if config.force_foreground {
+            SetForegroundWindow(hwnd);
+            thread::sleep(Duration::from_millis(50));
+        }
+
+        LAST_GAME_HWND.store(hwnd as isize, Ordering::Relaxed);
+
+        let mut buf = [0u16; 256];
+        let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+        let title = if len > 0 {
+            String::from_utf16_lossy(&buf[..len as usize])
+        } else {
+            "Fenêtre".to_string()
+        };
+
+        info!(
+            "🎯 Fenêtre cible '{}' emprisonnée avec succès (taille: {}x{}, pos: {}, {})",
+            title.trim(),
+            width,
+            height,
+            config.x,
+            config.y
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn apply_window_lock(_config: &WindowLockConfig) -> Result<(), String> {
+    Ok(())
 }
 
 pub fn get_actions() -> Vec<MacroAction> {
@@ -2357,5 +2676,41 @@ mod tests {
         let _ = (x, y);
         assert!(w > 0, "Largeur de capture d'écran doit être positive");
         assert!(h > 0, "Hauteur de capture d'écran doit être positive");
+    }
+
+    #[test]
+    fn test_window_lock_config_defaults_and_mutation() {
+        let default_cfg = WindowLockConfig::default();
+        assert!(!default_cfg.enabled);
+        assert_eq!(default_cfg.width, 1280);
+        assert_eq!(default_cfg.height, 720);
+        assert_eq!(default_cfg.x, 100);
+        assert_eq!(default_cfg.y, 100);
+        assert!(default_cfg.force_foreground);
+        assert!(default_cfg.restore_if_maximized);
+
+        let custom = WindowLockConfig {
+            enabled: true,
+            title_filter: "Game Window".to_string(),
+            x: 50,
+            y: 50,
+            width: 1920,
+            height: 1080,
+            force_foreground: true,
+            restore_if_maximized: false,
+        };
+
+        set_window_lock(custom.clone());
+        let fetched = get_window_lock();
+        assert_eq!(fetched, custom);
+
+        // Serialization test
+        let json = serde_json::to_string(&custom).expect("serialize WindowLockConfig");
+        let deserialized: WindowLockConfig =
+            serde_json::from_str(&json).expect("deserialize WindowLockConfig");
+        assert_eq!(deserialized, custom);
+
+        // Reset
+        set_window_lock(default_cfg);
     }
 }
