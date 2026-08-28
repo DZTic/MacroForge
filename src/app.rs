@@ -1,7 +1,7 @@
 use crate::events::EngineEvent;
 use crate::macro_core::{self, ActionType, MacroAction, MACRO_STATE};
 use crate::ui::dialogs::{
-    ActionEditorModal, ActionModalTab, ActionModalTarget, StopImageConfigModal,
+    ActionEditorModal, ActionModalTab, ActionModalTarget, StopImageConfigModal, WindowLockModal,
 };
 use crate::ui::i18n::Language;
 use crate::ui::theme::{self, colors};
@@ -48,6 +48,7 @@ pub struct MacroForgeApp {
     // Modales & dialogues
     action_modal: ActionEditorModal,
     stop_image_modal: StopImageConfigModal,
+    window_lock_modal: WindowLockModal,
 
     // Toolbar flottante native
     toolbar: crate::ui::FloatingToolbar,
@@ -73,6 +74,7 @@ impl MacroForgeApp {
         if settings.loop_playback {
             macro_core::set_loop_playback(true);
         }
+        macro_core::set_window_lock(settings.window_lock.clone());
 
         let initial_actions = {
             let state = MACRO_STATE.lock().unwrap();
@@ -106,6 +108,7 @@ impl MacroForgeApp {
 
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
+            window_lock_modal: WindowLockModal::new(),
 
             toolbar: crate::ui::FloatingToolbar {
                 is_visible: false,
@@ -136,6 +139,7 @@ impl MacroForgeApp {
             language: self.lang,
             loop_playback: self.loop_playback,
             hide_mouse_moves: self.hide_mouse_moves,
+            window_lock: macro_core::get_window_lock(),
         };
         settings.save();
     }
@@ -500,6 +504,13 @@ impl eframe::App for MacroForgeApp {
                     "✅ Configuration de l'image d'arrêt d'urgence enregistrée.".to_string()
                 }
                 Language::En => "✅ Emergency stop image configuration saved.".to_string(),
+            };
+        }
+
+        if self.window_lock_modal.show(ctx, self.lang) {
+            self.status_message = match self.lang {
+                Language::Fr => "✅ Configuration de la fenêtre cible enregistrée.".to_string(),
+                Language::En => "✅ Target window lock configuration saved.".to_string(),
             };
         }
 
@@ -897,6 +908,39 @@ impl eframe::App for MacroForgeApp {
                         ui.separator();
                         ui.add_space(6.0);
 
+                        // Bouton Configuration Verrouillage Fenêtre Cible
+                        let win_lock_cfg = macro_core::get_window_lock();
+                        let has_win_lock = win_lock_cfg.enabled;
+                        let win_lock_lbl = if has_win_lock {
+                            format!(
+                                "{} ({}×{})",
+                                self.lang.window_lock_btn(),
+                                win_lock_cfg.width,
+                                win_lock_cfg.height
+                            )
+                        } else {
+                            self.lang.window_lock_btn().to_string()
+                        };
+                        let win_lock_btn =
+                            GlassButton::new(&win_lock_lbl)
+                                .icon("🎯")
+                                .variant(if has_win_lock {
+                                    ButtonVariant::Primary
+                                } else {
+                                    ButtonVariant::Secondary
+                                });
+                        if ui
+                            .add(win_lock_btn)
+                            .on_hover_text(self.lang.window_lock_tooltip())
+                            .clicked()
+                        {
+                            self.window_lock_modal.open();
+                        }
+
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
                         // Sauvegarder profil .mforge
                         let save_btn = GlassButton::new(self.lang.save_profile())
                             .icon("💾")
@@ -1040,6 +1084,24 @@ impl eframe::App for MacroForgeApp {
                                 });
                             if ui.add(stop_img_btn).clicked() {
                                 self.stop_image_modal.open();
+                            }
+
+                            let win_lock_cfg = macro_core::get_window_lock();
+                            let has_win_lock = win_lock_cfg.enabled;
+                            let win_lock_btn = GlassButton::new("Fenêtre")
+                                .icon("🎯")
+                                .compact(true)
+                                .variant(if has_win_lock {
+                                    ButtonVariant::Primary
+                                } else {
+                                    ButtonVariant::Secondary
+                                });
+                            if ui
+                                .add(win_lock_btn)
+                                .on_hover_text(self.lang.window_lock_tooltip())
+                                .clicked()
+                            {
+                                self.window_lock_modal.open();
                             }
                         });
 
@@ -1433,6 +1495,7 @@ mod tests {
             selected_action_index: None,
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
+            window_lock_modal: WindowLockModal::new(),
             toolbar: crate::ui::FloatingToolbar::new(),
             main_window_visible: true,
             overlay: crate::ui::TransparentOverlay::new(),
@@ -1466,6 +1529,7 @@ mod tests {
             selected_action_index: None,
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
+            window_lock_modal: WindowLockModal::new(),
             toolbar: crate::ui::FloatingToolbar::new(),
             main_window_visible: true,
             overlay: crate::ui::TransparentOverlay::new(),
