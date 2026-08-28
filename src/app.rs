@@ -17,6 +17,14 @@ struct SearchQuery {
     raw: String,
 }
 
+/// Mode d'affichage Studio lors de l'intégration d'une fenêtre cible
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StudioViewMode {
+    Split,
+    Timeline,
+    Game,
+}
+
 pub struct MacroForgeApp {
     rx_events: Receiver<EngineEvent>,
     is_recording: bool,
@@ -27,6 +35,9 @@ pub struct MacroForgeApp {
 
     // Internationalisation
     lang: Language,
+
+    // Mode Studio
+    studio_view_mode: StudioViewMode,
 
     // Filtres & Recherche
     hide_mouse_moves: bool,
@@ -94,6 +105,7 @@ impl MacroForgeApp {
             status_message: ready_msg,
 
             lang,
+            studio_view_mode: StudioViewMode::Split,
             hide_mouse_moves: settings.hide_mouse_moves,
             search_query: String::new(),
             filtered_indices: Vec::new(),
@@ -437,6 +449,381 @@ impl MacroForgeApp {
                 Self::text_matches_query(path, raw)
                     || Self::contains_int(raw_bytes, *timeout as i64)
                     || raw.contains("image")
+            }
+        }
+    }
+
+    fn render_embedded_viewport_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let win_lock_cfg = macro_core::get_window_lock();
+        let target_title = macro_core::get_embedded_target_title()
+            .unwrap_or_else(|| {
+                if !win_lock_cfg.title_filter.trim().is_empty() {
+                    win_lock_cfg.title_filter.clone()
+                } else {
+                    self.lang.viewport_header_title().to_string()
+                }
+            });
+
+        // En-tête du Viewport
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new(format!("🎮 {}", target_title))
+                    .strong()
+                    .size(13.5)
+                    .color(colors::TEXT_PRIMARY),
+            );
+
+            let status_badge = Frame::none()
+                .fill(Color32::from_rgba_unmultiplied(16, 185, 129, 30))
+                .stroke(Stroke::new(
+                    1.0_f32,
+                    Color32::from_rgba_unmultiplied(16, 185, 129, 120),
+                ))
+                .rounding(Rounding::same(4.0))
+                .inner_margin(Margin::symmetric(6.0, 2.0));
+
+            status_badge.show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new(self.lang.viewport_status_docked())
+                        .strong()
+                        .size(11.0)
+                        .color(colors::ACCENT_SUCCESS),
+                );
+            });
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Bouton Détacher / Rétablir
+                let detach_btn = GlassButton::new(self.lang.viewport_detach_btn())
+                    .icon("🔓")
+                    .compact(true)
+                    .variant(ButtonVariant::Secondary);
+                if ui
+                    .add(detach_btn)
+                    .on_hover_text("Détacher la fenêtre et la rétablir sur le bureau Windows")
+                    .clicked()
+                {
+                    let cfg = macro_core::get_window_lock();
+                    let _ = macro_core::restore_target_window(&cfg);
+                    let mut new_cfg = cfg;
+                    new_cfg.embed_in_macroforge = false;
+                    macro_core::set_window_lock(new_cfg.clone());
+                    let mut settings = crate::ui::i18n::AppSettings::load();
+                    settings.window_lock = new_cfg;
+                    settings.save();
+                    self.status_message = match self.lang {
+                        Language::Fr => {
+                            "🔓 Fenêtre cible détachée et rétablie sur le bureau.".to_string()
+                        }
+                        Language::En => {
+                            "🔓 Target window detached and restored to desktop.".to_string()
+                        }
+                    };
+                }
+
+                ui.add_space(4.0);
+
+                // Bouton Configurer
+                let cfg_btn = GlassButton::new("⚙")
+                    .compact(true)
+                    .variant(ButtonVariant::Ghost);
+                if ui
+                    .add(cfg_btn)
+                    .on_hover_text("Ouvrir les paramètres de verrouillage")
+                    .clicked()
+                {
+                    self.window_lock_modal.open();
+                }
+            });
+        });
+
+        ui.add_space(4.0);
+
+        // Cadre visuel délimité pour le Viewport
+        let viewport_frame = Frame::none()
+            .fill(Color32::from_rgba_unmultiplied(10, 15, 26, 220))
+            .stroke(Stroke::new(
+                1.0_f32,
+                Color32::from_rgba_unmultiplied(59, 130, 246, 120),
+            ))
+            .rounding(Rounding::same(8.0))
+            .inner_margin(Margin::same(4.0));
+
+        viewport_frame.show(ui, |ui| {
+            let avail_size = ui.available_size_before_wrap();
+            let (rect, _response) = ui.allocate_exact_size(avail_size, egui::Sense::hover());
+
+            // Synchroniser les coordonnées physiques pour le SetWindowPos Win32
+            let ppp = ctx.pixels_per_point();
+            let phys_x = (rect.min.x * ppp).round() as i32;
+            let phys_y = (rect.min.y * ppp).round() as i32;
+            let phys_w = (rect.width() * ppp).round() as i32;
+            let phys_h = (rect.height() * ppp).round() as i32;
+
+            if phys_w > 50 && phys_h > 50 {
+                macro_core::update_embedded_viewport_bounds(phys_x, phys_y, phys_w, phys_h, true);
+            }
+        });
+    }
+
+    fn render_timeline_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        ui.add_space(2.0);
+
+        // En-tête de section Timeline & Actions
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new(self.lang.timeline_heading())
+                    .heading()
+                    .color(colors::TEXT_PRIMARY)
+                    .strong(),
+            );
+
+            // Bouton Rafraîchir
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let refresh_btn = GlassButton::new(self.lang.refresh_btn())
+                    .icon("🔄")
+                    .compact(true)
+                    .variant(ButtonVariant::Ghost);
+                if ui
+                    .add(refresh_btn)
+                    .on_hover_text("Synchroniser la liste avec le moteur interne")
+                    .clicked()
+                {
+                    self.refresh_actions();
+                }
+            });
+        });
+
+        ui.add_space(6.0);
+
+        // Filtrage des actions
+        let total_count = self.actions_cache.len();
+        // Cache : recalcul seulement si la liste ou le filtre a change (issue #32)
+        self.ensure_filtered_indices();
+        let filtered_indices = &self.filtered_indices;
+        let visible_count = filtered_indices.len();
+
+        let mut jump_triggered = false;
+        let filter_bar = FilterBar::new(
+            &mut self.hide_mouse_moves,
+            &mut self.search_query,
+            &mut self.jump_index,
+            total_count,
+            visible_count,
+            self.lang,
+            &mut jump_triggered,
+        );
+        ui.add(filter_bar);
+
+        if jump_triggered && self.jump_index > 0 && self.jump_index <= total_count {
+            self.scroll_target_index = Some(self.jump_index - 1);
+            self.selected_action_index = Some(self.jump_index - 1);
+        }
+
+        ui.add_space(8.0);
+
+        if self.actions_cache.is_empty() {
+            // État vide élégant Dark Glassmorphism avec actions rapides
+            ui.vertical_centered(|ui| {
+                ui.add_space(35.0);
+
+                let empty_card = theme::glass_card_frame();
+                empty_card.show(ui, |ui| {
+                    ui.set_max_width(520.0);
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(14.0);
+                        ui.label(
+                            egui::RichText::new("⚡")
+                                .size(44.0)
+                                .color(colors::ACCENT_PRIMARY_HOVER),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(self.lang.empty_state_title())
+                                .strong()
+                                .size(17.0)
+                                .color(colors::TEXT_PRIMARY),
+                        );
+                        ui.add_space(6.0);
+                        ui.label(
+                            egui::RichText::new(self.lang.empty_state_desc())
+                                .color(colors::TEXT_SECONDARY)
+                                .size(13.5),
+                        );
+                        ui.add_space(16.0);
+
+                        // Boutons d'action rapide pour démarrer immédiatement
+                        ui.horizontal(|ui| {
+                            let rec_quick_btn =
+                                GlassButton::new(if self.lang == Language::Fr {
+                                    "Enregistrer (F8)"
+                                } else {
+                                    "Record (F8)"
+                                })
+                                .icon("🔴")
+                                .variant(ButtonVariant::Danger);
+                            if ui.add(rec_quick_btn).clicked() {
+                                macro_core::start_recording();
+                            }
+
+                            ui.add_space(6.0);
+
+                            let key_quick_btn = GlassButton::new(self.lang.quick_add_key())
+                                .variant(ButtonVariant::Secondary);
+                            if ui.add(key_quick_btn).clicked() {
+                                self.action_modal.open_for_new(ActionModalTab::Keyboard);
+                            }
+
+                            ui.add_space(6.0);
+
+                            let mouse_quick_btn =
+                                GlassButton::new(self.lang.quick_add_mouse())
+                                    .variant(ButtonVariant::Secondary);
+                            if ui.add(mouse_quick_btn).clicked() {
+                                self.action_modal.open_for_new(ActionModalTab::Mouse);
+                            }
+                        });
+
+                        ui.add_space(14.0);
+                    });
+                });
+            });
+        } else {
+            // Liste scrollable des ActionCards avec support Drag & Drop
+            let mut card_event_to_process = None;
+            let is_unfiltered =
+                !self.hide_mouse_moves && self.search_query.trim().is_empty();
+
+            // Virtualisation de la liste (issue #10) : seules les cartes
+            // visibles dans la fenetre sont layoutees/dessinees par frame.
+            const ROW_HEIGHT: f32 = 34.0;
+            let total_rows = if is_unfiltered {
+                total_count
+            } else {
+                filtered_indices.len()
+            };
+
+            let mut timeline_scroll = egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .id_salt("timeline_scroll_area");
+            if let Some(target) = self.scroll_target_index {
+                let target_row = if is_unfiltered {
+                    Some(target)
+                } else {
+                    filtered_indices.iter().position(|&i| i == target)
+                };
+                if let Some(row) = target_row {
+                    // Lignes a hauteur fixe : offset = row * ROW_HEIGHT.
+                    timeline_scroll = timeline_scroll
+                        .scroll_offset(egui::vec2(0.0, row as f32 * ROW_HEIGHT));
+                }
+            }
+
+            timeline_scroll.show_rows(ui, ROW_HEIGHT, total_rows, |ui, row_range| {
+                ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
+
+                for row in row_range {
+                    if is_unfiltered {
+                        let idx = row;
+                        if let Some(action) = self.actions_cache.get(idx) {
+                            let card = ActionCard::new(idx, action)
+                                .selected(self.selected_action_index == Some(idx))
+                                .lang(self.lang)
+                                .bounds(idx == 0, idx == total_count - 1);
+                            let (_, ev) = card.show(ui);
+                            if let Some(e) = ev {
+                                card_event_to_process = Some(e);
+                            }
+                        }
+                    } else if let Some(&original_idx) = filtered_indices.get(row) {
+                        let is_selected = self.selected_action_index == Some(original_idx);
+                        if let Some(action) = self.actions_cache.get(original_idx) {
+                            let card = ActionCard::new(original_idx, action)
+                                .selected(is_selected)
+                                .lang(self.lang)
+                                .bounds(original_idx == 0, original_idx == total_count - 1);
+                            let (_, ev) = card.show(ui);
+                            if let Some(e) = ev {
+                                card_event_to_process = Some(e);
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Nettoyer l'état de glisser-déposer si le pointeur est relâché
+            if ctx.input(|i| i.pointer.any_released()) {
+                let dnd_payload_id = egui::Id::new("timeline_dnd_dragged_idx");
+                ui.data_mut(|d| d.remove_temp::<usize>(dnd_payload_id));
+            }
+
+            // Réinitialiser le curseur de défilement ciblé
+            self.scroll_target_index = None;
+
+            // Traiter les événements déclenchés par les cartes
+            if let Some(event) = card_event_to_process {
+                match event {
+                    ActionCardEvent::Edit(idx) => {
+                        if let Some(action) = self.actions_cache.get(idx) {
+                            self.action_modal.open_for_edit(idx, action);
+                        }
+                    }
+                    ActionCardEvent::Duplicate(idx) => {
+                        macro_core::duplicate_action(idx);
+                        self.refresh_actions();
+                        self.status_message = match self.lang {
+                            Language::Fr => format!("📋 Action #{} dupliquée.", idx + 1),
+                            Language::En => format!("📋 Action #{} duplicated.", idx + 1),
+                        };
+                    }
+                    ActionCardEvent::Delete(idx) => {
+                        macro_core::delete_action(idx);
+                        self.refresh_actions();
+                        self.status_message = match self.lang {
+                            Language::Fr => format!("🗑️ Action #{} supprimée.", idx + 1),
+                            Language::En => format!("🗑️ Action #{} deleted.", idx + 1),
+                        };
+                    }
+                    ActionCardEvent::MoveUp(idx) => {
+                        if idx > 0 {
+                            macro_core::move_action(idx, idx - 1);
+                            self.refresh_actions();
+                            self.selected_action_index = Some(idx - 1);
+                        }
+                    }
+                    ActionCardEvent::MoveDown(idx) => {
+                        if idx + 1 < self.actions_cache.len() {
+                            macro_core::move_action(idx, idx + 1);
+                            self.refresh_actions();
+                            self.selected_action_index = Some(idx + 1);
+                        }
+                    }
+                    ActionCardEvent::Reorder { from, to } => {
+                        let actual_to = if to > from { to.saturating_sub(1) } else { to };
+                        if actual_to < self.actions_cache.len() && from != actual_to {
+                            macro_core::move_action(from, actual_to);
+                            self.refresh_actions();
+                            self.selected_action_index = Some(actual_to);
+                            self.status_message = match self.lang {
+                                Language::Fr => format!(
+                                    "🔀 Action #{} déplacée vers #{}.",
+                                    from + 1,
+                                    actual_to + 1
+                                ),
+                                Language::En => format!(
+                                    "🔀 Action #{} moved to #{}.",
+                                    from + 1,
+                                    actual_to + 1
+                                ),
+                            };
+                        }
+                    }
+                    ActionCardEvent::DelayChanged(idx, delay) => {
+                        if idx < self.actions_cache.len() {
+                            self.actions_cache[idx].delay_ms = delay;
+                            macro_core::update_action(idx, self.actions_cache[idx].clone());
+                        }
+                    }
+                }
             }
         }
     }
@@ -1195,267 +1582,81 @@ impl eframe::App for MacroForgeApp {
                 });
             });
 
-        // 4. Panneau central (Timeline & Actions Editor)
+        // 4. Panneau central (Timeline, Mode Studio Split ou Viewport Dédié)
         egui::CentralPanel::default()
             .frame(theme::central_panel_frame())
             .show(ctx, |ui| {
-                ui.add_space(2.0);
+                let is_embedded = macro_core::get_window_lock().embed_in_macroforge
+                    || macro_core::is_target_window_embedded();
 
-                // En-tête de section Timeline & Actions
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(self.lang.timeline_heading())
-                            .heading()
-                            .color(colors::TEXT_PRIMARY)
-                            .strong(),
-                    );
+                if is_embedded {
+                    // Sélecteur de mode de vue Studio
+                    ui.horizontal(|ui| {
+                        let modes = [
+                            (StudioViewMode::Split, self.lang.studio_mode_split()),
+                            (StudioViewMode::Timeline, self.lang.studio_mode_timeline()),
+                            (StudioViewMode::Game, self.lang.studio_mode_game()),
+                        ];
 
-                    // Bouton Rafraîchir
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let refresh_btn = GlassButton::new(self.lang.refresh_btn())
-                            .icon("🔄")
-                            .compact(true)
-                            .variant(ButtonVariant::Ghost);
-                        if ui
-                            .add(refresh_btn)
-                            .on_hover_text("Synchroniser la liste avec le moteur interne")
-                            .clicked()
-                        {
-                            self.refresh_actions();
+                        for (mode, lbl) in modes {
+                            let is_active = self.studio_view_mode == mode;
+                            let btn = GlassButton::new(lbl)
+                                .compact(true)
+                                .selected(is_active)
+                                .variant(if is_active {
+                                    ButtonVariant::Primary
+                                } else {
+                                    ButtonVariant::Ghost
+                                });
+                            if ui.add(btn).clicked() {
+                                self.studio_view_mode = mode;
+                            }
                         }
                     });
-                });
 
-                ui.add_space(6.0);
-
-                // Filtrage des actions
-                let total_count = self.actions_cache.len();
-                // Cache : recalcul seulement si la liste ou le filtre a change (issue #32)
-                self.ensure_filtered_indices();
-                let filtered_indices = &self.filtered_indices;
-                let visible_count = filtered_indices.len();
-
-                let mut jump_triggered = false;
-                let filter_bar = FilterBar::new(
-                    &mut self.hide_mouse_moves,
-                    &mut self.search_query,
-                    &mut self.jump_index,
-                    total_count,
-                    visible_count,
-                    self.lang,
-                    &mut jump_triggered,
-                );
-                ui.add(filter_bar);
-
-                if jump_triggered && self.jump_index > 0 && self.jump_index <= total_count {
-                    self.scroll_target_index = Some(self.jump_index - 1);
-                    self.selected_action_index = Some(self.jump_index - 1);
+                    ui.add_space(4.0);
+                    ui.separator();
+                    ui.add_space(4.0);
                 }
 
-                ui.add_space(8.0);
+                if is_embedded && self.studio_view_mode == StudioViewMode::Split {
+                    // Mode Studio Split : Timeline à gauche, Viewport à droite
+                    let total_width = ui.available_width();
+                    let timeline_width = (total_width * 0.44).clamp(380.0, 520.0);
 
-                if self.actions_cache.is_empty() {
-                    // État vide élégant Dark Glassmorphism avec actions rapides
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(35.0);
+                    ui.horizontal_top(|ui| {
+                        // Volet gauche : Timeline
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(timeline_width, ui.available_height()),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                self.render_timeline_ui(ui, ctx);
+                            },
+                        );
 
-                        let empty_card = theme::glass_card_frame();
-                        empty_card.show(ui, |ui| {
-                            ui.set_max_width(520.0);
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(14.0);
-                                ui.label(
-                                    egui::RichText::new("⚡")
-                                        .size(44.0)
-                                        .color(colors::ACCENT_PRIMARY_HOVER),
-                                );
-                                ui.add_space(8.0);
-                                ui.label(
-                                    egui::RichText::new(self.lang.empty_state_title())
-                                        .strong()
-                                        .size(17.0)
-                                        .color(colors::TEXT_PRIMARY),
-                                );
-                                ui.add_space(6.0);
-                                ui.label(
-                                    egui::RichText::new(self.lang.empty_state_desc())
-                                        .color(colors::TEXT_SECONDARY)
-                                        .size(13.5),
-                                );
-                                ui.add_space(16.0);
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.add_space(8.0);
 
-                                // Boutons d'action rapide pour démarrer immédiatement
-                                ui.horizontal(|ui| {
-                                    let rec_quick_btn =
-                                        GlassButton::new(if self.lang == Language::Fr {
-                                            "Enregistrer (F8)"
-                                        } else {
-                                            "Record (F8)"
-                                        })
-                                        .icon("🔴")
-                                        .variant(ButtonVariant::Danger);
-                                    if ui.add(rec_quick_btn).clicked() {
-                                        macro_core::start_recording();
-                                    }
-
-                                    ui.add_space(6.0);
-
-                                    let key_quick_btn = GlassButton::new(self.lang.quick_add_key())
-                                        .variant(ButtonVariant::Secondary);
-                                    if ui.add(key_quick_btn).clicked() {
-                                        self.action_modal.open_for_new(ActionModalTab::Keyboard);
-                                    }
-
-                                    let mouse_quick_btn =
-                                        GlassButton::new(self.lang.quick_add_mouse())
-                                            .variant(ButtonVariant::Secondary);
-                                    if ui.add(mouse_quick_btn).clicked() {
-                                        self.action_modal.open_for_new(ActionModalTab::Mouse);
-                                    }
-                                });
-
-                                ui.add_space(14.0);
-                            });
-                        });
+                        // Volet droit : Viewport
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), ui.available_height()),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                self.render_embedded_viewport_ui(ui, ctx);
+                            },
+                        );
                     });
+                } else if is_embedded && self.studio_view_mode == StudioViewMode::Game {
+                    // Mode Jeu seul (Viewport plein panneau central)
+                    self.render_embedded_viewport_ui(ui, ctx);
                 } else {
-                    // Liste scrollable des ActionCards avec support Drag & Drop
-                    let mut card_event_to_process = None;
-                    let is_unfiltered =
-                        !self.hide_mouse_moves && self.search_query.trim().is_empty();
-
-                    // Virtualisation de la liste (issue #10) : seules les cartes
-                    // visibles dans la fenetre sont layoutees/dessinees par frame.
-                    const ROW_HEIGHT: f32 = 34.0;
-                    let total_rows = if is_unfiltered {
-                        total_count
-                    } else {
-                        filtered_indices.len()
-                    };
-
-                    let mut timeline_scroll = egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .id_salt("timeline_scroll_area");
-                    if let Some(target) = self.scroll_target_index {
-                        let target_row = if is_unfiltered {
-                            Some(target)
-                        } else {
-                            filtered_indices.iter().position(|&i| i == target)
-                        };
-                        if let Some(row) = target_row {
-                            // Lignes a hauteur fixe : offset = row * ROW_HEIGHT.
-                            timeline_scroll = timeline_scroll
-                                .scroll_offset(egui::vec2(0.0, row as f32 * ROW_HEIGHT));
-                        }
+                    // Mode Timeline standard (ou fenêtre non intégrée)
+                    if is_embedded {
+                        // Masquer temporairement la fenêtre enfant pour ne pas recouvrir egui
+                        macro_core::update_embedded_viewport_bounds(0, 0, 0, 0, false);
                     }
-
-                    timeline_scroll.show_rows(ui, ROW_HEIGHT, total_rows, |ui, row_range| {
-                        ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
-
-                        for row in row_range {
-                            if is_unfiltered {
-                                let idx = row;
-                                if let Some(action) = self.actions_cache.get(idx) {
-                                    let card = ActionCard::new(idx, action)
-                                        .selected(self.selected_action_index == Some(idx))
-                                        .lang(self.lang)
-                                        .bounds(idx == 0, idx == total_count - 1);
-                                    let (_, ev) = card.show(ui);
-                                    if let Some(e) = ev {
-                                        card_event_to_process = Some(e);
-                                    }
-                                }
-                            } else if let Some(&original_idx) = filtered_indices.get(row) {
-                                let is_selected = self.selected_action_index == Some(original_idx);
-                                if let Some(action) = self.actions_cache.get(original_idx) {
-                                    let card = ActionCard::new(original_idx, action)
-                                        .selected(is_selected)
-                                        .lang(self.lang)
-                                        .bounds(original_idx == 0, original_idx == total_count - 1);
-                                    let (_, ev) = card.show(ui);
-                                    if let Some(e) = ev {
-                                        card_event_to_process = Some(e);
-                                    }
-                                }
-                            }
-                        }
-                    });
-
-                    // Nettoyer l'état de glisser-déposer si le pointeur est relâché
-                    if ctx.input(|i| i.pointer.any_released()) {
-                        let dnd_payload_id = egui::Id::new("timeline_dnd_dragged_idx");
-                        ui.data_mut(|d| d.remove_temp::<usize>(dnd_payload_id));
-                    }
-
-                    // Réinitialiser le curseur de défilement ciblé
-                    self.scroll_target_index = None;
-
-                    // Traiter les événements déclenchés par les cartes
-                    if let Some(event) = card_event_to_process {
-                        match event {
-                            ActionCardEvent::Edit(idx) => {
-                                if let Some(action) = self.actions_cache.get(idx) {
-                                    self.action_modal.open_for_edit(idx, action);
-                                }
-                            }
-                            ActionCardEvent::Duplicate(idx) => {
-                                macro_core::duplicate_action(idx);
-                                self.refresh_actions();
-                                self.status_message = match self.lang {
-                                    Language::Fr => format!("📋 Action #{} dupliquée.", idx + 1),
-                                    Language::En => format!("📋 Action #{} duplicated.", idx + 1),
-                                };
-                            }
-                            ActionCardEvent::Delete(idx) => {
-                                macro_core::delete_action(idx);
-                                self.refresh_actions();
-                                self.status_message = match self.lang {
-                                    Language::Fr => format!("🗑️ Action #{} supprimée.", idx + 1),
-                                    Language::En => format!("🗑️ Action #{} deleted.", idx + 1),
-                                };
-                            }
-                            ActionCardEvent::MoveUp(idx) => {
-                                if idx > 0 {
-                                    macro_core::move_action(idx, idx - 1);
-                                    self.refresh_actions();
-                                    self.selected_action_index = Some(idx - 1);
-                                }
-                            }
-                            ActionCardEvent::MoveDown(idx) => {
-                                if idx + 1 < self.actions_cache.len() {
-                                    macro_core::move_action(idx, idx + 1);
-                                    self.refresh_actions();
-                                    self.selected_action_index = Some(idx + 1);
-                                }
-                            }
-                            ActionCardEvent::Reorder { from, to } => {
-                                let actual_to = if to > from { to.saturating_sub(1) } else { to };
-                                if actual_to < self.actions_cache.len() && from != actual_to {
-                                    macro_core::move_action(from, actual_to);
-                                    self.refresh_actions();
-                                    self.selected_action_index = Some(actual_to);
-                                    self.status_message = match self.lang {
-                                        Language::Fr => format!(
-                                            "🔀 Action #{} déplacée vers #{}.",
-                                            from + 1,
-                                            actual_to + 1
-                                        ),
-                                        Language::En => format!(
-                                            "🔀 Action #{} moved to #{}.",
-                                            from + 1,
-                                            actual_to + 1
-                                        ),
-                                    };
-                                }
-                            }
-                            ActionCardEvent::DelayChanged(idx, delay) => {
-                                if idx < self.actions_cache.len() {
-                                    self.actions_cache[idx].delay_ms = delay;
-                                    macro_core::update_action(idx, self.actions_cache[idx].clone());
-                                }
-                            }
-                        }
-                    }
+                    self.render_timeline_ui(ui, ctx);
                 }
             });
 
@@ -1482,6 +1683,7 @@ mod tests {
             actions_cache: Vec::new(),
             status_message: "Ready".to_string(),
             lang: Language::Fr,
+            studio_view_mode: StudioViewMode::Split,
             hide_mouse_moves: false,
             search_query: String::new(),
             filtered_indices: Vec::new(),
@@ -1496,9 +1698,23 @@ mod tests {
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
             window_lock_modal: WindowLockModal::new(),
-            toolbar: crate::ui::FloatingToolbar::new(),
+            toolbar: crate::ui::FloatingToolbar {
+                is_visible: false,
+                current_action_idx: 0,
+                total_actions: 0,
+                action_detail: String::new(),
+            },
             main_window_visible: true,
-            overlay: crate::ui::TransparentOverlay::new(),
+            overlay: crate::ui::TransparentOverlay {
+                is_visible: false,
+                current_action_idx: 0,
+                total_actions: 0,
+                action_type_label: String::new(),
+                action_detail: String::new(),
+                target_x: None,
+                target_y: None,
+                win32_configured: false,
+            },
             playback_started_at: None,
         };
 
@@ -1516,6 +1732,7 @@ mod tests {
             actions_cache: actions,
             status_message: "Ready".to_string(),
             lang: Language::Fr,
+            studio_view_mode: StudioViewMode::Split,
             hide_mouse_moves: false,
             search_query: String::new(),
             filtered_indices: Vec::new(),
@@ -1530,9 +1747,23 @@ mod tests {
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
             window_lock_modal: WindowLockModal::new(),
-            toolbar: crate::ui::FloatingToolbar::new(),
+            toolbar: crate::ui::FloatingToolbar {
+                is_visible: false,
+                current_action_idx: 0,
+                total_actions: 0,
+                action_detail: String::new(),
+            },
             main_window_visible: true,
-            overlay: crate::ui::TransparentOverlay::new(),
+            overlay: crate::ui::TransparentOverlay {
+                is_visible: false,
+                current_action_idx: 0,
+                total_actions: 0,
+                action_type_label: String::new(),
+                action_detail: String::new(),
+                target_x: None,
+                target_y: None,
+                win32_configured: false,
+            },
             playback_started_at: None,
         }
     }

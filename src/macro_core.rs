@@ -443,6 +443,8 @@ impl MacroState {
 const EXTREME_IMAGE_DATA: &[u8] = include_bytes!("../extreme.png");
 const FAILED_IMAGE_DATA: &[u8] = include_bytes!("../failed.PNG");
 
+pub type EmbeddedViewportRect = (i32, i32, i32, i32, bool);
+
 lazy_static::lazy_static! {
     pub static ref MACRO_STATE: Mutex<MacroState> = Mutex::new(MacroState::new());
     pub static ref EVENT_SENDER: Mutex<Option<Sender<EngineEvent>>> = Mutex::new(None);
@@ -450,6 +452,7 @@ lazy_static::lazy_static! {
     pub static ref IMAGE_CACHE: Mutex<HashMap<String, Arc<image::RgbaImage>>> = Mutex::new(HashMap::new());
     static ref LAST_RECORD_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
     static ref SAVED_WINDOW_STATES: Mutex<HashMap<isize, OriginalWindowState>> = Mutex::new(HashMap::new());
+    static ref EMBEDDED_VIEWPORT: Mutex<Option<EmbeddedViewportRect>> = Mutex::new(None);
 }
 
 #[cfg(windows)]
@@ -1938,6 +1941,93 @@ pub fn get_macroforge_main_hwnd() -> Option<isize> {
     None
 }
 
+/// Met à jour les dimensions et l'état de visibilité du viewport intégré dans l'UI MacroForge.
+pub fn update_embedded_viewport_bounds(x: i32, y: i32, width: i32, height: i32, visible: bool) {
+    let mut vp = EMBEDDED_VIEWPORT.lock().unwrap();
+    let prev = *vp;
+    let new_val = Some((x, y, width, height, visible));
+    if prev != new_val {
+        *vp = new_val;
+        #[cfg(windows)]
+        {
+            use winapi::shared::windef::HWND;
+            use winapi::um::winuser::{
+                GetParent, IsWindowVisible, SetWindowPos, ShowWindow, SWP_FRAMECHANGED,
+                SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW,
+            };
+            let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
+            if !hwnd.is_null() && unsafe { IsWindowVisible(hwnd) } != 0 {
+                let parent = unsafe { GetParent(hwnd) };
+                if let Some(mf_hwnd) = get_macroforge_main_hwnd() {
+                    if parent == mf_hwnd {
+                        if !visible {
+                            unsafe { ShowWindow(hwnd, SW_HIDE) };
+                        } else if width > 20 && height > 20 {
+                            unsafe {
+                                ShowWindow(hwnd, SW_SHOW);
+                                SetWindowPos(
+                                    hwnd,
+                                    std::ptr::null_mut(),
+                                    x,
+                                    y,
+                                    width,
+                                    height,
+                                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn update_embedded_viewport_bounds(_x: i32, _y: i32, _width: i32, _height: i32, _visible: bool) {}
+
+pub fn get_embedded_target_title() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use winapi::shared::windef::HWND;
+        use winapi::um::winuser::{GetParent, GetWindowTextW, IsWindowVisible};
+        let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
+        if !hwnd.is_null() && unsafe { IsWindowVisible(hwnd) } != 0 {
+            if let Some(mf_hwnd) = get_macroforge_main_hwnd() {
+                let parent = unsafe { GetParent(hwnd) };
+                if parent == mf_hwnd {
+                    let mut buf = [0u16; 256];
+                    let len = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
+                    if len > 0 {
+                        let title = String::from_utf16_lossy(&buf[..len as usize]);
+                        let trimmed = title.trim().to_string();
+                        if !trimmed.is_empty() {
+                            return Some(trimmed);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+pub fn is_target_window_embedded() -> bool {
+    #[cfg(windows)]
+    {
+        use winapi::shared::windef::HWND;
+        use winapi::um::winuser::{GetParent, IsWindowVisible};
+        let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
+        if !hwnd.is_null() && unsafe { IsWindowVisible(hwnd) } != 0 {
+            if let Some(mf_hwnd) = get_macroforge_main_hwnd() {
+                let parent = unsafe { GetParent(hwnd) };
+                return parent == mf_hwnd;
+            }
+        }
+    }
+    false
+}
+
 #[cfg(windows)]
 pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
     use winapi::shared::windef::{HWND, RECT};
@@ -1964,15 +2054,23 @@ pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
             let cur_x = rect.left;
             let cur_y = rect.top;
 
-            let target_w = config.width.max(50);
-            let target_h = config.height.max(50);
+            let (target_x, target_y, target_w, target_h) = if config.embed_in_macroforge {
+                let vp_opt = *EMBEDDED_VIEWPORT.lock().unwrap();
+                if let Some((vx, vy, vw, vh, _vis)) = vp_opt {
+                    (vx, vy, vw.max(50), vh.max(50))
+                } else {
+                    (config.x, config.y, config.width.max(50), config.height.max(50))
+                }
+            } else {
+                (config.x, config.y, config.width.max(50), config.height.max(50))
+            };
 
             let needs_clamp = IsZoomed(hwnd) != 0
                 || IsIconic(hwnd) != 0
                 || (cur_w - target_w).abs() > 4
                 || (cur_h - target_h).abs() > 4
                 || (!config.embed_in_macroforge
-                    && ((cur_x - config.x).abs() > 4 || (cur_y - config.y).abs() > 4));
+                    && ((cur_x - target_x).abs() > 4 || (cur_y - target_y).abs() > 4));
 
             if needs_clamp {
                 if IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0 {
@@ -1981,8 +2079,8 @@ pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
                 SetWindowPos(
                     hwnd,
                     std::ptr::null_mut(),
-                    config.x,
-                    config.y,
+                    target_x,
+                    target_y,
                     target_w,
                     target_h,
                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
@@ -2076,14 +2174,25 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
         }
 
         // 5. Application des dimensions et coordonnées
+        let (apply_x, apply_y, apply_w, apply_h) = if config.embed_in_macroforge {
+            let vp = *EMBEDDED_VIEWPORT.lock().unwrap();
+            if let Some((vx, vy, vw, vh, _vis)) = vp {
+                (vx, vy, vw.max(50), vh.max(50))
+            } else {
+                (config.x, config.y, width, height)
+            }
+        } else {
+            (config.x, config.y, width, height)
+        };
+
         let flags = SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED;
         let success = SetWindowPos(
             hwnd,
             std::ptr::null_mut(),
-            config.x,
-            config.y,
-            width,
-            height,
+            apply_x,
+            apply_y,
+            apply_w,
+            apply_h,
             flags,
         );
 
@@ -2109,10 +2218,10 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
         info!(
             "🎯 Fenêtre cible '{}' emprisonnée avec succès (taille: {}x{}, pos: {}, {}, embed: {}, lock_styles: {})",
             title.trim(),
-            width,
-            height,
-            config.x,
-            config.y,
+            apply_w,
+            apply_h,
+            apply_x,
+            apply_y,
             config.embed_in_macroforge,
             config.lock_window_styles
         );
@@ -2136,6 +2245,9 @@ pub fn restore_target_window(config: &WindowLockConfig) -> Result<(), String> {
 
     let hwnd = find_target_window_hwnd(config)
         .ok_or_else(|| "Aucune fenêtre cible trouvée pour la restauration.".to_string())?;
+
+    // Réinitialiser le viewport
+    *EMBEDDED_VIEWPORT.lock().unwrap() = None;
 
     unsafe {
         let state_opt = {
@@ -2994,5 +3106,25 @@ mod tests {
 
         // Reset
         set_window_lock(default_cfg);
+    }
+
+    #[test]
+    fn test_embedded_viewport_tracking_and_query() {
+        // Test updating viewport bounds
+        update_embedded_viewport_bounds(120, 240, 640, 480, true);
+        {
+            let vp = EMBEDDED_VIEWPORT.lock().unwrap();
+            assert_eq!(*vp, Some((120, 240, 640, 480, true)));
+        }
+
+        // Test hiding viewport
+        update_embedded_viewport_bounds(0, 0, 0, 0, false);
+        {
+            let vp = EMBEDDED_VIEWPORT.lock().unwrap();
+            assert_eq!(*vp, Some((0, 0, 0, 0, false)));
+        }
+
+        // Nettoyage
+        *EMBEDDED_VIEWPORT.lock().unwrap() = None;
     }
 }

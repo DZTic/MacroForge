@@ -950,8 +950,15 @@ impl Language {
 
     pub fn embed_in_macroforge_label(&self) -> &'static str {
         match self {
-            Language::Fr => "Intégrer directement dans MacroForge (Mode Enfant)",
-            Language::En => "Embed directly into MacroForge (Child Mode)",
+            Language::Fr => "Intégrer directement dans MacroForge (Mode Enfant / Studio)",
+            Language::En => "Embed directly into MacroForge (Child / Studio Mode)",
+        }
+    }
+
+    pub fn embed_in_macroforge_hint(&self) -> &'static str {
+        match self {
+            Language::Fr => "💡 Intègre la fenêtre dans un volet Viewport dédié (Mode Studio) sans recouvrir l'interface.",
+            Language::En => "💡 Docks the window into a dedicated Viewport panel (Studio Mode) without covering the UI.",
         }
     }
 
@@ -1001,6 +1008,55 @@ impl Language {
         match self {
             Language::Fr => "❌ Impossible de positionner la fenêtre cible.",
             Language::En => "❌ Could not position target window.",
+        }
+    }
+
+    pub fn studio_mode_split(&self) -> &'static str {
+        match self {
+            Language::Fr => "⚡ Studio Split",
+            Language::En => "⚡ Studio Split",
+        }
+    }
+
+    pub fn studio_mode_timeline(&self) -> &'static str {
+        match self {
+            Language::Fr => "📋 Timeline",
+            Language::En => "📋 Timeline",
+        }
+    }
+
+    pub fn studio_mode_game(&self) -> &'static str {
+        match self {
+            Language::Fr => "🎮 Fenêtre Cible",
+            Language::En => "🎮 Target Window",
+        }
+    }
+
+    pub fn viewport_header_title(&self) -> &'static str {
+        match self {
+            Language::Fr => "Zone de Jeu Intégrée",
+            Language::En => "Embedded Game Viewport",
+        }
+    }
+
+    pub fn viewport_detach_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Détacher / Libérer",
+            Language::En => "Detach / Release",
+        }
+    }
+
+    pub fn viewport_status_docked(&self) -> &'static str {
+        match self {
+            Language::Fr => "● Intégrée & Active",
+            Language::En => "● Docked & Active",
+        }
+    }
+
+    pub fn viewport_fit_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Ajuster",
+            Language::En => "Auto-fit",
         }
     }
 }
