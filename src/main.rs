@@ -45,7 +45,7 @@ fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("MacroForge (Full Natif Windows)")
-            .with_inner_size([900.0, 650.0])
+            .with_inner_size([1100.0, 700.0])
             .with_min_inner_size([600.0, 450.0]),
         ..Default::default()
     };

@@ -403,6 +403,14 @@ impl WindowLockModal {
                             &mut self.embed_in_macroforge,
                             lang.embed_in_macroforge_label(),
                         );
+                        if self.embed_in_macroforge {
+                            ui.add_space(2.0);
+                            ui.label(
+                                egui::RichText::new(lang.embed_in_macroforge_hint())
+                                    .size(11.5)
+                                    .color(colors::ACCENT_PRIMARY_HOVER),
+                            );
+                        }
                         ui.add_space(4.0);
                         ui.checkbox(
                             &mut self.lock_window_styles,
@@ -424,7 +432,7 @@ impl WindowLockModal {
 
                 ui.add_space(10.0);
 
-                // --- 5. Barre de test et boutons d'actions ---
+                // --- 5. Barre de test & Diagnostic ---
                 ui.horizontal(|ui| {
                     let test_btn = GlassButton::new(lang.test_window_lock_btn())
                         .icon("🧪")
@@ -457,7 +465,7 @@ impl WindowLockModal {
                         }
                     }
 
-                    ui.add_space(4.0);
+                    ui.add_space(6.0);
 
                     let release_btn = GlassButton::new(lang.restore_target_window_btn())
                         .icon("🔓")
@@ -489,16 +497,27 @@ impl WindowLockModal {
                             }
                         }
                     }
+                });
 
-                    if let Some((success, ref msg)) = self.test_status {
-                        let color = if success {
-                            colors::ACCENT_SUCCESS
-                        } else {
-                            colors::ACCENT_DANGER
-                        };
-                        ui.label(egui::RichText::new(msg).color(color).size(12.0));
-                    }
+                if let Some((success, ref msg)) = self.test_status {
+                    ui.add_space(4.0);
+                    let color = if success {
+                        colors::ACCENT_SUCCESS
+                    } else {
+                        colors::ACCENT_DANGER
+                    };
+                    let icon = if success { "✓ " } else { "⚠ " };
+                    ui.label(
+                        egui::RichText::new(format!("{}{}", icon, msg))
+                            .color(color)
+                            .size(12.0),
+                    );
+                }
 
+                ui.add_space(10.0);
+
+                // --- 6. Boutons d'actions principaux (Footer) ---
+                ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let save_btn = GlassButton::new(lang.modal_save())
                             .icon("💾")
