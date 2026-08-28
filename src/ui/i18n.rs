@@ -934,6 +934,41 @@ impl Language {
         }
     }
 
+    pub fn restore_target_window_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Libérer / Rétablir la fenêtre",
+            Language::En => "Release / Restore window",
+        }
+    }
+
+    pub fn strict_lock_section(&self) -> &'static str {
+        match self {
+            Language::Fr => "🛡️ Emprisonnement Strict & Anti-Plein Écran",
+            Language::En => "🛡️ Strict Containment & Anti-Fullscreen",
+        }
+    }
+
+    pub fn embed_in_macroforge_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Intégrer directement dans MacroForge (Mode Enfant)",
+            Language::En => "Embed directly into MacroForge (Child Mode)",
+        }
+    }
+
+    pub fn lock_window_styles_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Bloquer les bordures et le plein écran F11 (Supprimer maximisation)",
+            Language::En => "Lock borders & F11 fullscreen (Disable maximize)",
+        }
+    }
+
+    pub fn enforce_continuous_clamp_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Maintien actif continu (Rétablir instantanément si F11 forcé)",
+            Language::En => "Continuous active clamp (Re-clamp if F11 pressed)",
+        }
+    }
+
     pub fn force_foreground_label(&self) -> &'static str {
         match self {
             Language::Fr => "Forcer la mise au premier plan (Focus)",
@@ -950,8 +985,15 @@ impl Language {
 
     pub fn window_lock_success_test(&self) -> &'static str {
         match self {
-            Language::Fr => "✅ Fenêtre positionnée et redimensionnée avec succès !",
-            Language::En => "✅ Target window positioned and resized successfully!",
+            Language::Fr => "✅ Fenêtre emprisonnée et verrouillée avec succès !",
+            Language::En => "✅ Target window locked and positioned successfully!",
+        }
+    }
+
+    pub fn window_restored_success(&self) -> &'static str {
+        match self {
+            Language::Fr => "🔓 Fenêtre cible rétablie dans son état initial.",
+            Language::En => "🔓 Target window restored to original state.",
         }
     }
 
@@ -1025,6 +1067,9 @@ mod tests {
                 height: 900,
                 force_foreground: true,
                 restore_if_maximized: true,
+                embed_in_macroforge: true,
+                lock_window_styles: true,
+                enforce_continuous_clamp: true,
             },
         };
 
