@@ -1972,7 +1972,10 @@ pub fn update_embedded_viewport_bounds(x: i32, y: i32, width: i32, height: i32, 
                                     y,
                                     width,
                                     height,
-                                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+                                    SWP_NOZORDER
+                                        | SWP_NOACTIVATE
+                                        | SWP_FRAMECHANGED
+                                        | SWP_SHOWWINDOW,
                                 );
                             }
                         }
@@ -1984,7 +1987,14 @@ pub fn update_embedded_viewport_bounds(x: i32, y: i32, width: i32, height: i32, 
 }
 
 #[cfg(not(windows))]
-pub fn update_embedded_viewport_bounds(_x: i32, _y: i32, _width: i32, _height: i32, _visible: bool) {}
+pub fn update_embedded_viewport_bounds(
+    _x: i32,
+    _y: i32,
+    _width: i32,
+    _height: i32,
+    _visible: bool,
+) {
+}
 
 pub fn get_embedded_target_title() -> Option<String> {
     #[cfg(windows)]
@@ -2059,10 +2069,20 @@ pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
                 if let Some((vx, vy, vw, vh, _vis)) = vp_opt {
                     (vx, vy, vw.max(50), vh.max(50))
                 } else {
-                    (config.x, config.y, config.width.max(50), config.height.max(50))
+                    (
+                        config.x,
+                        config.y,
+                        config.width.max(50),
+                        config.height.max(50),
+                    )
                 }
             } else {
-                (config.x, config.y, config.width.max(50), config.height.max(50))
+                (
+                    config.x,
+                    config.y,
+                    config.width.max(50),
+                    config.height.max(50),
+                )
             };
 
             let needs_clamp = IsZoomed(hwnd) != 0

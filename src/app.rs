@@ -455,14 +455,13 @@ impl MacroForgeApp {
 
     fn render_embedded_viewport_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let win_lock_cfg = macro_core::get_window_lock();
-        let target_title = macro_core::get_embedded_target_title()
-            .unwrap_or_else(|| {
-                if !win_lock_cfg.title_filter.trim().is_empty() {
-                    win_lock_cfg.title_filter.clone()
-                } else {
-                    self.lang.viewport_header_title().to_string()
-                }
-            });
+        let target_title = macro_core::get_embedded_target_title().unwrap_or_else(|| {
+            if !win_lock_cfg.title_filter.trim().is_empty() {
+                win_lock_cfg.title_filter.clone()
+            } else {
+                self.lang.viewport_header_title().to_string()
+            }
+        });
 
         // En-tête du Viewport
         ui.horizontal(|ui| {
@@ -653,14 +652,13 @@ impl MacroForgeApp {
 
                         // Boutons d'action rapide pour démarrer immédiatement
                         ui.horizontal(|ui| {
-                            let rec_quick_btn =
-                                GlassButton::new(if self.lang == Language::Fr {
-                                    "Enregistrer (F8)"
-                                } else {
-                                    "Record (F8)"
-                                })
-                                .icon("🔴")
-                                .variant(ButtonVariant::Danger);
+                            let rec_quick_btn = GlassButton::new(if self.lang == Language::Fr {
+                                "Enregistrer (F8)"
+                            } else {
+                                "Record (F8)"
+                            })
+                            .icon("🔴")
+                            .variant(ButtonVariant::Danger);
                             if ui.add(rec_quick_btn).clicked() {
                                 macro_core::start_recording();
                             }
@@ -675,9 +673,8 @@ impl MacroForgeApp {
 
                             ui.add_space(6.0);
 
-                            let mouse_quick_btn =
-                                GlassButton::new(self.lang.quick_add_mouse())
-                                    .variant(ButtonVariant::Secondary);
+                            let mouse_quick_btn = GlassButton::new(self.lang.quick_add_mouse())
+                                .variant(ButtonVariant::Secondary);
                             if ui.add(mouse_quick_btn).clicked() {
                                 self.action_modal.open_for_new(ActionModalTab::Mouse);
                             }
@@ -690,8 +687,7 @@ impl MacroForgeApp {
         } else {
             // Liste scrollable des ActionCards avec support Drag & Drop
             let mut card_event_to_process = None;
-            let is_unfiltered =
-                !self.hide_mouse_moves && self.search_query.trim().is_empty();
+            let is_unfiltered = !self.hide_mouse_moves && self.search_query.trim().is_empty();
 
             // Virtualisation de la liste (issue #10) : seules les cartes
             // visibles dans la fenetre sont layoutees/dessinees par frame.
@@ -713,8 +709,8 @@ impl MacroForgeApp {
                 };
                 if let Some(row) = target_row {
                     // Lignes a hauteur fixe : offset = row * ROW_HEIGHT.
-                    timeline_scroll = timeline_scroll
-                        .scroll_offset(egui::vec2(0.0, row as f32 * ROW_HEIGHT));
+                    timeline_scroll =
+                        timeline_scroll.scroll_offset(egui::vec2(0.0, row as f32 * ROW_HEIGHT));
                 }
             }
 
@@ -809,11 +805,9 @@ impl MacroForgeApp {
                                     from + 1,
                                     actual_to + 1
                                 ),
-                                Language::En => format!(
-                                    "🔀 Action #{} moved to #{}.",
-                                    from + 1,
-                                    actual_to + 1
-                                ),
+                                Language::En => {
+                                    format!("🔀 Action #{} moved to #{}.", from + 1, actual_to + 1)
+                                }
                             };
                         }
                     }
