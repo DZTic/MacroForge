@@ -12,6 +12,7 @@ pub enum ToolbarAction {
     EmergencyStop,
     OpenMainWindow,
     CloseToolbar,
+    DetachTargetWindow,
 }
 
 pub struct FloatingToolbar {
@@ -42,6 +43,7 @@ impl FloatingToolbar {
         ctx: &egui::Context,
         is_recording: bool,
         is_playing: bool,
+        is_embedded: bool,
         lang: Language,
     ) -> ToolbarAction {
         if !self.is_visible {
@@ -50,12 +52,13 @@ impl FloatingToolbar {
 
         let mut triggered_action = ToolbarAction::None;
         let viewport_id = ViewportId::from_hash_of("macroforge_floating_toolbar");
+        let tb_width = if is_embedded { 336.0 } else { 300.0 };
 
         ctx.show_viewport_immediate(
             viewport_id,
             ViewportBuilder::default()
                 .with_title("MacroForge Toolbar")
-                .with_inner_size([300.0, 44.0])
+                .with_inner_size([tb_width, 44.0])
                 .with_min_inner_size([260.0, 40.0])
                 .with_decorations(false)
                 .with_transparent(true)
@@ -205,7 +208,7 @@ impl FloatingToolbar {
                                 }
                             });
 
-                            // 5. Boutons de contrôle de la fenêtre à droite (Ouvrir éditeur & Fermer)
+                            // 5. Boutons de contrôle de la fenêtre à droite (Ouvrir éditeur & Fermer & Détacher)
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
@@ -233,6 +236,19 @@ impl FloatingToolbar {
                                     );
                                     if edit_resp.clicked() {
                                         triggered_action = ToolbarAction::OpenMainWindow;
+                                    }
+
+                                    if is_embedded {
+                                        ui.add_space(2.0);
+                                        let detach_resp = render_window_btn(
+                                            ui,
+                                            WindowBtnType::Detach,
+                                            lang.toolbar_detach_tip(),
+                                            win_btn_size,
+                                        );
+                                        if detach_resp.clicked() {
+                                            triggered_action = ToolbarAction::DetachTargetWindow;
+                                        }
                                     }
                                 },
                             );
@@ -397,9 +413,10 @@ fn render_play_btn(
 enum WindowBtnType {
     OpenEditor,
     Close,
+    Detach,
 }
 
-/// Rendu des boutons de gestion de fenêtre (Ouvrir éditeur / Fermer toolbar)
+/// Rendu des boutons de gestion de fenêtre (Ouvrir éditeur / Fermer toolbar / Détacher fenêtre cible)
 fn render_window_btn(
     ui: &mut egui::Ui,
     btn_type: WindowBtnType,
@@ -453,6 +470,27 @@ fn render_window_btn(
                 )
             }
         }
+        WindowBtnType::Detach => {
+            if is_clicked {
+                (
+                    Color32::from_rgba_unmultiplied(245, 158, 11, 200),
+                    Stroke::new(1.0_f32, colors::ACCENT_WARNING),
+                    Color32::WHITE,
+                )
+            } else if is_hovered {
+                (
+                    Color32::from_rgba_unmultiplied(245, 158, 11, 90),
+                    Stroke::new(1.0_f32, colors::ACCENT_WARNING),
+                    Color32::WHITE,
+                )
+            } else {
+                (
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 12),
+                    Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 25)),
+                    colors::ACCENT_WARNING,
+                )
+            }
+        }
     };
 
     let rounding = Rounding::same(6.0_f32);
@@ -494,6 +532,16 @@ fn render_window_btn(
                 Stroke::new(1.4_f32, icon_color),
             );
         }
+        WindowBtnType::Detach => {
+            // Icône détachement / cadenas ouvert épuré
+            ui.painter().text(
+                center,
+                egui::Align2::CENTER_CENTER,
+                "🔓",
+                egui::FontId::proportional(11.0),
+                icon_color,
+            );
+        }
     }
 
     resp.on_hover_text(tooltip)
@@ -528,5 +576,6 @@ mod tests {
         assert_ne!(ToolbarAction::ToggleRecord, ToolbarAction::TogglePlay);
         assert_ne!(ToolbarAction::EmergencyStop, ToolbarAction::CloseToolbar);
         assert_ne!(ToolbarAction::OpenMainWindow, ToolbarAction::None);
+        assert_ne!(ToolbarAction::DetachTargetWindow, ToolbarAction::None);
     }
 }

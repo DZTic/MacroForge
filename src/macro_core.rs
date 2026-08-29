@@ -1952,11 +1952,15 @@ pub fn update_embedded_viewport_bounds(x: i32, y: i32, width: i32, height: i32, 
         {
             use winapi::shared::windef::HWND;
             use winapi::um::winuser::{
-                GetParent, IsWindowVisible, SetWindowPos, ShowWindow, SWP_FRAMECHANGED,
-                SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW,
+                GetParent, IsHungAppWindow, IsWindowVisible, SetWindowPos, ShowWindow,
+                SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
+                SW_HIDE, SW_SHOW,
             };
             let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
             if !hwnd.is_null() && unsafe { IsWindowVisible(hwnd) } != 0 {
+                if unsafe { IsHungAppWindow(hwnd) } != 0 {
+                    return;
+                }
                 let parent = unsafe { GetParent(hwnd) };
                 if let Some(mf_hwnd) = get_macroforge_main_hwnd() {
                     if parent == mf_hwnd {
@@ -1975,7 +1979,8 @@ pub fn update_embedded_viewport_bounds(x: i32, y: i32, width: i32, height: i32, 
                                     SWP_NOZORDER
                                         | SWP_NOACTIVATE
                                         | SWP_FRAMECHANGED
-                                        | SWP_SHOWWINDOW,
+                                        | SWP_SHOWWINDOW
+                                        | SWP_ASYNCWINDOWPOS,
                                 );
                             }
                         }
@@ -1994,6 +1999,11 @@ pub fn update_embedded_viewport_bounds(
     _height: i32,
     _visible: bool,
 ) {
+}
+
+/// Masque temporairement la fenêtre cible intégrée (par exemple lorsqu'une boîte de dialogue modale est active).
+pub fn hide_embedded_target_window() {
+    update_embedded_viewport_bounds(0, 0, 0, 0, false);
 }
 
 pub fn get_embedded_target_title() -> Option<String> {
@@ -2042,12 +2052,17 @@ pub fn is_target_window_embedded() -> bool {
 pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
     use winapi::shared::windef::{HWND, RECT};
     use winapi::um::winuser::{
-        GetWindowRect, IsIconic, IsWindowVisible, IsZoomed, SetWindowPos, ShowWindow,
-        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_RESTORE,
+        GetWindowRect, IsHungAppWindow, IsIconic, IsWindowVisible, IsZoomed, SetWindowPos,
+        ShowWindow, SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER,
+        SWP_SHOWWINDOW, SW_RESTORE,
     };
 
     let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as HWND;
     if hwnd.is_null() || unsafe { IsWindowVisible(hwnd) } == 0 {
+        return;
+    }
+
+    if unsafe { IsHungAppWindow(hwnd) } != 0 {
         return;
     }
 
@@ -2066,7 +2081,10 @@ pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
 
             let (target_x, target_y, target_w, target_h) = if config.embed_in_macroforge {
                 let vp_opt = *EMBEDDED_VIEWPORT.lock().unwrap();
-                if let Some((vx, vy, vw, vh, _vis)) = vp_opt {
+                if let Some((vx, vy, vw, vh, visible)) = vp_opt {
+                    if !visible {
+                        return;
+                    }
                     (vx, vy, vw.max(50), vh.max(50))
                 } else {
                     (
@@ -2103,7 +2121,11 @@ pub fn clamp_target_window_bounds(config: &WindowLockConfig) {
                     target_y,
                     target_w,
                     target_h,
-                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+                    SWP_NOZORDER
+                        | SWP_NOACTIVATE
+                        | SWP_FRAMECHANGED
+                        | SWP_SHOWWINDOW
+                        | SWP_ASYNCWINDOWPOS,
                 );
             }
         }
@@ -2117,15 +2139,19 @@ pub fn clamp_target_window_bounds(_config: &WindowLockConfig) {}
 pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
     use winapi::shared::windef::RECT;
     use winapi::um::winuser::{
-        GetParent, GetWindowLongPtrW, GetWindowRect, GetWindowTextW, IsIconic, IsZoomed,
-        SetForegroundWindow, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE,
-        GWL_STYLE, SWP_FRAMECHANGED, SWP_NOZORDER, SWP_SHOWWINDOW, SW_RESTORE, WS_CAPTION,
-        WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
-        WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
+        GetParent, GetWindowLongPtrW, GetWindowRect, GetWindowTextW, IsHungAppWindow, IsIconic,
+        IsZoomed, SetForegroundWindow, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+        GWL_EXSTYLE, GWL_STYLE, SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER,
+        SWP_SHOWWINDOW, SW_RESTORE, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+        WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
     };
 
     let hwnd = find_target_window_hwnd(config)
         .ok_or_else(|| "Aucune fenêtre cible trouvée ou active.".to_string())?;
+
+    if unsafe { IsHungAppWindow(hwnd) } != 0 {
+        return Err("La fenêtre cible ne répond pas (processus figé).".to_string());
+    }
 
     let width = config.width.max(50);
     let height = config.height.max(50);
@@ -2162,7 +2188,7 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
         // 2. Restaurer si maximisée ou minimisée (pour débloquer le mode plein écran initial)
         if config.restore_if_maximized && (IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0) {
             ShowWindow(hwnd, SW_RESTORE);
-            thread::sleep(Duration::from_millis(60));
+            thread::sleep(Duration::from_millis(40));
         }
 
         // 3. Intégration en tant que fenêtre enfant (SetParent) si demandée
@@ -2205,7 +2231,8 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
             (config.x, config.y, width, height)
         };
 
-        let flags = SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED;
+        let flags =
+            SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE;
         let success = SetWindowPos(
             hwnd,
             std::ptr::null_mut(),
@@ -2222,7 +2249,6 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
 
         if config.force_foreground && !config.embed_in_macroforge {
             SetForegroundWindow(hwnd);
-            thread::sleep(Duration::from_millis(50));
         }
 
         LAST_GAME_HWND.store(hwnd as isize, Ordering::Relaxed);
@@ -2236,7 +2262,7 @@ pub fn apply_window_lock(config: &WindowLockConfig) -> Result<(), String> {
         };
 
         info!(
-            "🎯 Fenêtre cible '{}' emprisonnée avec succès (taille: {}x{}, pos: {}, {}, embed: {}, lock_styles: {})",
+            "🎯 Fenêtre cible '{}' configurée avec succès (taille: {}x{}, pos: {}, {}, embed: {}, lock_styles: {})",
             title.trim(),
             apply_w,
             apply_h,
@@ -2260,7 +2286,7 @@ pub fn restore_target_window(config: &WindowLockConfig) -> Result<(), String> {
     use winapi::shared::windef::HWND;
     use winapi::um::winuser::{
         SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE,
-        SWP_FRAMECHANGED, SWP_NOZORDER, SWP_SHOWWINDOW, SW_SHOWNORMAL,
+        SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOZORDER, SWP_SHOWWINDOW, SW_SHOWNORMAL,
     };
 
     let hwnd = find_target_window_hwnd(config)
@@ -2294,7 +2320,7 @@ pub fn restore_target_window(config: &WindowLockConfig) -> Result<(), String> {
                 state.y,
                 state.width.max(100),
                 state.height.max(100),
-                SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED,
+                SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
             );
 
             info!("🔓 Fenêtre cible rétablie dans son état d'origine.");
@@ -3137,8 +3163,8 @@ mod tests {
             assert_eq!(*vp, Some((120, 240, 640, 480, true)));
         }
 
-        // Test hiding viewport
-        update_embedded_viewport_bounds(0, 0, 0, 0, false);
+        // Test hiding viewport via helper
+        hide_embedded_target_window();
         {
             let vp = EMBEDDED_VIEWPORT.lock().unwrap();
             assert_eq!(*vp, Some((0, 0, 0, 0, false)));
