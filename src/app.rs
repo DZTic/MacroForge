@@ -841,7 +841,7 @@ impl eframe::App for MacroForgeApp {
             self.main_window_visible = false;
         }
 
-        // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F7: Play/Stop, F4: Stop Playback)
+        // Raccourcis clavier locaux in-app (F8: Rec/Stop, F9: Stop Rec, F7: Play/Stop, F4: Stop Playback, F10: Détacher fenêtre)
         if !self.action_modal.is_listening_key {
             if ctx.input(|i| i.key_pressed(egui::Key::F8)) {
                 macro_core::toggle_recording();
@@ -855,6 +855,33 @@ impl eframe::App for MacroForgeApp {
             if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
                 macro_core::emergency_stop();
             }
+            if ctx.input(|i| i.key_pressed(egui::Key::F10)) {
+                let cfg = macro_core::get_window_lock();
+                let _ = macro_core::restore_target_window(&cfg);
+                let mut new_cfg = cfg;
+                new_cfg.embed_in_macroforge = false;
+                macro_core::set_window_lock(new_cfg.clone());
+                let mut settings = crate::ui::i18n::AppSettings::load();
+                settings.window_lock = new_cfg;
+                settings.save();
+                self.status_message = match self.lang {
+                    Language::Fr => {
+                        "🔓 Fenêtre cible détachée et rétablie sur le bureau.".to_string()
+                    }
+                    Language::En => {
+                        "🔓 Target window detached and restored to desktop.".to_string()
+                    }
+                };
+            }
+        }
+
+        // Si une boîte de dialogue modale est active, masquer temporairement la fenêtre enfant Win32
+        // afin qu'elle ne recouvre jamais la pop-up egui ni n'intercepte les clics de souris
+        let any_modal_open = self.action_modal.is_open
+            || self.stop_image_modal.is_open
+            || self.window_lock_modal.is_open;
+        if any_modal_open {
+            macro_core::hide_embedded_target_window();
         }
 
         // 1. Modales d'ajout/édition et de configuration d'arrêt
@@ -896,10 +923,15 @@ impl eframe::App for MacroForgeApp {
         }
 
         // 2. Toolbar flottante native (Multi-viewport)
-        match self
-            .toolbar
-            .show(ctx, self.is_recording, self.is_playing, self.lang)
-        {
+        let is_embedded = macro_core::get_window_lock().embed_in_macroforge
+            || macro_core::is_target_window_embedded();
+        match self.toolbar.show(
+            ctx,
+            self.is_recording,
+            self.is_playing,
+            is_embedded,
+            self.lang,
+        ) {
             crate::ui::ToolbarAction::None => {}
             crate::ui::ToolbarAction::ToggleRecord => {
                 macro_core::toggle_recording();
@@ -916,6 +948,24 @@ impl eframe::App for MacroForgeApp {
                 if can_stop {
                     macro_core::emergency_stop();
                 }
+            }
+            crate::ui::ToolbarAction::DetachTargetWindow => {
+                let cfg = macro_core::get_window_lock();
+                let _ = macro_core::restore_target_window(&cfg);
+                let mut new_cfg = cfg;
+                new_cfg.embed_in_macroforge = false;
+                macro_core::set_window_lock(new_cfg.clone());
+                let mut settings = crate::ui::i18n::AppSettings::load();
+                settings.window_lock = new_cfg;
+                settings.save();
+                self.status_message = match self.lang {
+                    Language::Fr => {
+                        "🔓 Fenêtre cible détachée et rétablie sur le bureau.".to_string()
+                    }
+                    Language::En => {
+                        "🔓 Target window detached and restored to desktop.".to_string()
+                    }
+                };
             }
             crate::ui::ToolbarAction::OpenMainWindow => {
                 self.main_window_visible = true;

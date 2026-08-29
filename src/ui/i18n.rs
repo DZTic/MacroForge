@@ -962,6 +962,13 @@ impl Language {
         }
     }
 
+    pub fn embed_in_macroforge_warning(&self) -> &'static str {
+        match self {
+            Language::Fr => "⚠️ Note : Certains jeux 3D (ex: Roblox) ou protégés par anti-cheat refusent l'intégration enfant (WS_CHILD) et peuvent crasher. Si c'est le cas, désactivez cette case pour utiliser le mode Verrouillage Externe.",
+            Language::En => "⚠️ Note: Some 3D games (e.g. Roblox) or anti-cheat protected apps resist WS_CHILD embedding and may crash. If so, uncheck this box to use External Lock mode.",
+        }
+    }
+
     pub fn lock_window_styles_label(&self) -> &'static str {
         match self {
             Language::Fr => "Bloquer les bordures et le plein écran F11 (Supprimer maximisation)",
@@ -1059,6 +1066,27 @@ impl Language {
             Language::En => "Auto-fit",
         }
     }
+
+    pub fn toolbar_detach_tip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Détacher la fenêtre cible et la rétablir sur le bureau (F10)",
+            Language::En => "Detach target window and restore to desktop (F10)",
+        }
+    }
+
+    pub fn detach_target_window_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "🔓 Détacher Fenêtre",
+            Language::En => "🔓 Detach Window",
+        }
+    }
+
+    pub fn emergency_detach_shortcut_hint(&self) -> &'static str {
+        match self {
+            Language::Fr => "F10 : Détacher fenêtre cible",
+            Language::En => "F10: Detach target window",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1088,6 +1116,16 @@ mod tests {
         assert_ne!(fr.capture_cursor_pos_btn(), en.capture_cursor_pos_btn());
         assert_ne!(fr.window_lock_btn(), en.window_lock_btn());
         assert_ne!(fr.window_lock_modal_title(), en.window_lock_modal_title());
+        assert_ne!(
+            fr.embed_in_macroforge_warning(),
+            en.embed_in_macroforge_warning()
+        );
+        assert_ne!(fr.toolbar_detach_tip(), en.toolbar_detach_tip());
+        assert_ne!(fr.detach_target_window_btn(), en.detach_target_window_btn());
+        assert_ne!(
+            fr.emergency_detach_shortcut_hint(),
+            en.emergency_detach_shortcut_hint()
+        );
     }
 
     #[test]

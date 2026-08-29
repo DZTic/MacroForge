@@ -2,7 +2,7 @@ use crate::macro_core::{self, WindowInfo, WindowLockConfig};
 use crate::ui::i18n::Language;
 use crate::ui::theme::{self, colors};
 use crate::ui::widgets::{ButtonVariant, GlassButton};
-use eframe::egui::{self, DragValue, Frame, Margin, Rounding, Stroke, Vec2};
+use eframe::egui::{self, Color32, DragValue, Frame, Margin, Rounding, Stroke, Vec2};
 
 pub struct WindowLockModal {
     pub is_open: bool,
@@ -410,6 +410,12 @@ impl WindowLockModal {
                                     .size(11.5)
                                     .color(colors::ACCENT_PRIMARY_HOVER),
                             );
+                            ui.add_space(2.0);
+                            ui.label(
+                                egui::RichText::new(lang.embed_in_macroforge_warning())
+                                    .size(11.0)
+                                    .color(Color32::from_rgb(251, 191, 36)),
+                            );
                         }
                         ui.add_space(4.0);
                         ui.checkbox(
@@ -557,6 +563,10 @@ impl WindowLockModal {
                     });
                 });
             });
+
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            should_close = true;
+        }
 
         if should_close {
             self.is_open = false;
