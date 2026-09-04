@@ -127,6 +127,7 @@ impl MacroForgeApp {
                 current_action_idx: 0,
                 total_actions,
                 action_detail: String::new(),
+                win32_configured: false,
             },
 
             main_window_visible: true,
@@ -1747,6 +1748,7 @@ mod tests {
                 current_action_idx: 0,
                 total_actions: 0,
                 action_detail: String::new(),
+                win32_configured: false,
             },
             main_window_visible: true,
             overlay: crate::ui::TransparentOverlay {
@@ -1796,6 +1798,7 @@ mod tests {
                 current_action_idx: 0,
                 total_actions: 0,
                 action_detail: String::new(),
+                win32_configured: false,
             },
             main_window_visible: true,
             overlay: crate::ui::TransparentOverlay {

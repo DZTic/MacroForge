@@ -53,8 +53,7 @@ impl TransparentOverlay {
                 .with_resizable(false),
             |ctx, _class| {
                 #[cfg(windows)]
-                if !self.win32_configured {
-                    apply_win32_overlay_styles();
+                if !self.win32_configured && apply_win32_overlay_styles() {
                     self.win32_configured = true;
                 }
 
@@ -120,7 +119,7 @@ impl TransparentOverlay {
 }
 
 #[cfg(windows)]
-pub fn apply_win32_overlay_styles() {
+pub fn apply_win32_overlay_styles() -> bool {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     use winapi::um::winuser::*;
@@ -129,15 +128,31 @@ pub fn apply_win32_overlay_styles() {
     unsafe {
         let hwnd = FindWindowW(std::ptr::null(), title.as_ptr());
         if !hwnd.is_null() {
-            // WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST
-            let ex_style = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+            // WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE
+            let ex_style = WS_EX_LAYERED
+                | WS_EX_TRANSPARENT
+                | WS_EX_TOOLWINDOW
+                | WS_EX_TOPMOST
+                | WS_EX_NOACTIVATE;
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style as isize);
+
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE,
+            );
 
             // WDA_EXCLUDEFROMCAPTURE = 0x00000011 (exclusion des captures d'écran GDI)
             const WDA_EXCLUDEFROMCAPTURE: u32 = 0x00000011;
             SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+            return true;
         }
     }
+    false
 }
 
 #[cfg(test)]

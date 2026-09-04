@@ -20,6 +20,7 @@ pub struct FloatingToolbar {
     pub current_action_idx: usize,
     pub total_actions: usize,
     pub action_detail: String,
+    pub win32_configured: bool,
 }
 
 impl Default for FloatingToolbar {
@@ -35,6 +36,7 @@ impl FloatingToolbar {
             current_action_idx: 0,
             total_actions: 0,
             action_detail: String::new(),
+            win32_configured: false,
         }
     }
 
@@ -47,6 +49,7 @@ impl FloatingToolbar {
         lang: Language,
     ) -> ToolbarAction {
         if !self.is_visible {
+            self.win32_configured = false;
             return ToolbarAction::None;
         }
 
@@ -65,6 +68,11 @@ impl FloatingToolbar {
                 .with_always_on_top()
                 .with_resizable(false),
             |ctx, _class| {
+                #[cfg(windows)]
+                if !self.win32_configured && apply_win32_toolbar_styles() {
+                    self.win32_configured = true;
+                }
+
                 egui::CentralPanel::default()
                     .frame(toolbar_frame())
                     .show(ctx, |ui| {
@@ -547,6 +555,41 @@ fn render_window_btn(
     resp.on_hover_text(tooltip)
 }
 
+#[cfg(windows)]
+pub fn apply_win32_toolbar_styles() -> bool {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::um::winuser::*;
+
+    let title: Vec<u16> = OsStr::new("MacroForge Toolbar\0").encode_wide().collect();
+    unsafe {
+        let hwnd = FindWindowW(std::ptr::null(), title.as_ptr());
+        if !hwnd.is_null() {
+            // WS_EX_TOOLWINDOW: non présent dans la barre des tâches ni Alt+Tab
+            // WS_EX_TOPMOST: toujours au premier plan au-dessus du jeu
+            // WS_EX_NOACTIVATE: ne vole jamais le focus / n'interrompt pas le plein écran
+            let ex_style = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE;
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style as isize);
+
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE,
+            );
+
+            // Exclusion des captures d'écran GDI pour ne pas gêner la détection d'image
+            const WDA_EXCLUDEFROMCAPTURE: u32 = 0x00000011;
+            SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,13 +601,16 @@ mod tests {
         assert_eq!(toolbar.current_action_idx, 0);
         assert_eq!(toolbar.total_actions, 0);
         assert!(toolbar.action_detail.is_empty());
+        assert!(!toolbar.win32_configured);
 
         toolbar.is_visible = true;
+        toolbar.win32_configured = true;
         toolbar.total_actions = 15;
         toolbar.current_action_idx = 3;
         toolbar.action_detail = "Test Action".to_string();
 
         assert!(toolbar.is_visible);
+        assert!(toolbar.win32_configured);
         assert_eq!(toolbar.total_actions, 15);
         assert_eq!(toolbar.current_action_idx, 3);
         assert_eq!(toolbar.action_detail, "Test Action");
@@ -577,5 +623,19 @@ mod tests {
         assert_ne!(ToolbarAction::EmergencyStop, ToolbarAction::CloseToolbar);
         assert_ne!(ToolbarAction::OpenMainWindow, ToolbarAction::None);
         assert_ne!(ToolbarAction::DetachTargetWindow, ToolbarAction::None);
+    }
+
+    #[test]
+    fn test_toolbar_win32_config_reset_on_hide() {
+        let mut toolbar = FloatingToolbar::new();
+        toolbar.is_visible = true;
+        toolbar.win32_configured = true;
+
+        toolbar.is_visible = false;
+        // Simuler le show quand invisible
+        let ctx = egui::Context::default();
+        let action = toolbar.show(&ctx, false, false, false, Language::Fr);
+        assert_eq!(action, ToolbarAction::None);
+        assert!(!toolbar.win32_configured);
     }
 }

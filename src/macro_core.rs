@@ -1124,7 +1124,13 @@ pub fn stop_recording() -> usize {
 #[cfg(windows)]
 pub fn get_screen_capture_bounds() -> (i32, i32, i32, i32) {
     let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
-    if !hwnd.is_null() && unsafe { IsWindowVisible(hwnd) } != 0 {
+    if !hwnd.is_null()
+        && unsafe {
+            winapi::um::winuser::IsWindow(hwnd) != 0
+                && winapi::um::winuser::IsWindowVisible(hwnd) != 0
+                && winapi::um::winuser::IsIconic(hwnd) == 0
+        }
+    {
         let mut rect = winapi::shared::windef::RECT {
             left: 0,
             top: 0,
@@ -1134,7 +1140,7 @@ pub fn get_screen_capture_bounds() -> (i32, i32, i32, i32) {
         if unsafe { winapi::um::winuser::GetWindowRect(hwnd, &mut rect) } != 0 {
             let width = rect.right - rect.left;
             let height = rect.bottom - rect.top;
-            if width > 100 && height > 100 {
+            if width > 100 && height > 100 && rect.left >= -2000 && rect.top >= -2000 {
                 return (rect.left, rect.top, width, height);
             }
         }
@@ -1149,6 +1155,72 @@ pub fn get_screen_capture_bounds() -> (i32, i32, i32, i32) {
     let vh = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
     (vx, vy, vw, vh)
 }
+
+/// Active et transfère proprement le premier plan Windows vers la fenêtre cible sans
+/// altérer son mode plein écran ni provoquer d'artefacts d'affichage ou de saut de mode.
+#[cfg(windows)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
+    use winapi::um::processthreadsapi::GetCurrentThreadId;
+    use winapi::um::winuser::{
+        AttachThreadInput, BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId,
+        IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow, ShowWindow,
+        SystemParametersInfoA, SPIF_SENDCHANGE, SPI_SETFOREGROUNDLOCKTIMEOUT, SW_RESTORE,
+    };
+
+    if hwnd.is_null() || unsafe { IsWindow(hwnd) == 0 || IsWindowVisible(hwnd) == 0 } {
+        return;
+    }
+
+    unsafe {
+        let cur_fg = GetForegroundWindow();
+        if cur_fg == hwnd {
+            return;
+        }
+
+        // Si la fenêtre est minimisée (dans la barre des tâches), la restaurer
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+            thread::sleep(Duration::from_millis(50));
+        }
+
+        let cur_thread = GetCurrentThreadId();
+        let fg_thread = if !cur_fg.is_null() {
+            GetWindowThreadProcessId(cur_fg, std::ptr::null_mut())
+        } else {
+            0
+        };
+        let target_thread = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
+
+        // Déverrouiller le timeout de premier plan Windows
+        SystemParametersInfoA(
+            SPI_SETFOREGROUNDLOCKTIMEOUT,
+            0,
+            std::ptr::null_mut(),
+            SPIF_SENDCHANGE,
+        );
+
+        if fg_thread != 0 && fg_thread != cur_thread {
+            AttachThreadInput(cur_thread, fg_thread, 1);
+        }
+        if target_thread != 0 && target_thread != cur_thread {
+            AttachThreadInput(cur_thread, target_thread, 1);
+        }
+
+        SetForegroundWindow(hwnd);
+        BringWindowToTop(hwnd);
+
+        if fg_thread != 0 && fg_thread != cur_thread {
+            AttachThreadInput(cur_thread, fg_thread, 0);
+        }
+        if target_thread != 0 && target_thread != cur_thread {
+            AttachThreadInput(cur_thread, target_thread, 0);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn force_foreground_window(_hwnd: isize) {}
 
 pub fn play_macro() {
     let mut state = MACRO_STATE.lock().unwrap();
@@ -1198,28 +1270,14 @@ pub fn play_macro() {
                 thread::sleep(Duration::from_millis(150));
             }
         } else {
-            // Si la fenêtre active est MacroForge, redonner automatiquement le focus à l'application cible
-            unsafe {
-                use winapi::um::winuser::{
-                    GetForegroundWindow, GetWindowTextW, IsWindowVisible, SetForegroundWindow,
-                };
-                let cur_hwnd = GetForegroundWindow();
-                if !cur_hwnd.is_null() {
-                    let mut buf = [0u16; 256];
-                    let len = GetWindowTextW(cur_hwnd, buf.as_mut_ptr(), buf.len() as i32);
-                    let title = if len > 0 {
-                        String::from_utf16_lossy(&buf[..len as usize])
-                    } else {
-                        String::new()
-                    };
-                    if title.contains("MacroForge") {
-                        let target_hwnd =
-                            LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
-                        if !target_hwnd.is_null() && IsWindowVisible(target_hwnd) != 0 {
-                            SetForegroundWindow(target_hwnd);
-                            thread::sleep(Duration::from_millis(150));
-                        }
-                    }
+            // Si la fenêtre active est MacroForge ou si la cible n'a pas le focus, lui redonner proprement
+            #[cfg(windows)]
+            {
+                let target_hwnd =
+                    LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+                if !target_hwnd.is_null() {
+                    force_foreground_window(target_hwnd);
+                    thread::sleep(Duration::from_millis(60));
                 }
             }
         }
@@ -1246,6 +1304,15 @@ pub fn play_macro() {
         'main_loop: loop {
             iteration += 1;
             trace!("{} --- Itération #{} démarrée ---", ts(), iteration);
+
+            #[cfg(windows)]
+            if !window_lock_cfg.enabled {
+                let target_hwnd =
+                    LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+                if !target_hwnd.is_null() {
+                    force_foreground_window(target_hwnd);
+                }
+            }
 
             let mut action_index = 0usize;
             let mut timeline_origin = Instant::now();
@@ -3102,6 +3169,13 @@ mod tests {
         let _ = (x, y);
         assert!(w > 0, "Largeur de capture d'écran doit être positive");
         assert!(h > 0, "Hauteur de capture d'écran doit être positive");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_force_foreground_window_null_safe() {
+        // Un handle null ne doit pas paniquer ni bloquer
+        force_foreground_window(std::ptr::null_mut());
     }
 
     #[test]
