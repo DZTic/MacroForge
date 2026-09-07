@@ -481,7 +481,7 @@ pub fn set_egui_ctx(ctx: eframe::egui::Context) {
     *EGUI_CTX.lock().unwrap() = Some(ctx);
 }
 
-fn notify_event(event: EngineEvent) {
+pub fn notify_event(event: EngineEvent) {
     if let Some(ref sender) = *EVENT_SENDER.lock().unwrap() {
         let _ = sender.send(event);
     }
@@ -1746,6 +1746,11 @@ pub fn stop_playback() {
     state.stop_playback_flag.store(true, Ordering::SeqCst);
 }
 
+pub fn get_stop_playback_flag() -> Arc<AtomicBool> {
+    let state = MACRO_STATE.lock().unwrap();
+    Arc::clone(&state.stop_playback_flag)
+}
+
 pub fn get_stop_image() -> (Option<String>, u64) {
     let state = MACRO_STATE.lock().unwrap();
     (state.stop_image_path.clone(), state.stop_image_timeout)
@@ -2507,7 +2512,7 @@ pub fn load_macro_from_file(path: &str) -> Result<usize, String> {
     Ok(count)
 }
 
-fn check_image_present(path: &str) -> bool {
+pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
     let template_arc = {
         let mut cache = IMAGE_CACHE.lock().unwrap();
         if let Some(img) = cache.get(path) {
@@ -2559,7 +2564,7 @@ fn check_image_present(path: &str) -> bool {
                 template_raw,
                 tw,
                 th,
-                25,
+                tolerance,
             )
             .is_some()
         })
@@ -2567,6 +2572,71 @@ fn check_image_present(path: &str) -> bool {
     }
     #[cfg(not(windows))]
     false
+}
+
+pub fn check_image_present(path: &str) -> bool {
+    check_image_present_with_tolerance(path, 25)
+}
+
+/// Exécute une séquence arbitraire de MacroAction avec précision temporelle et vérification d'arrêt d'urgence.
+/// Retourne true si l'exécution s'est achevée normalement, ou false si elle a été interrompue par stop_flag.
+pub fn play_action_sequence(actions: &[MacroAction], stop_flag: &Arc<AtomicBool>) -> bool {
+    if actions.is_empty() {
+        return true;
+    }
+    let timeline_origin = Instant::now();
+    let mut total_recorded_delay = 0u64;
+
+    for action in actions {
+        if stop_flag.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        let action_delay = match action.action_type {
+            ActionType::WaitImage(..) => 0,
+            _ => action.delay_ms,
+        };
+        total_recorded_delay += action_delay;
+
+        let target_time = timeline_origin + Duration::from_millis(total_recorded_delay);
+        loop {
+            let now = Instant::now();
+            if now >= target_time {
+                break;
+            }
+
+            let diff = target_time.duration_since(now).as_millis();
+            if diff > 10 {
+                thread::sleep(Duration::from_millis(1));
+            } else if diff > 1 {
+                thread::yield_now();
+            } else {
+                std::hint::spin_loop();
+            }
+
+            if stop_flag.load(Ordering::Relaxed) {
+                return false;
+            }
+        }
+
+        #[cfg(windows)]
+        match &action.action_type {
+            ActionType::KeyPress(_, vk, is_ext) => send_key(*vk, false, *is_ext),
+            ActionType::KeyRelease(_, vk, is_ext) => send_key(*vk, true, *is_ext),
+            ActionType::MouseMoveRelative(dx, dy) => send_mouse_relative(*dx, *dy),
+            ActionType::MouseMove(x, y) => send_mouse_move(*x as i32, *y as i32),
+            ActionType::MousePress(u, x, y) => send_mouse_button(*u, true, *x as i32, *y as i32),
+            ActionType::MouseRelease(u, x, y) => send_mouse_button(*u, false, *x as i32, *y as i32),
+            ActionType::Scroll(_, y) => unsafe {
+                use winapi::um::winuser::{mouse_event, MOUSEEVENTF_WHEEL};
+                let delta = (*y * 120.0) as i32;
+                mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta as u32, 0);
+            },
+            ActionType::Wait(_) => {}
+            ActionType::WaitImage(..) => {}
+        }
+    }
+    true
 }
 
 pub fn handle_rdev_event(event: Event) {
