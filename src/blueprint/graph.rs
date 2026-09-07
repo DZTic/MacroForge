@@ -118,6 +118,18 @@ impl BlueprintNodeType {
             BlueprintNodeType::Stop => vec![],
         }
     }
+
+    pub fn min_dimensions(&self) -> (f32, f32) {
+        match self {
+            BlueprintNodeType::ImageCondition { .. } | BlueprintNodeType::WaitImage { .. } => {
+                (260.0, 150.0)
+            }
+            BlueprintNodeType::Loop { .. } => (220.0, 125.0),
+            BlueprintNodeType::Macro { .. } => (240.0, 105.0),
+            BlueprintNodeType::Delay { .. } => (210.0, 100.0),
+            BlueprintNodeType::Start | BlueprintNodeType::Stop => (180.0, 85.0),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -138,18 +150,7 @@ impl BlueprintNode {
         lang: Language,
     ) -> Self {
         let title = node_type.default_title(lang);
-        let width = match node_type {
-            BlueprintNodeType::Macro { .. } | BlueprintNodeType::ImageCondition { .. } => 240.0,
-            BlueprintNodeType::WaitImage { .. } => 230.0,
-            _ => 200.0,
-        };
-        let height = match node_type {
-            BlueprintNodeType::ImageCondition { .. } | BlueprintNodeType::WaitImage { .. } => 135.0,
-            BlueprintNodeType::Macro { .. } => 110.0,
-            BlueprintNodeType::Loop { .. } => 110.0,
-            BlueprintNodeType::Delay { .. } => 95.0,
-            _ => 80.0,
-        };
+        let (width, height) = node_type.min_dimensions();
 
         Self {
             id,
@@ -466,5 +467,44 @@ mod tests {
         assert_eq!(loaded.connections.len(), 1);
         assert_eq!(loaded.connections[0].from, out_pin);
         assert_eq!(loaded.connections[0].to, in_pin);
+    }
+
+    #[test]
+    fn test_blueprint_node_min_dimensions_prevent_overflow() {
+        let node_types = [
+            BlueprintNodeType::Start,
+            BlueprintNodeType::Macro {
+                name: "Test".to_string(),
+                actions: vec![],
+            },
+            BlueprintNodeType::ImageCondition {
+                image_path: "test.png".to_string(),
+                tolerance: 25,
+                timeout_ms: 3000,
+            },
+            BlueprintNodeType::WaitImage {
+                image_path: "test.png".to_string(),
+                timeout_ms: 5000,
+                tolerance: 25,
+            },
+            BlueprintNodeType::Delay { delay_ms: 1000 },
+            BlueprintNodeType::Loop { count: 3 },
+            BlueprintNodeType::Stop,
+        ];
+
+        for nt in &node_types {
+            let (min_w, min_h) = nt.min_dimensions();
+            let node = BlueprintNode::new(NodeId(1), nt.clone(), [0.0, 0.0], Language::Fr);
+            assert!(node.width >= min_w, "Node width must be >= min_w");
+            assert!(node.height >= min_h, "Node height must be >= min_h");
+            // Les nœuds complexes avec contrôles multiples doivent avoir au moins 260px de largeur et 150px de hauteur
+            if matches!(
+                nt,
+                BlueprintNodeType::ImageCondition { .. } | BlueprintNodeType::WaitImage { .. }
+            ) {
+                assert!(node.width >= 260.0);
+                assert!(node.height >= 150.0);
+            }
+        }
     }
 }

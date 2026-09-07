@@ -487,6 +487,13 @@ impl BlueprintCanvas {
         let mut pin_under_mouse: Option<PinId> = None;
 
         for node in &mut graph.nodes {
+            let (min_w, min_h) = node.node_type.min_dimensions();
+            if node.width < min_w {
+                node.width = min_w;
+            }
+            if node.height < min_h {
+                node.height = min_h;
+            }
             let screen_pos = self.to_screen(node.position, origin);
             let node_rect = Rect::from_min_size(
                 screen_pos,
@@ -671,20 +678,24 @@ impl BlueprintCanvas {
     }
 
     fn get_pin_screen_pos(&self, node: &BlueprintNode, pin: PinId, origin: Pos2) -> Pos2 {
+        let (min_w, min_h) = node.node_type.min_dimensions();
+        let effective_w = node.width.max(min_w);
+        let effective_h = node.height.max(min_h);
         let screen_rect = Rect::from_min_size(
             self.to_screen(node.position, origin),
-            Vec2::new(node.width * self.zoom, node.height * self.zoom),
+            Vec2::new(effective_w * self.zoom, effective_h * self.zoom),
         );
 
         let header_h = 28.0 * self.zoom;
         let content_y = screen_rect.min.y + header_h;
-        let pin_y_offset = (20.0 + (pin.pin_index as f32 * 22.0)) * self.zoom;
+        let pin_y_offset = (18.0 + (pin.pin_index as f32 * 22.0)) * self.zoom;
         let y = content_y + pin_y_offset;
+        let pin_inset = 9.0 * self.zoom;
 
         if pin.is_output {
-            Pos2::new(screen_rect.max.x, y)
+            Pos2::new(screen_rect.max.x - pin_inset, y)
         } else {
-            Pos2::new(screen_rect.min.x, y)
+            Pos2::new(screen_rect.min.x + pin_inset, y)
         }
     }
 
@@ -784,9 +795,10 @@ impl BlueprintCanvas {
             delete_clicked = true;
         }
 
-        // Broches d'entrée (à gauche)
+        // Broches d'entrée (à gauche, entièrement dans le nœud)
         let inputs = node.node_type.input_pins(lang);
         let pin_radius = 5.5 * self.zoom;
+        let pin_inset = 9.0 * self.zoom;
 
         for (idx, pin_name) in inputs.iter().enumerate() {
             let pin_id = PinId {
@@ -795,8 +807,8 @@ impl BlueprintCanvas {
                 pin_index: idx,
             };
             let pin_center = Pos2::new(
-                rect.min.x,
-                header_rect.max.y + (20.0 + idx as f32 * 22.0) * self.zoom,
+                rect.min.x + pin_inset,
+                header_rect.max.y + (18.0 + idx as f32 * 22.0) * self.zoom,
             );
             let pin_interact_rect =
                 Rect::from_center_size(pin_center, Vec2::splat(16.0 * self.zoom));
@@ -820,7 +832,7 @@ impl BlueprintCanvas {
             painter.circle_filled(
                 pin_center,
                 if is_hovered {
-                    pin_radius * 1.3
+                    pin_radius * 1.2
                 } else {
                     pin_radius
                 },
@@ -829,7 +841,7 @@ impl BlueprintCanvas {
             painter.circle_stroke(pin_center, pin_radius, Stroke::new(1.0_f32, Color32::WHITE));
 
             painter.text(
-                Pos2::new(pin_center.x + 10.0 * self.zoom, pin_center.y),
+                Pos2::new(pin_center.x + 9.0 * self.zoom, pin_center.y),
                 egui::Align2::LEFT_CENTER,
                 pin_name,
                 egui::FontId::proportional(11.0 * self.zoom),
@@ -837,7 +849,7 @@ impl BlueprintCanvas {
             );
         }
 
-        // Broches de sortie (à droite)
+        // Broches de sortie (à droite, entièrement dans le nœud)
         let outputs = node.node_type.output_pins(lang);
         for (idx, pin_name) in outputs.iter().enumerate() {
             let pin_id = PinId {
@@ -846,8 +858,8 @@ impl BlueprintCanvas {
                 pin_index: idx,
             };
             let pin_center = Pos2::new(
-                rect.max.x,
-                header_rect.max.y + (20.0 + idx as f32 * 22.0) * self.zoom,
+                rect.max.x - pin_inset,
+                header_rect.max.y + (18.0 + idx as f32 * 22.0) * self.zoom,
             );
             let pin_interact_rect =
                 Rect::from_center_size(pin_center, Vec2::splat(16.0 * self.zoom));
@@ -875,7 +887,7 @@ impl BlueprintCanvas {
             painter.circle_filled(
                 pin_center,
                 if is_hovered {
-                    pin_radius * 1.3
+                    pin_radius * 1.2
                 } else {
                     pin_radius
                 },
@@ -884,7 +896,7 @@ impl BlueprintCanvas {
             painter.circle_stroke(pin_center, pin_radius, Stroke::new(1.0_f32, Color32::WHITE));
 
             painter.text(
-                Pos2::new(pin_center.x - 10.0 * self.zoom, pin_center.y),
+                Pos2::new(pin_center.x - 9.0 * self.zoom, pin_center.y),
                 egui::Align2::RIGHT_CENTER,
                 pin_name,
                 egui::FontId::proportional(11.0 * self.zoom),
@@ -892,138 +904,182 @@ impl BlueprintCanvas {
             );
         }
 
-        // Corps du nœud : paramètres éditables
+        // Corps du nœud : paramètres éditables (placés sous les broches, strictement contenus)
+        let num_pins = inputs.len().max(outputs.len());
+        let pins_height = match num_pins {
+            0 => 6.0 * self.zoom,
+            1 => 34.0 * self.zoom,
+            _ => 56.0 * self.zoom,
+        };
+        let body_top = header_rect.max.y + pins_height;
         let body_rect = Rect::from_min_max(
-            Pos2::new(
-                rect.min.x + 8.0 * self.zoom,
-                header_rect.max.y + 40.0 * self.zoom,
-            ),
-            Pos2::new(rect.max.x - 8.0 * self.zoom, rect.max.y - 6.0 * self.zoom),
+            Pos2::new(rect.min.x + 10.0 * self.zoom, body_top),
+            Pos2::new(rect.max.x - 10.0 * self.zoom, rect.max.y - 8.0 * self.zoom),
         );
 
         if self.zoom >= 0.7 && body_rect.height() > 15.0 {
             ui.allocate_new_ui(
-                egui::UiBuilder::new().max_rect(body_rect),
-                |ui| match &mut node.node_type {
-                    BlueprintNodeType::Macro { actions, .. } => {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "⚡ {} actions enregistrées",
-                                actions.len()
-                            ))
-                            .size(11.0 * self.zoom)
-                            .color(colors::TEXT_MUTED),
-                        );
-                    }
-                    BlueprintNodeType::ImageCondition {
-                        image_path,
-                        tolerance,
-                        timeout_ms,
-                    } => {
-                        ui.horizontal(|ui| {
+                egui::UiBuilder::new()
+                    .max_rect(body_rect)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+                |ui| {
+                    ui.set_clip_rect(body_rect);
+                    ui.set_max_width(body_rect.width());
+                    ui.spacing_mut().item_spacing = Vec2::new(4.0 * self.zoom, 4.0 * self.zoom);
+                    ui.spacing_mut().button_padding = Vec2::new(5.0 * self.zoom, 2.0 * self.zoom);
+
+                    match &mut node.node_type {
+                        BlueprintNodeType::Macro { actions, .. } => {
+                            let text = match lang {
+                                Language::Fr => format!("⚡ {} action(s)", actions.len()),
+                                Language::En => format!("⚡ {} action(s)", actions.len()),
+                            };
                             ui.label(
-                                egui::RichText::new("Img:")
+                                egui::RichText::new(text)
                                     .size(10.5 * self.zoom)
                                     .color(colors::TEXT_MUTED),
                             );
-                            let short_path = std::path::Path::new(image_path)
-                                .file_name()
-                                .and_then(|f| f.to_str())
-                                .unwrap_or("...");
-                            if ui
-                                .button(egui::RichText::new(short_path).size(10.5 * self.zoom))
-                                .on_hover_text(image_path.as_str())
-                                .clicked()
-                            {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Image", &["png", "bmp", "jpg"])
-                                    .pick_file()
+                        }
+                        BlueprintNodeType::ImageCondition {
+                            image_path,
+                            tolerance,
+                            timeout_ms,
+                        } => {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Img:")
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                let raw_name = std::path::Path::new(image_path)
+                                    .file_name()
+                                    .and_then(|f| f.to_str())
+                                    .unwrap_or("...");
+                                let display_name = if raw_name.chars().count() > 16 {
+                                    let truncated: String = raw_name.chars().take(14).collect();
+                                    format!("{}…", truncated)
+                                } else {
+                                    raw_name.to_string()
+                                };
+                                if ui
+                                    .add(egui::Button::new(
+                                        egui::RichText::new(display_name).size(10.5 * self.zoom),
+                                    ))
+                                    .on_hover_text(image_path.as_str())
+                                    .clicked()
                                 {
-                                    if let Some(p) = path.to_str() {
-                                        *image_path = p.to_string();
+                                    if let Some(path) = rfd::FileDialog::new()
+                                        .add_filter("Image", &["png", "bmp", "jpg"])
+                                        .pick_file()
+                                    {
+                                        if let Some(p) = path.to_str() {
+                                            *image_path = p.to_string();
+                                        }
                                     }
                                 }
-                            }
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Tol:")
-                                    .size(10.5 * self.zoom)
-                                    .color(colors::TEXT_MUTED),
-                            );
-                            ui.add(egui::DragValue::new(tolerance).range(0..=100).speed(1));
-                            ui.label(
-                                egui::RichText::new("ms:")
-                                    .size(10.5 * self.zoom)
-                                    .color(colors::TEXT_MUTED),
-                            );
-                            ui.add(egui::DragValue::new(timeout_ms).range(0..=60000).speed(50));
-                        });
-                    }
-                    BlueprintNodeType::WaitImage {
-                        image_path,
-                        timeout_ms,
-                        tolerance: _,
-                    } => {
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Img:")
-                                    .size(10.5 * self.zoom)
-                                    .color(colors::TEXT_MUTED),
-                            );
-                            let short_path = std::path::Path::new(image_path)
-                                .file_name()
-                                .and_then(|f| f.to_str())
-                                .unwrap_or("...");
-                            if ui
-                                .button(egui::RichText::new(short_path).size(10.5 * self.zoom))
-                                .on_hover_text(image_path.as_str())
-                                .clicked()
-                            {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Image", &["png", "bmp", "jpg"])
-                                    .pick_file()
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Tol:")
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(egui::DragValue::new(tolerance).range(0..=100).speed(1));
+                                ui.label(
+                                    egui::RichText::new("ms:")
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(egui::DragValue::new(timeout_ms).range(0..=60000).speed(50));
+                            });
+                        }
+                        BlueprintNodeType::WaitImage {
+                            image_path,
+                            timeout_ms,
+                            tolerance,
+                        } => {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Img:")
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                let raw_name = std::path::Path::new(image_path)
+                                    .file_name()
+                                    .and_then(|f| f.to_str())
+                                    .unwrap_or("...");
+                                let display_name = if raw_name.chars().count() > 16 {
+                                    let truncated: String = raw_name.chars().take(14).collect();
+                                    format!("{}…", truncated)
+                                } else {
+                                    raw_name.to_string()
+                                };
+                                if ui
+                                    .add(egui::Button::new(
+                                        egui::RichText::new(display_name).size(10.5 * self.zoom),
+                                    ))
+                                    .on_hover_text(image_path.as_str())
+                                    .clicked()
                                 {
-                                    if let Some(p) = path.to_str() {
-                                        *image_path = p.to_string();
+                                    if let Some(path) = rfd::FileDialog::new()
+                                        .add_filter("Image", &["png", "bmp", "jpg"])
+                                        .pick_file()
+                                    {
+                                        if let Some(p) = path.to_str() {
+                                            *image_path = p.to_string();
+                                        }
                                     }
                                 }
-                            }
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Max ms:")
-                                    .size(10.5 * self.zoom)
-                                    .color(colors::TEXT_MUTED),
-                            );
-                            ui.add(
-                                egui::DragValue::new(timeout_ms)
-                                    .range(100..=120000)
-                                    .speed(100),
-                            );
-                        });
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("Tol:")
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(egui::DragValue::new(tolerance).range(0..=100).speed(1));
+                                ui.label(
+                                    egui::RichText::new("ms:")
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(timeout_ms)
+                                        .range(100..=120000)
+                                        .speed(100),
+                                );
+                            });
+                        }
+                        BlueprintNodeType::Delay { delay_ms } => {
+                            ui.horizontal(|ui| {
+                                let label = match lang {
+                                    Language::Fr => "Délai (ms):",
+                                    Language::En => "Delay (ms):",
+                                };
+                                ui.label(
+                                    egui::RichText::new(label)
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(egui::DragValue::new(delay_ms).range(10..=60000).speed(50));
+                            });
+                        }
+                        BlueprintNodeType::Loop { count } => {
+                            ui.horizontal(|ui| {
+                                let label = match lang {
+                                    Language::Fr => "Nb (0=inf):",
+                                    Language::En => "Count (0=inf):",
+                                };
+                                ui.label(
+                                    egui::RichText::new(label)
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(egui::DragValue::new(count).range(0..=1000).speed(1));
+                            });
+                        }
+                        _ => {}
                     }
-                    BlueprintNodeType::Delay { delay_ms } => {
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Délai (ms):")
-                                    .size(11.0 * self.zoom)
-                                    .color(colors::TEXT_MUTED),
-                            );
-                            ui.add(egui::DragValue::new(delay_ms).range(10..=60000).speed(50));
-                        });
-                    }
-                    BlueprintNodeType::Loop { count } => {
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Nb (0=inf):")
-                                    .size(11.0 * self.zoom)
-                                    .color(colors::TEXT_MUTED),
-                            );
-                            ui.add(egui::DragValue::new(count).range(0..=1000).speed(1));
-                        });
-                    }
-                    _ => {}
                 },
             );
         }

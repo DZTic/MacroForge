@@ -106,12 +106,18 @@ impl<'a> ActionCard<'a> {
                 Color32::from_rgb(251, 146, 60),
                 format!("Attente de {} ms", ms),
             ),
-            ActionType::WaitImage(path, timeout) => (
-                "🖼",
-                self.lang.action_wait_image(),
-                colors::ACCENT_PURPLE_HOVER,
-                format!("{} ({}ms)", path, timeout),
-            ),
+            ActionType::WaitImage(path, timeout) => {
+                let file_name = std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or(path.as_str());
+                (
+                    "🖼",
+                    self.lang.action_wait_image(),
+                    colors::ACCENT_PURPLE_HOVER,
+                    format!("{} ({}ms)", file_name, timeout),
+                )
+            }
         };
 
         let dnd_payload_id = egui::Id::new("timeline_dnd_dragged_idx");
@@ -219,11 +225,14 @@ impl<'a> ActionCard<'a> {
                     ui.add_space(6.0);
 
                     // Détails techniques clairs et lisibles
-                    ui.label(
-                        egui::RichText::new(detail_str)
-                            .monospace()
-                            .color(colors::TEXT_PRIMARY)
-                            .size(12.5),
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(detail_str)
+                                .monospace()
+                                .color(colors::TEXT_PRIMARY)
+                                .size(12.5),
+                        )
+                        .truncate(),
                     );
 
                     // Boutons d'actions et délai alignés à droite avec espacement équilibré
