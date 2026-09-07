@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 pub mod app;
+pub mod blueprint;
 pub mod events;
 pub mod macro_core;
 pub mod ui;

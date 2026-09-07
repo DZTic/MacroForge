@@ -1087,6 +1087,90 @@ impl Language {
             Language::En => "F10: Detach target window",
         }
     }
+
+    pub fn blueprint_tab(&self) -> &'static str {
+        match self {
+            Language::Fr => "🕸️ Blueprint",
+            Language::En => "🕸️ Blueprint",
+        }
+    }
+
+    pub fn timeline_tab(&self) -> &'static str {
+        match self {
+            Language::Fr => "📋 Actions (Timeline)",
+            Language::En => "📋 Actions (Timeline)",
+        }
+    }
+
+    pub fn blueprint_create_from_macro(&self) -> &'static str {
+        match self {
+            Language::Fr => "⚡ Nœud depuis macro active",
+            Language::En => "⚡ Node from active macro",
+        }
+    }
+
+    pub fn blueprint_import_macro(&self) -> &'static str {
+        match self {
+            Language::Fr => "📂 Importer .mforge en nœud",
+            Language::En => "📂 Import .mforge as node",
+        }
+    }
+
+    pub fn blueprint_node_library(&self) -> &'static str {
+        match self {
+            Language::Fr => "Bibliothèque de Nœuds",
+            Language::En => "Node Library",
+        }
+    }
+
+    pub fn blueprint_run(&self) -> &'static str {
+        match self {
+            Language::Fr => "▶️ Lancer Blueprint",
+            Language::En => "▶️ Run Blueprint",
+        }
+    }
+
+    pub fn blueprint_stop(&self) -> &'static str {
+        match self {
+            Language::Fr => "⏹️ Arrêter Blueprint",
+            Language::En => "⏹️ Stop Blueprint",
+        }
+    }
+
+    pub fn blueprint_save(&self) -> &'static str {
+        match self {
+            Language::Fr => "💾 Sauvegarder Graphe",
+            Language::En => "💾 Save Graph",
+        }
+    }
+
+    pub fn blueprint_load(&self) -> &'static str {
+        match self {
+            Language::Fr => "📂 Ouvrir Graphe",
+            Language::En => "📂 Open Graph",
+        }
+    }
+
+    pub fn blueprint_clear(&self) -> &'static str {
+        match self {
+            Language::Fr => "🧹 Vider Graphe",
+            Language::En => "🧹 Clear Graph",
+        }
+    }
+
+    pub fn blueprint_center(&self) -> &'static str {
+        match self {
+            Language::Fr => "🎯 Centrer la vue",
+            Language::En => "🎯 Center View",
+        }
+    }
+
+    pub fn blueprint_empty_hint(&self) -> &'static str {
+        match self {
+            Language::Fr => "Glissez-déposez des nœuds ou cliquez dans la bibliothèque à gauche pour construire votre workflow.",
+            Language::En => "Drag and drop nodes or click in the library on the left to build your workflow.",
+        }
+    }
 }
 
 #[cfg(test)]

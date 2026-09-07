@@ -25,6 +25,13 @@ pub enum StudioViewMode {
     Game,
 }
 
+/// Mode de vue principal de l'application : Timeline vs Blueprint
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainViewMode {
+    Timeline,
+    Blueprint,
+}
+
 pub struct MacroForgeApp {
     rx_events: Receiver<EngineEvent>,
     is_recording: bool,
@@ -32,6 +39,12 @@ pub struct MacroForgeApp {
     loop_playback: bool,
     actions_cache: Vec<MacroAction>,
     status_message: String,
+
+    // Mode d'affichage principal (Timeline vs Blueprint)
+    main_view_mode: MainViewMode,
+    blueprint_graph: crate::blueprint::BlueprintGraph,
+    blueprint_runner: crate::blueprint::BlueprintRunnerState,
+    blueprint_canvas: crate::ui::BlueprintCanvas,
 
     // Internationalisation
     lang: Language,
@@ -103,6 +116,11 @@ impl MacroForgeApp {
             loop_playback: initial_loop,
             actions_cache: initial_actions,
             status_message: ready_msg,
+
+            main_view_mode: MainViewMode::Timeline,
+            blueprint_graph: crate::blueprint::BlueprintGraph::new(),
+            blueprint_runner: crate::blueprint::BlueprintRunnerState::new(),
+            blueprint_canvas: crate::ui::BlueprintCanvas::new(),
 
             lang,
             studio_view_mode: StudioViewMode::Split,
@@ -1034,49 +1052,82 @@ impl eframe::App for MacroForgeApp {
                         ui.separator();
                         ui.add_space(6.0);
 
-                        // Boutons d'ajout rapide d'action
-                        let key_btn = GlassButton::new(self.lang.quick_add_key())
+                        // Sélecteur d'onglets principal (Timeline ↔ Blueprint)
+                        let is_timeline = self.main_view_mode == MainViewMode::Timeline;
+                        let timeline_btn = GlassButton::new(self.lang.timeline_tab())
                             .compact(is_compact)
-                            .variant(ButtonVariant::Secondary);
-                        if ui
-                            .add(key_btn)
-                            .on_hover_text("Ajouter un événement clavier manuellement")
-                            .clicked()
-                        {
-                            self.action_modal.open_for_new(ActionModalTab::Keyboard);
+                            .selected(is_timeline)
+                            .variant(if is_timeline {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Ghost
+                            });
+                        if ui.add(timeline_btn).clicked() {
+                            self.main_view_mode = MainViewMode::Timeline;
                         }
 
-                        let mouse_btn = GlassButton::new(self.lang.quick_add_mouse())
+                        let is_blueprint = self.main_view_mode == MainViewMode::Blueprint;
+                        let blueprint_btn = GlassButton::new(self.lang.blueprint_tab())
                             .compact(is_compact)
-                            .variant(ButtonVariant::Secondary);
-                        if ui
-                            .add(mouse_btn)
-                            .on_hover_text("Ajouter un événement souris manuellement")
-                            .clicked()
-                        {
-                            self.action_modal.open_for_new(ActionModalTab::Mouse);
+                            .selected(is_blueprint)
+                            .variant(if is_blueprint {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Ghost
+                            });
+                        if ui.add(blueprint_btn).clicked() {
+                            self.main_view_mode = MainViewMode::Blueprint;
                         }
 
-                        let wait_btn = GlassButton::new(self.lang.quick_add_wait())
-                            .compact(is_compact)
-                            .variant(ButtonVariant::Secondary);
-                        if ui
-                            .add(wait_btn)
-                            .on_hover_text("Ajouter un délai de pause")
-                            .clicked()
-                        {
-                            self.action_modal.open_for_new(ActionModalTab::Wait);
-                        }
+                        if self.main_view_mode == MainViewMode::Timeline {
+                            ui.add_space(4.0);
+                            ui.separator();
+                            ui.add_space(4.0);
 
-                        let img_btn = GlassButton::new(self.lang.quick_add_image())
-                            .compact(is_compact)
-                            .variant(ButtonVariant::Secondary);
-                        if ui
-                            .add(img_btn)
-                            .on_hover_text("Ajouter une attente de détection d'image")
-                            .clicked()
-                        {
-                            self.action_modal.open_for_new(ActionModalTab::Image);
+                            // Boutons d'ajout rapide d'action
+                            let key_btn = GlassButton::new(self.lang.quick_add_key())
+                                .compact(is_compact)
+                                .variant(ButtonVariant::Secondary);
+                            if ui
+                                .add(key_btn)
+                                .on_hover_text("Ajouter un événement clavier manuellement")
+                                .clicked()
+                            {
+                                self.action_modal.open_for_new(ActionModalTab::Keyboard);
+                            }
+
+                            let mouse_btn = GlassButton::new(self.lang.quick_add_mouse())
+                                .compact(is_compact)
+                                .variant(ButtonVariant::Secondary);
+                            if ui
+                                .add(mouse_btn)
+                                .on_hover_text("Ajouter un événement souris manuellement")
+                                .clicked()
+                            {
+                                self.action_modal.open_for_new(ActionModalTab::Mouse);
+                            }
+
+                            let wait_btn = GlassButton::new(self.lang.quick_add_wait())
+                                .compact(is_compact)
+                                .variant(ButtonVariant::Secondary);
+                            if ui
+                                .add(wait_btn)
+                                .on_hover_text("Ajouter un délai de pause")
+                                .clicked()
+                            {
+                                self.action_modal.open_for_new(ActionModalTab::Wait);
+                            }
+
+                            let img_btn = GlassButton::new(self.lang.quick_add_image())
+                                .compact(is_compact)
+                                .variant(ButtonVariant::Secondary);
+                            if ui
+                                .add(img_btn)
+                                .on_hover_text("Ajouter une attente de détection d'image")
+                                .clicked()
+                            {
+                                self.action_modal.open_for_new(ActionModalTab::Image);
+                            }
                         }
 
                         // Commandes alignées à droite sans débordement
@@ -1198,29 +1249,64 @@ impl eframe::App for MacroForgeApp {
                         ui.add_space(3.0);
 
                         ui.horizontal(|ui| {
-                            let key_btn = GlassButton::new("+ Clavier")
-                                .compact(true)
-                                .variant(ButtonVariant::Secondary);
-                            if ui.add(key_btn).clicked() {
-                                self.action_modal.open_for_new(ActionModalTab::Keyboard);
+                            let is_timeline = self.main_view_mode == MainViewMode::Timeline;
+                            if ui
+                                .add(
+                                    GlassButton::new("Timeline")
+                                        .compact(true)
+                                        .selected(is_timeline)
+                                        .variant(if is_timeline {
+                                            ButtonVariant::Primary
+                                        } else {
+                                            ButtonVariant::Ghost
+                                        }),
+                                )
+                                .clicked()
+                            {
+                                self.main_view_mode = MainViewMode::Timeline;
                             }
-                            let mouse_btn = GlassButton::new("+ Souris")
-                                .compact(true)
-                                .variant(ButtonVariant::Secondary);
-                            if ui.add(mouse_btn).clicked() {
-                                self.action_modal.open_for_new(ActionModalTab::Mouse);
+                            let is_blueprint = self.main_view_mode == MainViewMode::Blueprint;
+                            if ui
+                                .add(
+                                    GlassButton::new("Blueprint")
+                                        .compact(true)
+                                        .selected(is_blueprint)
+                                        .variant(if is_blueprint {
+                                            ButtonVariant::Primary
+                                        } else {
+                                            ButtonVariant::Ghost
+                                        }),
+                                )
+                                .clicked()
+                            {
+                                self.main_view_mode = MainViewMode::Blueprint;
                             }
-                            let wait_btn = GlassButton::new("+ Pause")
-                                .compact(true)
-                                .variant(ButtonVariant::Secondary);
-                            if ui.add(wait_btn).clicked() {
-                                self.action_modal.open_for_new(ActionModalTab::Wait);
-                            }
-                            let img_btn = GlassButton::new("+ Image")
-                                .compact(true)
-                                .variant(ButtonVariant::Secondary);
-                            if ui.add(img_btn).clicked() {
-                                self.action_modal.open_for_new(ActionModalTab::Image);
+
+                            if self.main_view_mode == MainViewMode::Timeline {
+                                let key_btn = GlassButton::new("+ Clavier")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Secondary);
+                                if ui.add(key_btn).clicked() {
+                                    self.action_modal.open_for_new(ActionModalTab::Keyboard);
+                                }
+                                let mouse_btn = GlassButton::new("+ Souris")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Secondary);
+                                if ui.add(mouse_btn).clicked() {
+                                    self.action_modal.open_for_new(ActionModalTab::Mouse);
+                                }
+                                let wait_btn = GlassButton::new("+ Pause")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Secondary);
+                                if ui.add(wait_btn).clicked() {
+                                    self.action_modal.open_for_new(ActionModalTab::Wait);
+                                }
+                                let img_btn = GlassButton::new("+ Image")
+                                    .compact(true)
+                                    .variant(ButtonVariant::Secondary);
+                                if ui.add(img_btn).clicked() {
+                                    self.action_modal.open_for_new(ActionModalTab::Image);
+                                }
                             }
                         });
                     });
@@ -1264,7 +1350,39 @@ impl eframe::App for MacroForgeApp {
                         }
 
                         // Bouton Jouer / Arrêt Urgence
-                        if !self.is_playing {
+                        let is_bp = self.main_view_mode == MainViewMode::Blueprint;
+                        let is_bp_running = self.blueprint_runner.is_active();
+                        if is_bp {
+                            if !is_bp_running {
+                                let btn = GlassButton::new(self.lang.blueprint_run())
+                                    .icon("▶")
+                                    .shortcut("F7")
+                                    .variant(ButtonVariant::Success);
+                                if ui
+                                    .add(btn)
+                                    .on_hover_text("Exécuter le graphe de Blueprint (F7)")
+                                    .clicked()
+                                {
+                                    self.blueprint_runner
+                                        .run_graph(self.blueprint_graph.clone(), self.lang);
+                                }
+                            } else {
+                                let btn = GlassButton::new(self.lang.emergency_stop_btn())
+                                    .icon("⏹")
+                                    .shortcut("F4")
+                                    .variant(ButtonVariant::Warning);
+                                if ui
+                                    .add(btn)
+                                    .on_hover_text(
+                                        "Arrêter immédiatement l'exécution du Blueprint (F4)",
+                                    )
+                                    .clicked()
+                                {
+                                    self.blueprint_runner.stop();
+                                    macro_core::emergency_stop();
+                                }
+                            }
+                        } else if !self.is_playing {
                             let btn = GlassButton::new(self.lang.play_btn())
                                 .icon("▶")
                                 .shortcut("F7")
@@ -1469,7 +1587,31 @@ impl eframe::App for MacroForgeApp {
                                 }
                             }
 
-                            if !self.is_playing {
+                            let is_bp = self.main_view_mode == MainViewMode::Blueprint;
+                            let is_bp_running = self.blueprint_runner.is_active();
+                            if is_bp {
+                                if !is_bp_running {
+                                    let btn = GlassButton::new(self.lang.blueprint_run())
+                                        .icon("▶")
+                                        .shortcut("F7")
+                                        .compact(true)
+                                        .variant(ButtonVariant::Success);
+                                    if ui.add(btn).clicked() {
+                                        self.blueprint_runner
+                                            .run_graph(self.blueprint_graph.clone(), self.lang);
+                                    }
+                                } else {
+                                    let btn = GlassButton::new(self.lang.emergency_stop_btn())
+                                        .icon("⏹")
+                                        .shortcut("F4")
+                                        .compact(true)
+                                        .variant(ButtonVariant::Warning);
+                                    if ui.add(btn).clicked() {
+                                        self.blueprint_runner.stop();
+                                        macro_core::emergency_stop();
+                                    }
+                                }
+                            } else if !self.is_playing {
                                 let btn = GlassButton::new(self.lang.play_btn())
                                     .icon("▶")
                                     .shortcut("F7")
@@ -1627,86 +1769,102 @@ impl eframe::App for MacroForgeApp {
                 });
             });
 
-        // 4. Panneau central (Timeline, Mode Studio Split ou Viewport Dédié)
+        // 4. Panneau central (Timeline, Mode Studio Split ou Blueprint)
         egui::CentralPanel::default()
             .frame(theme::central_panel_frame())
             .show(ctx, |ui| {
-                let is_embedded = macro_core::get_window_lock().embed_in_macroforge
-                    || macro_core::is_target_window_embedded();
-
-                if is_embedded {
-                    // Sélecteur de mode de vue Studio
-                    ui.horizontal(|ui| {
-                        let modes = [
-                            (StudioViewMode::Split, self.lang.studio_mode_split()),
-                            (StudioViewMode::Timeline, self.lang.studio_mode_timeline()),
-                            (StudioViewMode::Game, self.lang.studio_mode_game()),
-                        ];
-
-                        for (mode, lbl) in modes {
-                            let is_active = self.studio_view_mode == mode;
-                            let btn = GlassButton::new(lbl)
-                                .compact(true)
-                                .selected(is_active)
-                                .variant(if is_active {
-                                    ButtonVariant::Primary
-                                } else {
-                                    ButtonVariant::Ghost
-                                });
-                            if ui.add(btn).clicked() {
-                                self.studio_view_mode = mode;
-                            }
-                        }
-                    });
-
-                    ui.add_space(4.0);
-                    ui.separator();
-                    ui.add_space(4.0);
-                }
-
-                if is_embedded && self.studio_view_mode == StudioViewMode::Split {
-                    // Mode Studio Split : Timeline à gauche, Viewport à droite
-                    let total_width = ui.available_width();
-                    let timeline_width = (total_width * 0.44).clamp(380.0, 520.0);
-
-                    ui.horizontal_top(|ui| {
-                        // Volet gauche : Timeline
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(timeline_width, ui.available_height()),
-                            egui::Layout::top_down(egui::Align::Min),
-                            |ui| {
-                                self.render_timeline_ui(ui, ctx);
-                            },
-                        );
-
-                        ui.add_space(8.0);
-                        ui.separator();
-                        ui.add_space(8.0);
-
-                        // Volet droit : Viewport
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(ui.available_width(), ui.available_height()),
-                            egui::Layout::top_down(egui::Align::Min),
-                            |ui| {
-                                self.render_embedded_viewport_ui(ui, ctx);
-                            },
-                        );
-                    });
-                } else if is_embedded && self.studio_view_mode == StudioViewMode::Game {
-                    // Mode Jeu seul (Viewport plein panneau central)
-                    self.render_embedded_viewport_ui(ui, ctx);
-                } else {
-                    // Mode Timeline standard (ou fenêtre non intégrée)
+                if self.main_view_mode == MainViewMode::Blueprint {
+                    let is_embedded = macro_core::get_window_lock().embed_in_macroforge
+                        || macro_core::is_target_window_embedded();
                     if is_embedded {
-                        // Masquer temporairement la fenêtre enfant pour ne pas recouvrir egui
+                        // Masquer temporairement la fenêtre enfant pour ne pas recouvrir le canevas
                         macro_core::update_embedded_viewport_bounds(0, 0, 0, 0, false);
                     }
-                    self.render_timeline_ui(ui, ctx);
+                    self.blueprint_canvas.render(
+                        ui,
+                        &mut self.blueprint_graph,
+                        &self.blueprint_runner,
+                        &self.actions_cache,
+                        self.lang,
+                    );
+                } else {
+                    let is_embedded = macro_core::get_window_lock().embed_in_macroforge
+                        || macro_core::is_target_window_embedded();
+
+                    if is_embedded {
+                        // Sélecteur de mode de vue Studio
+                        ui.horizontal(|ui| {
+                            let modes = [
+                                (StudioViewMode::Split, self.lang.studio_mode_split()),
+                                (StudioViewMode::Timeline, self.lang.studio_mode_timeline()),
+                                (StudioViewMode::Game, self.lang.studio_mode_game()),
+                            ];
+
+                            for (mode, lbl) in modes {
+                                let is_active = self.studio_view_mode == mode;
+                                let btn = GlassButton::new(lbl)
+                                    .compact(true)
+                                    .selected(is_active)
+                                    .variant(if is_active {
+                                        ButtonVariant::Primary
+                                    } else {
+                                        ButtonVariant::Ghost
+                                    });
+                                if ui.add(btn).clicked() {
+                                    self.studio_view_mode = mode;
+                                }
+                            }
+                        });
+
+                        ui.add_space(4.0);
+                        ui.separator();
+                        ui.add_space(4.0);
+                    }
+
+                    if is_embedded && self.studio_view_mode == StudioViewMode::Split {
+                        // Mode Studio Split : Timeline à gauche, Viewport à droite
+                        let total_width = ui.available_width();
+                        let timeline_width = (total_width * 0.44).clamp(380.0, 520.0);
+
+                        ui.horizontal_top(|ui| {
+                            // Volet gauche : Timeline
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(timeline_width, ui.available_height()),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    self.render_timeline_ui(ui, ctx);
+                                },
+                            );
+
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.add_space(8.0);
+
+                            // Volet droit : Viewport
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(ui.available_width(), ui.available_height()),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    self.render_embedded_viewport_ui(ui, ctx);
+                                },
+                            );
+                        });
+                    } else if is_embedded && self.studio_view_mode == StudioViewMode::Game {
+                        // Mode Jeu seul (Viewport plein panneau central)
+                        self.render_embedded_viewport_ui(ui, ctx);
+                    } else {
+                        // Mode Timeline standard (ou fenêtre non intégrée)
+                        if is_embedded {
+                            // Masquer temporairement la fenêtre enfant pour ne pas recouvrir egui
+                            macro_core::update_embedded_viewport_bounds(0, 0, 0, 0, false);
+                        }
+                        self.render_timeline_ui(ui, ctx);
+                    }
                 }
             });
 
-        // Demander un repaint régulier si en enregistrement ou lecture
-        if self.is_recording || self.is_playing {
+        // Demander un repaint régulier si en enregistrement ou lecture (macro ou blueprint)
+        if self.is_recording || self.is_playing || self.blueprint_runner.is_active() {
             ctx.request_repaint_after(std::time::Duration::from_millis(33));
         }
     }
@@ -1727,6 +1885,10 @@ mod tests {
             loop_playback: false,
             actions_cache: Vec::new(),
             status_message: "Ready".to_string(),
+            main_view_mode: MainViewMode::Timeline,
+            blueprint_graph: crate::blueprint::BlueprintGraph::new(),
+            blueprint_runner: crate::blueprint::BlueprintRunnerState::new(),
+            blueprint_canvas: crate::ui::BlueprintCanvas::new(),
             lang: Language::Fr,
             studio_view_mode: StudioViewMode::Split,
             hide_mouse_moves: false,
@@ -1777,6 +1939,10 @@ mod tests {
             loop_playback: false,
             actions_cache: actions,
             status_message: "Ready".to_string(),
+            main_view_mode: MainViewMode::Timeline,
+            blueprint_graph: crate::blueprint::BlueprintGraph::new(),
+            blueprint_runner: crate::blueprint::BlueprintRunnerState::new(),
+            blueprint_canvas: crate::ui::BlueprintCanvas::new(),
             lang: Language::Fr,
             studio_view_mode: StudioViewMode::Split,
             hide_mouse_moves: false,
