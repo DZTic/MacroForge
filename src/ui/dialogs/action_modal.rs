@@ -90,12 +90,19 @@ impl ActionEditorModal {
         self.target = ActionModalTarget::New;
         self.current_tab = default_tab;
         self.is_listening_key = false;
+        if default_tab == ActionModalTab::Image {
+            self.delay_ms = 0;
+        }
     }
 
     pub fn open_for_edit(&mut self, index: usize, action: &MacroAction) {
         self.is_open = true;
         self.target = ActionModalTarget::Edit(index);
-        self.delay_ms = action.delay_ms;
+        self.delay_ms = if matches!(action.action_type, ActionType::WaitImage(..)) {
+            0
+        } else {
+            action.delay_ms
+        };
         self.is_listening_key = false;
 
         match &action.action_type {
@@ -153,35 +160,41 @@ impl ActionEditorModal {
                 self.current_tab = ActionModalTab::Image;
                 self.image_path = path.clone();
                 self.image_timeout_ms = *timeout;
+                self.delay_ms = 0;
             }
         }
     }
 
     pub fn build_action(&self) -> MacroAction {
-        let action_type = match self.current_tab {
+        let (action_type, delay_ms) = match self.current_tab {
             ActionModalTab::Keyboard => {
-                if self.is_key_press {
+                let act = if self.is_key_press {
                     ActionType::KeyPress(self.key_name.clone(), self.vk_code, self.is_extended)
                 } else {
                     ActionType::KeyRelease(self.key_name.clone(), self.vk_code, self.is_extended)
-                }
+                };
+                (act, self.delay_ms)
             }
-            ActionModalTab::Mouse => match self.mouse_sub_type {
-                0 => ActionType::MousePress(self.mouse_button, self.mouse_x, self.mouse_y),
-                1 => ActionType::MouseRelease(self.mouse_button, self.mouse_x, self.mouse_y),
-                2 => ActionType::MouseMove(self.mouse_x, self.mouse_y),
-                3 => ActionType::MouseMoveRelative(self.mouse_dx, self.mouse_dy),
-                _ => ActionType::Scroll(self.scroll_dx, self.scroll_dy),
-            },
-            ActionModalTab::Wait => ActionType::Wait(self.wait_duration_ms),
-            ActionModalTab::Image => {
-                ActionType::WaitImage(self.image_path.clone(), self.image_timeout_ms)
+            ActionModalTab::Mouse => {
+                let act = match self.mouse_sub_type {
+                    0 => ActionType::MousePress(self.mouse_button, self.mouse_x, self.mouse_y),
+                    1 => ActionType::MouseRelease(self.mouse_button, self.mouse_x, self.mouse_y),
+                    2 => ActionType::MouseMove(self.mouse_x, self.mouse_y),
+                    3 => ActionType::MouseMoveRelative(self.mouse_dx, self.mouse_dy),
+                    _ => ActionType::Scroll(self.scroll_dx, self.scroll_dy),
+                };
+                (act, self.delay_ms)
             }
+            ActionModalTab::Wait => (ActionType::Wait(self.wait_duration_ms), self.delay_ms),
+            ActionModalTab::Image => (
+                ActionType::WaitImage(self.image_path.clone(), self.image_timeout_ms),
+                0,
+            ),
         };
 
         MacroAction {
             action_type,
-            delay_ms: self.delay_ms,
+            delay_ms,
         }
     }
 
@@ -257,6 +270,9 @@ impl ActionEditorModal {
                         if ui.add(btn).clicked() {
                             self.current_tab = tab;
                             self.is_listening_key = false;
+                            if tab == ActionModalTab::Image {
+                                self.delay_ms = 0;
+                            }
                         }
                     }
                 });
@@ -279,41 +295,45 @@ impl ActionEditorModal {
                             ActionModalTab::Image => self.render_image_fields(ui, lang),
                         }
 
-                        ui.add_space(8.0);
-                        ui.separator();
-                        ui.add_space(6.0);
+                        // Le délai avant exécution s'applique au clavier, souris et pause,
+                        // mais est masqué pour l'image afin d'enchaîner directement les actions dès détection.
+                        if self.current_tab != ActionModalTab::Image {
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.add_space(6.0);
 
-                        // Champ délai universel avec présélections rapides
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new(lang.delay_label())
-                                    .color(colors::TEXT_PRIMARY)
-                                    .size(13.0),
-                            );
-                            ui.add(
-                                DragValue::new(&mut self.delay_ms)
-                                    .range(0..=60000)
-                                    .speed(5.0)
-                                    .suffix(" ms"),
-                            );
+                            // Champ délai universel avec présélections rapides
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(lang.delay_label())
+                                        .color(colors::TEXT_PRIMARY)
+                                        .size(13.0),
+                                );
+                                ui.add(
+                                    DragValue::new(&mut self.delay_ms)
+                                        .range(0..=60000)
+                                        .speed(5.0)
+                                        .suffix(" ms"),
+                                );
 
-                            let quick_delays = [
-                                (0, "0ms"),
-                                (5, "5ms"),
-                                (10, "10ms"),
-                                (25, "25ms"),
-                                (50, "50ms"),
-                                (100, "100ms"),
-                            ];
-                            for &(d, lbl) in &quick_delays {
-                                let d_btn = GlassButton::new(lbl)
-                                    .compact(true)
-                                    .variant(ButtonVariant::Secondary);
-                                if ui.add(d_btn).clicked() {
-                                    self.delay_ms = d;
+                                let quick_delays = [
+                                    (0, "0ms"),
+                                    (5, "5ms"),
+                                    (10, "10ms"),
+                                    (25, "25ms"),
+                                    (50, "50ms"),
+                                    (100, "100ms"),
+                                ];
+                                for &(d, lbl) in &quick_delays {
+                                    let d_btn = GlassButton::new(lbl)
+                                        .compact(true)
+                                        .variant(ButtonVariant::Secondary);
+                                    if ui.add(d_btn).clicked() {
+                                        self.delay_ms = d;
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        }
                     });
 
                 ui.add_space(10.0);
@@ -828,5 +848,43 @@ mod tests {
         assert_eq!(name, "ArrowDown");
         assert_eq!(vk, 0x28);
         assert!(ext);
+    }
+
+    #[test]
+    fn test_action_modal_build_image_zero_delay() {
+        let mut modal = ActionEditorModal::new();
+        modal.delay_ms = 550; // Simule un résidu de délai
+        modal.open_for_new(ActionModalTab::Image);
+        assert_eq!(modal.delay_ms, 0);
+
+        modal.image_path = "embedded://extreme.png".to_string();
+        modal.image_timeout_ms = 3000;
+        modal.delay_ms = 550; // Même si modifié manuellement par mégarde
+
+        let action = modal.build_action();
+        assert_eq!(action.delay_ms, 0);
+        assert_eq!(
+            action.action_type,
+            ActionType::WaitImage("embedded://extreme.png".to_string(), 3000)
+        );
+    }
+
+    #[test]
+    fn test_action_modal_edit_image_resets_delay() {
+        let original = MacroAction {
+            action_type: ActionType::WaitImage("test.png".into(), 2000),
+            delay_ms: 550, // Macro existante avec un délai résiduel
+        };
+
+        let mut modal = ActionEditorModal::new();
+        modal.open_for_edit(1, &original);
+
+        assert!(modal.is_open);
+        assert_eq!(modal.target, ActionModalTarget::Edit(1));
+        assert_eq!(modal.current_tab, ActionModalTab::Image);
+        assert_eq!(modal.delay_ms, 0);
+
+        let rebuilt = modal.build_action();
+        assert_eq!(rebuilt.delay_ms, 0);
     }
 }

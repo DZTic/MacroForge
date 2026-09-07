@@ -1330,7 +1330,11 @@ pub fn play_macro() {
                     break 'main_loop;
                 }
 
-                total_recorded_delay += action.delay_ms;
+                let action_delay = match action.action_type {
+                    ActionType::WaitImage(..) => 0,
+                    _ => action.delay_ms,
+                };
+                total_recorded_delay += action_delay;
 
                 #[cfg(windows)]
                 if window_lock_cfg.enabled && window_lock_cfg.enforce_continuous_clamp {
@@ -2415,18 +2419,27 @@ pub fn set_actions(actions: Vec<MacroAction>) {
     state.actions = actions;
 }
 
-pub fn add_action(action: MacroAction) {
+pub fn add_action(mut action: MacroAction) {
+    if matches!(action.action_type, ActionType::WaitImage(..)) {
+        action.delay_ms = 0;
+    }
     let mut state = MACRO_STATE.lock().unwrap();
     state.actions.push(action);
 }
 
-pub fn insert_action(index: usize, action: MacroAction) {
+pub fn insert_action(index: usize, mut action: MacroAction) {
+    if matches!(action.action_type, ActionType::WaitImage(..)) {
+        action.delay_ms = 0;
+    }
     let mut state = MACRO_STATE.lock().unwrap();
     let safe_idx = index.min(state.actions.len());
     state.actions.insert(safe_idx, action);
 }
 
-pub fn update_action(index: usize, action: MacroAction) -> bool {
+pub fn update_action(index: usize, mut action: MacroAction) -> bool {
+    if matches!(action.action_type, ActionType::WaitImage(..)) {
+        action.delay_ms = 0;
+    }
     let mut state = MACRO_STATE.lock().unwrap();
     if index < state.actions.len() {
         state.actions[index] = action;
