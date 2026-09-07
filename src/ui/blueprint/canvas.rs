@@ -584,9 +584,9 @@ impl BlueprintCanvas {
         let mut col = 0;
         while x < rect.max.x {
             let stroke = if col % 4 == 0 {
-                Stroke::new(1.0, major_color)
+                Stroke::new(1.0_f32, major_color)
             } else {
-                Stroke::new(0.5, subtle_color)
+                Stroke::new(0.5_f32, subtle_color)
             };
             painter.line_segment([Pos2::new(x, rect.min.y), Pos2::new(x, rect.max.y)], stroke);
             x += grid_size;
@@ -597,9 +597,9 @@ impl BlueprintCanvas {
         let mut row = 0;
         while y < rect.max.y {
             let stroke = if row % 4 == 0 {
-                Stroke::new(1.0, major_color)
+                Stroke::new(1.0_f32, major_color)
             } else {
-                Stroke::new(0.5, subtle_color)
+                Stroke::new(0.5_f32, subtle_color)
             };
             painter.line_segment([Pos2::new(rect.min.x, y), Pos2::new(rect.max.x, y)], stroke);
             y += grid_size;
@@ -658,7 +658,7 @@ impl BlueprintCanvas {
                 [from_pos, cp1, cp2, to_pos],
                 false,
                 Color32::TRANSPARENT,
-                Stroke::new(stroke_width + 4.0, glow_color),
+                Stroke::new(stroke_width + 4.0_f32, glow_color),
             ));
         }
 
@@ -826,7 +826,7 @@ impl BlueprintCanvas {
                 },
                 pin_color,
             );
-            painter.circle_stroke(pin_center, pin_radius, Stroke::new(1.0, Color32::WHITE));
+            painter.circle_stroke(pin_center, pin_radius, Stroke::new(1.0_f32, Color32::WHITE));
 
             painter.text(
                 Pos2::new(pin_center.x + 10.0 * self.zoom, pin_center.y),
@@ -881,7 +881,7 @@ impl BlueprintCanvas {
                 },
                 pin_color,
             );
-            painter.circle_stroke(pin_center, pin_radius, Stroke::new(1.0, Color32::WHITE));
+            painter.circle_stroke(pin_center, pin_radius, Stroke::new(1.0_f32, Color32::WHITE));
 
             painter.text(
                 Pos2::new(pin_center.x - 10.0 * self.zoom, pin_center.y),
