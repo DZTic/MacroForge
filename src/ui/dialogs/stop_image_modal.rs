@@ -48,7 +48,7 @@ impl StopImageConfigModal {
             .frame(theme::modal_frame())
             .collapsible(false)
             .resizable(false)
-            .default_size(Vec2::new(490.0, 270.0))
+            .default_size(Vec2::new(520.0, 270.0))
             .anchor(egui::Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.add_space(2.0);
