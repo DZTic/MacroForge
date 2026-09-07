@@ -277,17 +277,19 @@ impl<'a> ActionCard<'a> {
 
                         ui.add_space(8.0);
 
-                        // 5. Ajustement direct du délai
-                        let mut cur_delay = self.action.delay_ms;
-                        let delay_resp = ui.add(
-                            DragValue::new(&mut cur_delay)
-                                .range(0..=60000)
-                                .speed(5.0)
-                                .prefix("+")
-                                .suffix("ms"),
-                        );
-                        if delay_resp.changed() {
-                            event = Some(ActionCardEvent::DelayChanged(self.index, cur_delay));
+                        // 5. Ajustement direct du délai (masqué pour la détection d'image car enchaînement direct à 0ms)
+                        if !matches!(self.action.action_type, ActionType::WaitImage(..)) {
+                            let mut cur_delay = self.action.delay_ms;
+                            let delay_resp = ui.add(
+                                DragValue::new(&mut cur_delay)
+                                    .range(0..=60000)
+                                    .speed(5.0)
+                                    .prefix("+")
+                                    .suffix("ms"),
+                            );
+                            if delay_resp.changed() {
+                                event = Some(ActionCardEvent::DelayChanged(self.index, cur_delay));
+                            }
                         }
                     });
                 });
