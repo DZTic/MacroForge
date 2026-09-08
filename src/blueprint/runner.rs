@@ -181,9 +181,9 @@ impl BlueprintRunnerState {
                             if check_stopped() {
                                 break;
                             }
-                            if let Some(pos) = macro_core::find_image_coords_with_tolerance(
-                                image_path, *tolerance,
-                            ) {
+                            if let Some(pos) =
+                                macro_core::find_image_coords_with_tolerance(image_path, *tolerance)
+                            {
                                 matched_pos = Some(pos);
                                 break;
                             }
@@ -204,7 +204,10 @@ impl BlueprintRunnerState {
                                     format!("✅ Image détectée à ({}, {}) ! Branche [Match] sélectionnée.", pos.0, pos.1)
                                 }
                                 Language::En => {
-                                    format!("✅ Image found at ({}, {})! [Match] branch selected.", pos.0, pos.1)
+                                    format!(
+                                        "✅ Image found at ({}, {})! [Match] branch selected.",
+                                        pos.0, pos.1
+                                    )
                                 }
                             };
                             set_status(&msg);
@@ -246,9 +249,9 @@ impl BlueprintRunnerState {
                             if check_stopped() {
                                 break;
                             }
-                            if let Some(pos) = macro_core::find_image_coords_with_tolerance(
-                                image_path, *tolerance,
-                            ) {
+                            if let Some(pos) =
+                                macro_core::find_image_coords_with_tolerance(image_path, *tolerance)
+                            {
                                 found_pos = Some(pos);
                                 break;
                             }
@@ -347,10 +350,12 @@ impl BlueprintRunnerState {
                         } else {
                             let fail_msg = match lang {
                                 Language::Fr => {
-                                    "❌ Clic annulé : aucune image cible détectée. Branche [Échec].".to_string()
+                                    "❌ Clic annulé : aucune image cible détectée. Branche [Échec]."
+                                        .to_string()
                                 }
                                 Language::En => {
-                                    "❌ Click aborted: no target image detected. [Failed] branch.".to_string()
+                                    "❌ Click aborted: no target image detected. [Failed] branch."
+                                        .to_string()
                                 }
                             };
                             set_status(&fail_msg);
@@ -723,6 +728,8 @@ mod tests {
 
         assert!(!runner.is_active());
         let status = runner.get_status();
-        assert!(status.contains("terminée") || status.contains("Échec") || status.contains("arrêt"));
+        assert!(
+            status.contains("terminée") || status.contains("Échec") || status.contains("arrêt")
+        );
     }
 }

@@ -1267,13 +1267,19 @@ mod tests {
             en.emergency_detach_shortcut_hint()
         );
         assert_ne!(fr.blueprint_click_image(), en.blueprint_click_image());
-        assert_ne!(fr.blueprint_click_coordinates(), en.blueprint_click_coordinates());
+        assert_ne!(
+            fr.blueprint_click_coordinates(),
+            en.blueprint_click_coordinates()
+        );
         assert_ne!(fr.blueprint_move_cursor(), en.blueprint_move_cursor());
         assert_ne!(fr.blueprint_key_press(), en.blueprint_key_press());
         assert_ne!(fr.blueprint_random_delay(), en.blueprint_random_delay());
         assert_ne!(fr.blueprint_mouse_scroll(), en.blueprint_mouse_scroll());
         assert_ne!(fr.blueprint_capture_cursor(), en.blueprint_capture_cursor());
-        assert_ne!(fr.blueprint_last_detected_image(), en.blueprint_last_detected_image());
+        assert_ne!(
+            fr.blueprint_last_detected_image(),
+            en.blueprint_last_detected_image()
+        );
     }
 
     #[test]

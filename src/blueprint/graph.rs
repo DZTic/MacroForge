@@ -79,11 +79,7 @@ pub enum BlueprintNodeType {
     },
     /// Déplace le curseur de la souris (absolu ou relatif)
     /// Sortie 0: Suivant
-    MouseMove {
-        x: i32,
-        y: i32,
-        relative: bool,
-    },
+    MouseMove { x: i32, y: i32, relative: bool },
     /// Simule l'appui sur une touche clavier
     /// Sortie 0: Suivant
     KeyPress {
@@ -94,15 +90,10 @@ pub enum BlueprintNodeType {
     },
     /// Pause aléatoire entre min_ms et max_ms
     /// Sortie 0: Suivant
-    RandomDelay {
-        min_ms: u64,
-        max_ms: u64,
-    },
+    RandomDelay { min_ms: u64, max_ms: u64 },
     /// Défilement molette souris (steps > 0 haut, steps < 0 bas)
     /// Sortie 0: Suivant
-    MouseScroll {
-        steps: i32,
-    },
+    MouseScroll { steps: i32 },
     /// Pause temporelle en millisecondes
     Delay { delay_ms: u64 },
     /// Boucle d'exécution (count = 0 pour boucle infinie)
@@ -225,7 +216,9 @@ impl BlueprintNodeType {
 
     pub fn min_dimensions(&self) -> (f32, f32) {
         match self {
-            BlueprintNodeType::ClickImage { use_last_detected, .. } => {
+            BlueprintNodeType::ClickImage {
+                use_last_detected, ..
+            } => {
                 if *use_last_detected {
                     (260.0, 160.0)
                 } else {
@@ -692,10 +685,7 @@ mod tests {
         assert_eq!(click_coord.input_pins(Language::Fr).len(), 1);
         assert_eq!(click_coord.output_pins(Language::Fr).len(), 1);
 
-        assert_eq!(
-            BlueprintClickType::Left.label(Language::Fr),
-            "Clic Gauche"
-        );
+        assert_eq!(BlueprintClickType::Left.label(Language::Fr), "Clic Gauche");
         assert_eq!(
             BlueprintClickType::DoubleLeft.label(Language::En),
             "Double Click"
