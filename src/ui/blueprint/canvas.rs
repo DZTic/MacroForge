@@ -1,10 +1,27 @@
-use crate::blueprint::graph::{BlueprintGraph, BlueprintNode, BlueprintNodeType, NodeId, PinId};
+use crate::blueprint::graph::{
+    BlueprintClickType, BlueprintGraph, BlueprintNode, BlueprintNodeType, NodeId, PinId,
+};
 use crate::blueprint::runner::BlueprintRunnerState;
 use crate::macro_core::MacroAction;
 use crate::ui::i18n::Language;
 use crate::ui::theme::colors;
 use crate::ui::widgets::{ButtonVariant, GlassButton};
 use eframe::egui::{self, epaint::CubicBezierShape, Color32, Pos2, Rect, Rounding, Stroke, Vec2};
+
+fn capture_cursor() -> Option<(i32, i32)> {
+    #[cfg(windows)]
+    {
+        use winapi::shared::windef::POINT;
+        use winapi::um::winuser::GetCursorPos;
+        let mut pt = POINT { x: 0, y: 0 };
+        unsafe {
+            if GetCursorPos(&mut pt) != 0 {
+                return Some((pt.x, pt.y));
+            }
+        }
+    }
+    None
+}
 
 pub struct BlueprintCanvas {
     pub pan: [f32; 2],
@@ -359,11 +376,10 @@ impl BlueprintCanvas {
         ui.add_space(8.0);
 
         // Blocs prédéfinis de la bibliothèque
-        let template_items: Vec<(&'static str, &'static str, BlueprintNodeType)> = vec![
-            ("🟢", "Départ", BlueprintNodeType::Start),
+        let template_items: Vec<(&'static str, BlueprintNodeType)> = vec![
+            ("🟢", BlueprintNodeType::Start),
             (
                 "🟣",
-                "Condition Image",
                 BlueprintNodeType::ImageCondition {
                     image_path: "embedded://extreme.png".to_string(),
                     tolerance: 25,
@@ -372,7 +388,6 @@ impl BlueprintCanvas {
             ),
             (
                 "🔷",
-                "Attente Image",
                 BlueprintNodeType::WaitImage {
                     image_path: "embedded://extreme.png".to_string(),
                     timeout_ms: 5000,
@@ -380,24 +395,75 @@ impl BlueprintCanvas {
                 },
             ),
             (
+                "🎯",
+                BlueprintNodeType::ClickImage {
+                    use_last_detected: true,
+                    image_path: "embedded://extreme.png".to_string(),
+                    tolerance: 25,
+                    timeout_ms: 3000,
+                    click_type: BlueprintClickType::Left,
+                    offset_x: 0,
+                    offset_y: 0,
+                },
+            ),
+            (
+                "📍",
+                BlueprintNodeType::ClickCoordinate {
+                    x: 500,
+                    y: 500,
+                    click_type: BlueprintClickType::Left,
+                    delay_after_ms: 50,
+                },
+            ),
+            (
+                "🖱️",
+                BlueprintNodeType::MouseMove {
+                    x: 500,
+                    y: 500,
+                    relative: false,
+                },
+            ),
+            (
+                "⌨️",
+                BlueprintNodeType::KeyPress {
+                    key_name: "Space".to_string(),
+                    vk_code: 32,
+                    is_extended: false,
+                    hold_ms: 30,
+                },
+            ),
+            (
+                "🎲",
+                BlueprintNodeType::RandomDelay {
+                    min_ms: 200,
+                    max_ms: 800,
+                },
+            ),
+            ("📜", BlueprintNodeType::MouseScroll { steps: -3 }),
+            (
                 "🟠",
-                "Pause / Délai",
                 BlueprintNodeType::Delay { delay_ms: 1000 },
             ),
-            ("🟡", "Boucle", BlueprintNodeType::Loop { count: 3 }),
-            ("🔴", "Arrêt", BlueprintNodeType::Stop),
+            ("🟡", BlueprintNodeType::Loop { count: 3 }),
+            ("🔴", BlueprintNodeType::Stop),
         ];
 
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                for (icon, label, node_type) in template_items {
-                    let display_label = format!("{} {}", icon, label);
+                for (icon, node_type) in template_items {
+                    let title = node_type.default_title(lang);
+                    let display_label = format!("{} {}", icon, title);
                     let item_btn = GlassButton::new(&display_label).variant(ButtonVariant::Ghost);
+
+                    let hover_tip = match lang {
+                        Language::Fr => "Cliquer pour insérer ce nœud sur le canevas",
+                        Language::En => "Click to insert this node onto the canvas",
+                    };
 
                     if ui
                         .add(item_btn)
-                        .on_hover_text("Cliquer pour insérer ce nœud sur le canevas")
+                        .on_hover_text(hover_tip)
                         .clicked()
                     {
                         let target_pos = [
@@ -721,6 +787,12 @@ impl BlueprintCanvas {
             BlueprintNodeType::Macro { .. } => colors::ACCENT_PRIMARY,
             BlueprintNodeType::ImageCondition { .. } => colors::ACCENT_PURPLE,
             BlueprintNodeType::WaitImage { .. } => colors::ACCENT_CYAN,
+            BlueprintNodeType::ClickImage { .. } => Color32::from_rgb(217, 70, 239), // Rose/Fuchsia
+            BlueprintNodeType::ClickCoordinate { .. } => Color32::from_rgb(14, 165, 233), // Bleu ciel
+            BlueprintNodeType::MouseMove { .. } => Color32::from_rgb(99, 102, 241), // Indigo
+            BlueprintNodeType::KeyPress { .. } => Color32::from_rgb(168, 85, 247), // Violet
+            BlueprintNodeType::RandomDelay { .. } => Color32::from_rgb(245, 158, 11), // Ambre
+            BlueprintNodeType::MouseScroll { .. } => Color32::from_rgb(20, 184, 166), // Sarcelle (Teal)
             BlueprintNodeType::Delay { .. } => colors::ACCENT_WARNING,
             BlueprintNodeType::Loop { .. } => Color32::from_rgb(234, 179, 8),
             BlueprintNodeType::Stop => colors::ACCENT_DANGER,
@@ -1076,6 +1148,228 @@ impl BlueprintCanvas {
                                         .color(colors::TEXT_MUTED),
                                 );
                                 ui.add(egui::DragValue::new(count).range(0..=1000).speed(1));
+                            });
+                        }
+                        BlueprintNodeType::ClickImage {
+                            use_last_detected,
+                            image_path,
+                            tolerance,
+                            timeout_ms,
+                            click_type,
+                            offset_x,
+                            offset_y,
+                        } => {
+                            ui.horizontal(|ui| {
+                                let chk_label = match lang {
+                                    Language::Fr => "Dernière image trouvée",
+                                    Language::En => "Last matched image",
+                                };
+                                ui.checkbox(use_last_detected, egui::RichText::new(chk_label).size(10.5 * self.zoom));
+                            });
+
+                            if !*use_last_detected {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Img:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                    let raw_name = std::path::Path::new(image_path).file_name().and_then(|f| f.to_str()).unwrap_or("...");
+                                    let display_name = if raw_name.chars().count() > 14 {
+                                        let truncated: String = raw_name.chars().take(12).collect();
+                                        format!("{}…", truncated)
+                                    } else {
+                                        raw_name.to_string()
+                                    };
+                                    if ui.add(egui::Button::new(egui::RichText::new(display_name).size(10.5 * self.zoom)))
+                                        .on_hover_text(image_path.as_str())
+                                        .clicked()
+                                    {
+                                        if let Some(path) = rfd::FileDialog::new().add_filter("Image", &["png", "bmp", "jpg"]).pick_file() {
+                                            if let Some(p) = path.to_str() {
+                                                *image_path = p.to_string();
+                                            }
+                                        }
+                                    }
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Tol:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                    ui.add(egui::DragValue::new(tolerance).range(0..=100).speed(1));
+                                    ui.label(egui::RichText::new("ms:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                    ui.add(egui::DragValue::new(timeout_ms).range(0..=60000).speed(50));
+                                });
+                            }
+
+                            ui.horizontal(|ui| {
+                                let type_label = match lang {
+                                    Language::Fr => "Type:",
+                                    Language::En => "Type:",
+                                };
+                                ui.label(egui::RichText::new(type_label).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                egui::ComboBox::from_id_salt(ui.make_persistent_id(("click_img_combo", node.id)))
+                                    .selected_text(egui::RichText::new(click_type.label(lang)).size(10.0 * self.zoom))
+                                    .width(85.0 * self.zoom)
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(click_type, BlueprintClickType::Left, BlueprintClickType::Left.label(lang));
+                                        ui.selectable_value(click_type, BlueprintClickType::Right, BlueprintClickType::Right.label(lang));
+                                        ui.selectable_value(click_type, BlueprintClickType::DoubleLeft, BlueprintClickType::DoubleLeft.label(lang));
+                                        ui.selectable_value(click_type, BlueprintClickType::Middle, BlueprintClickType::Middle.label(lang));
+                                    });
+                            });
+
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("ΔX:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(offset_x).speed(1));
+                                ui.label(egui::RichText::new("ΔY:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(offset_y).speed(1));
+                            });
+                        }
+                        BlueprintNodeType::ClickCoordinate {
+                            x,
+                            y,
+                            click_type,
+                            delay_after_ms,
+                        } => {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("X:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(x).speed(1));
+                                ui.label(egui::RichText::new("Y:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(y).speed(1));
+
+                                let cap_tip = match lang {
+                                    Language::Fr => "Capturer la position actuelle du curseur",
+                                    Language::En => "Capture current cursor position",
+                                };
+                                if ui.button(egui::RichText::new("📍").size(11.0 * self.zoom)).on_hover_text(cap_tip).clicked() {
+                                    if let Some((cx, cy)) = capture_cursor() {
+                                        *x = cx;
+                                        *y = cy;
+                                    }
+                                }
+                            });
+
+                            ui.horizontal(|ui| {
+                                let type_label = match lang {
+                                    Language::Fr => "Type:",
+                                    Language::En => "Type:",
+                                };
+                                ui.label(egui::RichText::new(type_label).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                egui::ComboBox::from_id_salt(ui.make_persistent_id(("click_coord_combo", node.id)))
+                                    .selected_text(egui::RichText::new(click_type.label(lang)).size(10.0 * self.zoom))
+                                    .width(85.0 * self.zoom)
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(click_type, BlueprintClickType::Left, BlueprintClickType::Left.label(lang));
+                                        ui.selectable_value(click_type, BlueprintClickType::Right, BlueprintClickType::Right.label(lang));
+                                        ui.selectable_value(click_type, BlueprintClickType::DoubleLeft, BlueprintClickType::DoubleLeft.label(lang));
+                                        ui.selectable_value(click_type, BlueprintClickType::Middle, BlueprintClickType::Middle.label(lang));
+                                    });
+                            });
+
+                            ui.horizontal(|ui| {
+                                let pause_label = match lang {
+                                    Language::Fr => "Attente (ms):",
+                                    Language::En => "Wait (ms):",
+                                };
+                                ui.label(egui::RichText::new(pause_label).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(delay_after_ms).range(0..=10000).speed(25));
+                            });
+                        }
+                        BlueprintNodeType::MouseMove { x, y, relative } => {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(if *relative { "ΔX:" } else { "X:" }).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(x).speed(1));
+                                ui.label(egui::RichText::new(if *relative { "ΔY:" } else { "Y:" }).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(y).speed(1));
+
+                                if !*relative {
+                                    let cap_tip = match lang {
+                                        Language::Fr => "Capturer la position actuelle du curseur",
+                                        Language::En => "Capture current cursor position",
+                                    };
+                                    if ui.button(egui::RichText::new("📍").size(11.0 * self.zoom)).on_hover_text(cap_tip).clicked() {
+                                        if let Some((cx, cy)) = capture_cursor() {
+                                            *x = cx;
+                                            *y = cy;
+                                        }
+                                    }
+                                }
+                            });
+
+                            ui.horizontal(|ui| {
+                                let rel_label = match lang {
+                                    Language::Fr => "Relatif (Δ)",
+                                    Language::En => "Relative (Δ)",
+                                };
+                                ui.checkbox(relative, egui::RichText::new(rel_label).size(10.5 * self.zoom));
+                            });
+                        }
+                        BlueprintNodeType::KeyPress {
+                            key_name,
+                            vk_code,
+                            is_extended,
+                            hold_ms,
+                        } => {
+                            ui.horizontal(|ui| {
+                                let key_label = match lang {
+                                    Language::Fr => "Touche:",
+                                    Language::En => "Key:",
+                                };
+                                ui.label(egui::RichText::new(key_label).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+
+                                egui::ComboBox::from_id_salt(ui.make_persistent_id(("key_preset", node.id)))
+                                    .selected_text(egui::RichText::new(key_name.as_str()).size(10.5 * self.zoom))
+                                    .width(80.0 * self.zoom)
+                                    .show_ui(ui, |ui| {
+                                        let common_keys: &[(&str, u16, bool)] = &[
+                                            ("Enter", 13, false),
+                                            ("Space", 32, false),
+                                            ("Escape", 27, false),
+                                            ("Tab", 9, false),
+                                            ("Backspace", 8, false),
+                                            ("Up", 38, true),
+                                            ("Down", 40, true),
+                                            ("Left", 37, true),
+                                            ("Right", 39, true),
+                                            ("F1", 112, false),
+                                            ("F2", 113, false),
+                                            ("F3", 114, false),
+                                            ("F5", 116, false),
+                                            ("A", 65, false),
+                                            ("E", 69, false),
+                                            ("F", 70, false),
+                                            ("R", 82, false),
+                                        ];
+                                        for (name, vk, ext) in common_keys {
+                                            if ui.selectable_label(key_name == *name, *name).clicked() {
+                                                *key_name = name.to_string();
+                                                *vk_code = *vk;
+                                                *is_extended = *ext;
+                                            }
+                                        }
+                                    });
+                            });
+
+                            ui.horizontal(|ui| {
+                                let hold_label = match lang {
+                                    Language::Fr => "Maintien (ms):",
+                                    Language::En => "Hold (ms):",
+                                };
+                                ui.label(egui::RichText::new(hold_label).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(hold_ms).range(0..=5000).speed(10));
+                            });
+                        }
+                        BlueprintNodeType::RandomDelay { min_ms, max_ms } => {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Min:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(min_ms).range(1..=60000).speed(25));
+                                ui.label(egui::RichText::new("Max:").size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(max_ms).range(1..=60000).speed(25));
+                            });
+                        }
+                        BlueprintNodeType::MouseScroll { steps } => {
+                            ui.horizontal(|ui| {
+                                let scr_label = match lang {
+                                    Language::Fr => "Crans (+haut/-bas):",
+                                    Language::En => "Steps (+up/-down):",
+                                };
+                                ui.label(egui::RichText::new(scr_label).size(10.5 * self.zoom).color(colors::TEXT_MUTED));
+                                ui.add(egui::DragValue::new(steps).range(-50..=50).speed(1));
                             });
                         }
                         _ => {}

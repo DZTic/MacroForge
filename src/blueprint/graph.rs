@@ -12,6 +12,29 @@ pub struct PinId {
     pub pin_index: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BlueprintClickType {
+    Left,
+    Right,
+    Middle,
+    DoubleLeft,
+}
+
+impl BlueprintClickType {
+    pub fn label(&self, lang: Language) -> &'static str {
+        match (self, lang) {
+            (BlueprintClickType::Left, Language::Fr) => "Clic Gauche",
+            (BlueprintClickType::Left, Language::En) => "Left Click",
+            (BlueprintClickType::Right, Language::Fr) => "Clic Droit",
+            (BlueprintClickType::Right, Language::En) => "Right Click",
+            (BlueprintClickType::Middle, Language::Fr) => "Clic Milieu",
+            (BlueprintClickType::Middle, Language::En) => "Middle Click",
+            (BlueprintClickType::DoubleLeft, Language::Fr) => "Double-clic",
+            (BlueprintClickType::DoubleLeft, Language::En) => "Double Click",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum BlueprintNodeType {
     /// Point d'entrée du graphe
@@ -34,6 +57,51 @@ pub enum BlueprintNodeType {
         image_path: String,
         timeout_ms: u64,
         tolerance: u8,
+    },
+    /// Clique sur une image : soit la dernière détectée, soit une image spécifique
+    /// Sortie 0: Effectué (Done), Sortie 1: Échec / Absent (Failed)
+    ClickImage {
+        use_last_detected: bool,
+        image_path: String,
+        tolerance: u8,
+        timeout_ms: u64,
+        click_type: BlueprintClickType,
+        offset_x: i32,
+        offset_y: i32,
+    },
+    /// Clique aux coordonnées d'écran spécifiques (X, Y)
+    /// Sortie 0: Suivant
+    ClickCoordinate {
+        x: i32,
+        y: i32,
+        click_type: BlueprintClickType,
+        delay_after_ms: u64,
+    },
+    /// Déplace le curseur de la souris (absolu ou relatif)
+    /// Sortie 0: Suivant
+    MouseMove {
+        x: i32,
+        y: i32,
+        relative: bool,
+    },
+    /// Simule l'appui sur une touche clavier
+    /// Sortie 0: Suivant
+    KeyPress {
+        key_name: String,
+        vk_code: u16,
+        is_extended: bool,
+        hold_ms: u64,
+    },
+    /// Pause aléatoire entre min_ms et max_ms
+    /// Sortie 0: Suivant
+    RandomDelay {
+        min_ms: u64,
+        max_ms: u64,
+    },
+    /// Défilement molette souris (steps > 0 haut, steps < 0 bas)
+    /// Sortie 0: Suivant
+    MouseScroll {
+        steps: i32,
     },
     /// Pause temporelle en millisecondes
     Delay { delay_ms: u64 },
@@ -67,6 +135,26 @@ impl BlueprintNodeType {
             }
             (BlueprintNodeType::WaitImage { .. }, Language::Fr) => "Attente Image".to_string(),
             (BlueprintNodeType::WaitImage { .. }, Language::En) => "Wait Image".to_string(),
+            (BlueprintNodeType::ClickImage { .. }, Language::Fr) => {
+                "Cliquer sur l'image".to_string()
+            }
+            (BlueprintNodeType::ClickImage { .. }, Language::En) => "Click Image".to_string(),
+            (BlueprintNodeType::ClickCoordinate { .. }, Language::Fr) => {
+                "Clic Coordonnées".to_string()
+            }
+            (BlueprintNodeType::ClickCoordinate { .. }, Language::En) => {
+                "Click Coordinates".to_string()
+            }
+            (BlueprintNodeType::MouseMove { .. }, Language::Fr) => "Déplacer Curseur".to_string(),
+            (BlueprintNodeType::MouseMove { .. }, Language::En) => "Move Cursor".to_string(),
+            (BlueprintNodeType::KeyPress { .. }, Language::Fr) => "Touche Clavier".to_string(),
+            (BlueprintNodeType::KeyPress { .. }, Language::En) => "Key Press".to_string(),
+            (BlueprintNodeType::RandomDelay { .. }, Language::Fr) => "Délai Aléatoire".to_string(),
+            (BlueprintNodeType::RandomDelay { .. }, Language::En) => "Random Delay".to_string(),
+            (BlueprintNodeType::MouseScroll { .. }, Language::Fr) => {
+                "Défilement Molette".to_string()
+            }
+            (BlueprintNodeType::MouseScroll { .. }, Language::En) => "Mouse Scroll".to_string(),
             (BlueprintNodeType::Delay { .. }, Language::Fr) => "Pause / Délai".to_string(),
             (BlueprintNodeType::Delay { .. }, Language::En) => "Delay / Pause".to_string(),
             (BlueprintNodeType::Loop { .. }, Language::Fr) => "Boucle".to_string(),
@@ -82,6 +170,12 @@ impl BlueprintNodeType {
             BlueprintNodeType::Macro { .. }
             | BlueprintNodeType::ImageCondition { .. }
             | BlueprintNodeType::WaitImage { .. }
+            | BlueprintNodeType::ClickImage { .. }
+            | BlueprintNodeType::ClickCoordinate { .. }
+            | BlueprintNodeType::MouseMove { .. }
+            | BlueprintNodeType::KeyPress { .. }
+            | BlueprintNodeType::RandomDelay { .. }
+            | BlueprintNodeType::MouseScroll { .. }
             | BlueprintNodeType::Delay { .. }
             | BlueprintNodeType::Stop => {
                 vec!["Exec".to_string()]
@@ -96,7 +190,13 @@ impl BlueprintNodeType {
     pub fn output_pins(&self, lang: Language) -> Vec<String> {
         match self {
             BlueprintNodeType::Start => vec!["Exec".to_string()],
-            BlueprintNodeType::Macro { .. } | BlueprintNodeType::Delay { .. } => match lang {
+            BlueprintNodeType::Macro { .. }
+            | BlueprintNodeType::Delay { .. }
+            | BlueprintNodeType::ClickCoordinate { .. }
+            | BlueprintNodeType::MouseMove { .. }
+            | BlueprintNodeType::KeyPress { .. }
+            | BlueprintNodeType::RandomDelay { .. }
+            | BlueprintNodeType::MouseScroll { .. } => match lang {
                 Language::Fr => vec!["Suivant".to_string()],
                 Language::En => vec!["Next".to_string()],
             },
@@ -111,6 +211,10 @@ impl BlueprintNodeType {
                 Language::Fr => vec!["Trouvée".to_string(), "Délai Dépassé".to_string()],
                 Language::En => vec!["Found".to_string(), "Timeout".to_string()],
             },
+            BlueprintNodeType::ClickImage { .. } => match lang {
+                Language::Fr => vec!["Effectué".to_string(), "Échec (Absent)".to_string()],
+                Language::En => vec!["Done".to_string(), "Failed (Miss)".to_string()],
+            },
             BlueprintNodeType::Loop { .. } => match lang {
                 Language::Fr => vec!["Répéter".to_string(), "Terminé".to_string()],
                 Language::En => vec!["Loop Body".to_string(), "Completed".to_string()],
@@ -121,6 +225,18 @@ impl BlueprintNodeType {
 
     pub fn min_dimensions(&self) -> (f32, f32) {
         match self {
+            BlueprintNodeType::ClickImage { use_last_detected, .. } => {
+                if *use_last_detected {
+                    (260.0, 160.0)
+                } else {
+                    (270.0, 205.0)
+                }
+            }
+            BlueprintNodeType::ClickCoordinate { .. } => (260.0, 160.0),
+            BlueprintNodeType::MouseMove { .. } => (250.0, 145.0),
+            BlueprintNodeType::KeyPress { .. } => (240.0, 130.0),
+            BlueprintNodeType::RandomDelay { .. } => (220.0, 115.0),
+            BlueprintNodeType::MouseScroll { .. } => (210.0, 105.0),
             BlueprintNodeType::ImageCondition { .. } | BlueprintNodeType::WaitImage { .. } => {
                 (260.0, 150.0)
             }
@@ -487,6 +603,46 @@ mod tests {
                 timeout_ms: 5000,
                 tolerance: 25,
             },
+            BlueprintNodeType::ClickImage {
+                use_last_detected: true,
+                image_path: "".to_string(),
+                tolerance: 25,
+                timeout_ms: 3000,
+                click_type: BlueprintClickType::Left,
+                offset_x: 0,
+                offset_y: 0,
+            },
+            BlueprintNodeType::ClickImage {
+                use_last_detected: false,
+                image_path: "btn.png".to_string(),
+                tolerance: 25,
+                timeout_ms: 3000,
+                click_type: BlueprintClickType::Right,
+                offset_x: 10,
+                offset_y: -5,
+            },
+            BlueprintNodeType::ClickCoordinate {
+                x: 500,
+                y: 300,
+                click_type: BlueprintClickType::DoubleLeft,
+                delay_after_ms: 50,
+            },
+            BlueprintNodeType::MouseMove {
+                x: 100,
+                y: 200,
+                relative: false,
+            },
+            BlueprintNodeType::KeyPress {
+                key_name: "Enter".to_string(),
+                vk_code: 13,
+                is_extended: false,
+                hold_ms: 30,
+            },
+            BlueprintNodeType::RandomDelay {
+                min_ms: 100,
+                max_ms: 500,
+            },
+            BlueprintNodeType::MouseScroll { steps: 3 },
             BlueprintNodeType::Delay { delay_ms: 1000 },
             BlueprintNodeType::Loop { count: 3 },
             BlueprintNodeType::Stop,
@@ -497,14 +653,52 @@ mod tests {
             let node = BlueprintNode::new(NodeId(1), nt.clone(), [0.0, 0.0], Language::Fr);
             assert!(node.width >= min_w, "Node width must be >= min_w");
             assert!(node.height >= min_h, "Node height must be >= min_h");
-            // Les nœuds complexes avec contrôles multiples doivent avoir au moins 260px de largeur et 150px de hauteur
             if matches!(
                 nt,
-                BlueprintNodeType::ImageCondition { .. } | BlueprintNodeType::WaitImage { .. }
+                BlueprintNodeType::ImageCondition { .. }
+                    | BlueprintNodeType::WaitImage { .. }
+                    | BlueprintNodeType::ClickImage { .. }
+                    | BlueprintNodeType::ClickCoordinate { .. }
             ) {
                 assert!(node.width >= 260.0);
                 assert!(node.height >= 150.0);
             }
         }
+    }
+
+    #[test]
+    fn test_blueprint_click_nodes_and_pins() {
+        let click_img = BlueprintNodeType::ClickImage {
+            use_last_detected: true,
+            image_path: "".to_string(),
+            tolerance: 25,
+            timeout_ms: 1000,
+            click_type: BlueprintClickType::Left,
+            offset_x: 0,
+            offset_y: 0,
+        };
+        assert_eq!(click_img.input_pins(Language::Fr).len(), 1);
+        let out_fr = click_img.output_pins(Language::Fr);
+        assert_eq!(out_fr.len(), 2);
+        assert!(out_fr[0].contains("Effectué"));
+        assert!(out_fr[1].contains("Échec"));
+
+        let click_coord = BlueprintNodeType::ClickCoordinate {
+            x: 100,
+            y: 200,
+            click_type: BlueprintClickType::Right,
+            delay_after_ms: 50,
+        };
+        assert_eq!(click_coord.input_pins(Language::Fr).len(), 1);
+        assert_eq!(click_coord.output_pins(Language::Fr).len(), 1);
+
+        assert_eq!(
+            BlueprintClickType::Left.label(Language::Fr),
+            "Clic Gauche"
+        );
+        assert_eq!(
+            BlueprintClickType::DoubleLeft.label(Language::En),
+            "Double Click"
+        );
     }
 }
