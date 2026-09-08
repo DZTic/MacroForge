@@ -81,6 +81,7 @@ impl BlueprintRunnerState {
         thread::spawn(move || {
             let mut current_id = Some(start_id);
             let mut loop_counters: HashMap<NodeId, u32> = HashMap::new();
+            let mut last_detected_image_pos: Option<(i32, i32)> = None;
             let mut max_steps = 100_000u32; // Protection anti-boucle infinie sans délai
 
             let set_status = |msg: &str| {
@@ -173,17 +174,17 @@ impl BlueprintRunnerState {
                         set_status(&step_msg);
 
                         let start = Instant::now();
-                        let mut matched = false;
+                        let mut matched_pos = None;
                         let timeout = Duration::from_millis(*timeout_ms);
 
                         loop {
                             if check_stopped() {
                                 break;
                             }
-                            if macro_core::check_image_present_with_tolerance(
-                                image_path, *tolerance,
-                            ) {
-                                matched = true;
+                            if let Some(pos) =
+                                macro_core::find_image_coords_with_tolerance(image_path, *tolerance)
+                            {
+                                matched_pos = Some(pos);
                                 break;
                             }
                             if start.elapsed() >= timeout {
@@ -196,13 +197,17 @@ impl BlueprintRunnerState {
                             break;
                         }
 
-                        if matched {
+                        if let Some(pos) = matched_pos {
+                            last_detected_image_pos = Some(pos);
                             let msg = match lang {
                                 Language::Fr => {
-                                    "✅ Image détectée ! Branche [Match] sélectionnée.".to_string()
+                                    format!("✅ Image détectée à ({}, {}) ! Branche [Match] sélectionnée.", pos.0, pos.1)
                                 }
                                 Language::En => {
-                                    "✅ Image found! [Match] branch selected.".to_string()
+                                    format!(
+                                        "✅ Image found at ({}, {})! [Match] branch selected.",
+                                        pos.0, pos.1
+                                    )
                                 }
                             };
                             set_status(&msg);
@@ -237,17 +242,17 @@ impl BlueprintRunnerState {
                         set_status(&step_msg);
 
                         let start = Instant::now();
-                        let mut found = false;
+                        let mut found_pos = None;
                         let timeout = Duration::from_millis(*timeout_ms);
 
                         loop {
                             if check_stopped() {
                                 break;
                             }
-                            if macro_core::check_image_present_with_tolerance(
-                                image_path, *tolerance,
-                            ) {
-                                found = true;
+                            if let Some(pos) =
+                                macro_core::find_image_coords_with_tolerance(image_path, *tolerance)
+                            {
+                                found_pos = Some(pos);
                                 break;
                             }
                             if start.elapsed() >= timeout {
@@ -260,11 +265,257 @@ impl BlueprintRunnerState {
                             break;
                         }
 
-                        if found {
+                        if let Some(pos) = found_pos {
+                            last_detected_image_pos = Some(pos);
                             Some(0) // Pin 0 = Found
                         } else {
                             Some(1) // Pin 1 = Timeout
                         }
+                    }
+                    BlueprintNodeType::ClickImage {
+                        use_last_detected,
+                        image_path,
+                        tolerance,
+                        timeout_ms,
+                        click_type,
+                        offset_x,
+                        offset_y,
+                    } => {
+                        let target_coords = if *use_last_detected {
+                            last_detected_image_pos
+                        } else {
+                            let step_msg = match lang {
+                                Language::Fr => format!(
+                                    "👁️ Recherche de l'image pour clic (tolérance: {})...",
+                                    tolerance
+                                ),
+                                Language::En => format!(
+                                    "👁️ Scanning for image to click (tolerance: {})...",
+                                    tolerance
+                                ),
+                            };
+                            set_status(&step_msg);
+
+                            let start = Instant::now();
+                            let mut found = None;
+                            let timeout = Duration::from_millis(*timeout_ms);
+
+                            loop {
+                                if check_stopped() {
+                                    break;
+                                }
+                                if let Some(pos) = macro_core::find_image_coords_with_tolerance(
+                                    image_path, *tolerance,
+                                ) {
+                                    found = Some(pos);
+                                    break;
+                                }
+                                if start.elapsed() >= timeout {
+                                    break;
+                                }
+                                thread::sleep(Duration::from_millis(50));
+                            }
+                            if let Some(pos) = found {
+                                last_detected_image_pos = Some(pos);
+                            }
+                            found
+                        };
+
+                        if check_stopped() {
+                            break;
+                        }
+
+                        if let Some((cx, cy)) = target_coords {
+                            let click_x = cx + offset_x;
+                            let click_y = cy + offset_y;
+                            let step_msg = match lang {
+                                Language::Fr => format!(
+                                    "🎯 Clic ({}) sur l'image à ({}, {})...",
+                                    click_type.label(lang),
+                                    click_x,
+                                    click_y
+                                ),
+                                Language::En => format!(
+                                    "🎯 Click ({}) on image at ({}, {})...",
+                                    click_type.label(lang),
+                                    click_x,
+                                    click_y
+                                ),
+                            };
+                            set_status(&step_msg);
+
+                            macro_core::execute_click(click_x, click_y, *click_type);
+                            thread::sleep(Duration::from_millis(50));
+                            Some(0) // Pin 0 = Effectué
+                        } else {
+                            let fail_msg = match lang {
+                                Language::Fr => {
+                                    "❌ Clic annulé : aucune image cible détectée. Branche [Échec]."
+                                        .to_string()
+                                }
+                                Language::En => {
+                                    "❌ Click aborted: no target image detected. [Failed] branch."
+                                        .to_string()
+                                }
+                            };
+                            set_status(&fail_msg);
+                            Some(1) // Pin 1 = Échec
+                        }
+                    }
+                    BlueprintNodeType::ClickCoordinate {
+                        x,
+                        y,
+                        click_type,
+                        delay_after_ms,
+                    } => {
+                        let step_msg = match lang {
+                            Language::Fr => format!(
+                                "📍 Clic ({}) aux coordonnées ({}, {})...",
+                                click_type.label(lang),
+                                x,
+                                y
+                            ),
+                            Language::En => format!(
+                                "📍 Click ({}) at coordinates ({}, {})...",
+                                click_type.label(lang),
+                                x,
+                                y
+                            ),
+                        };
+                        set_status(&step_msg);
+
+                        macro_core::execute_click(*x, *y, *click_type);
+                        if *delay_after_ms > 0 {
+                            let start = Instant::now();
+                            let target = Duration::from_millis(*delay_after_ms);
+                            while start.elapsed() < target {
+                                if check_stopped() {
+                                    break;
+                                }
+                                let remaining = target.saturating_sub(start.elapsed());
+                                let sleep_chunk = remaining.min(Duration::from_millis(15));
+                                thread::sleep(sleep_chunk);
+                            }
+                        }
+                        if check_stopped() {
+                            break;
+                        }
+                        Some(0)
+                    }
+                    BlueprintNodeType::MouseMove { x, y, relative } => {
+                        let step_msg = match lang {
+                            Language::Fr => {
+                                if *relative {
+                                    format!("🖱️ Déplacement curseur relatif ({:+}, {:+})...", x, y)
+                                } else {
+                                    format!("🖱️ Déplacement curseur vers ({}, {})...", x, y)
+                                }
+                            }
+                            Language::En => {
+                                if *relative {
+                                    format!("🖱️ Move cursor relative ({:+}, {:+})...", x, y)
+                                } else {
+                                    format!("🖱️ Move cursor to ({}, {})...", x, y)
+                                }
+                            }
+                        };
+                        set_status(&step_msg);
+
+                        #[cfg(windows)]
+                        {
+                            if *relative {
+                                macro_core::send_mouse_relative(*x, *y);
+                            } else {
+                                macro_core::send_mouse_move(*x, *y);
+                            }
+                        }
+                        thread::sleep(Duration::from_millis(20));
+                        Some(0)
+                    }
+                    BlueprintNodeType::KeyPress {
+                        key_name,
+                        vk_code,
+                        is_extended,
+                        hold_ms,
+                    } => {
+                        let step_msg = match lang {
+                            Language::Fr => format!("⌨️ Pression de la touche '{}'...", key_name),
+                            Language::En => format!("⌨️ Pressing key '{}'...", key_name),
+                        };
+                        set_status(&step_msg);
+
+                        #[cfg(windows)]
+                        {
+                            macro_core::send_key(*vk_code, false, *is_extended);
+                            if *hold_ms > 0 {
+                                let start = Instant::now();
+                                let target = Duration::from_millis(*hold_ms);
+                                while start.elapsed() < target {
+                                    if check_stopped() {
+                                        break;
+                                    }
+                                    let remaining = target.saturating_sub(start.elapsed());
+                                    let sleep_chunk = remaining.min(Duration::from_millis(10));
+                                    thread::sleep(sleep_chunk);
+                                }
+                            }
+                            macro_core::send_key(*vk_code, true, *is_extended);
+                        }
+                        thread::sleep(Duration::from_millis(20));
+                        if check_stopped() {
+                            break;
+                        }
+                        Some(0)
+                    }
+                    BlueprintNodeType::RandomDelay { min_ms, max_ms } => {
+                        let min = *min_ms.min(max_ms);
+                        let max = *min_ms.max(max_ms);
+                        let duration_ms = if min == max {
+                            min
+                        } else {
+                            use std::time::SystemTime;
+                            let seed = SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .map(|d| d.subsec_nanos())
+                                .unwrap_or(42) as u64;
+                            min + (seed % (max - min + 1))
+                        };
+                        let step_msg = match lang {
+                            Language::Fr => format!("🎲 Pause aléatoire de {} ms...", duration_ms),
+                            Language::En => format!("🎲 Random delay of {} ms...", duration_ms),
+                        };
+                        set_status(&step_msg);
+
+                        let start = Instant::now();
+                        let target = Duration::from_millis(duration_ms);
+                        while start.elapsed() < target {
+                            if check_stopped() {
+                                break;
+                            }
+                            let remaining = target.saturating_sub(start.elapsed());
+                            let sleep_chunk = remaining.min(Duration::from_millis(15));
+                            thread::sleep(sleep_chunk);
+                        }
+                        if check_stopped() {
+                            break;
+                        }
+                        Some(0)
+                    }
+                    BlueprintNodeType::MouseScroll { steps } => {
+                        let step_msg = match lang {
+                            Language::Fr => format!("📜 Défilement molette ({} pas)...", steps),
+                            Language::En => format!("📜 Mouse scroll ({} steps)...", steps),
+                        };
+                        set_status(&step_msg);
+
+                        #[cfg(windows)]
+                        unsafe {
+                            use winapi::um::winuser::{mouse_event, MOUSEEVENTF_WHEEL};
+                            let delta = (*steps * 120) as u32;
+                            mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta, 0);
+                        }
+                        thread::sleep(Duration::from_millis(40));
+                        Some(0)
                     }
                     BlueprintNodeType::Delay { delay_ms } => {
                         let step_msg = match lang {
@@ -349,5 +600,136 @@ impl BlueprintRunnerState {
         });
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::blueprint::graph::{BlueprintClickType, PinId};
+
+    #[test]
+    fn test_runner_state_initialization() {
+        let runner = BlueprintRunnerState::new();
+        assert!(!runner.is_active());
+        assert_eq!(runner.get_active_node(), None);
+        assert_eq!(runner.get_status(), "Prêt");
+    }
+
+    #[test]
+    fn test_runner_executes_random_delay_and_stop() {
+        let runner = BlueprintRunnerState::new();
+        let mut graph = BlueprintGraph::new();
+        let start_id = graph.find_start_node().unwrap();
+
+        let delay_id = graph.add_node(
+            BlueprintNodeType::RandomDelay {
+                min_ms: 10,
+                max_ms: 20,
+            },
+            [200.0, 200.0],
+            Language::Fr,
+        );
+
+        let stop_id = graph.add_node(BlueprintNodeType::Stop, [300.0, 200.0], Language::Fr);
+
+        graph.connect(
+            PinId {
+                node_id: start_id,
+                is_output: true,
+                pin_index: 0,
+            },
+            PinId {
+                node_id: delay_id,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        graph.connect(
+            PinId {
+                node_id: delay_id,
+                is_output: true,
+                pin_index: 0,
+            },
+            PinId {
+                node_id: stop_id,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        assert!(runner.run_graph(graph, Language::Fr));
+
+        // Attendre que l'exécution se termine
+        let start = Instant::now();
+        while runner.is_active() && start.elapsed() < Duration::from_millis(1500) {
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        assert!(!runner.is_active());
+    }
+
+    #[test]
+    fn test_runner_click_image_unmatched_falls_to_failed_pin() {
+        let runner = BlueprintRunnerState::new();
+        let mut graph = BlueprintGraph::new();
+        let start_id = graph.find_start_node().unwrap();
+
+        let click_id = graph.add_node(
+            BlueprintNodeType::ClickImage {
+                use_last_detected: true,
+                image_path: "".to_string(),
+                tolerance: 20,
+                timeout_ms: 50,
+                click_type: BlueprintClickType::Left,
+                offset_x: 0,
+                offset_y: 0,
+            },
+            [250.0, 200.0],
+            Language::Fr,
+        );
+
+        let stop_id = graph.add_node(BlueprintNodeType::Stop, [400.0, 200.0], Language::Fr);
+
+        graph.connect(
+            PinId {
+                node_id: start_id,
+                is_output: true,
+                pin_index: 0,
+            },
+            PinId {
+                node_id: click_id,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        // Connecter la broche Échec (Pin 1) vers Stop
+        graph.connect(
+            PinId {
+                node_id: click_id,
+                is_output: true,
+                pin_index: 1,
+            },
+            PinId {
+                node_id: stop_id,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        assert!(runner.run_graph(graph, Language::Fr));
+
+        let start = Instant::now();
+        while runner.is_active() && start.elapsed() < Duration::from_millis(1500) {
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        assert!(!runner.is_active());
+        let status = runner.get_status();
+        assert!(
+            status.contains("terminée") || status.contains("Échec") || status.contains("arrêt")
+        );
     }
 }

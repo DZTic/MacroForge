@@ -1,3 +1,4 @@
+use crate::blueprint::BlueprintClickType;
 use crate::events::{EngineEvent, PlaybackActionPayload};
 use log::{debug, error, info, trace, warn};
 use rayon::prelude::*;
@@ -2512,7 +2513,7 @@ pub fn load_macro_from_file(path: &str) -> Result<usize, String> {
     Ok(count)
 }
 
-pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
+pub fn find_image_coords_with_tolerance(path: &str, tolerance: u8) -> Option<(i32, i32)> {
     let template_arc = {
         let mut cache = IMAGE_CACHE.lock().unwrap();
         if let Some(img) = cache.get(path) {
@@ -2529,7 +2530,7 @@ pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
                     cache.insert(path.to_string(), rb.clone());
                     rb
                 }
-                Err(_) => return false,
+                Err(_) => return None,
             }
         } else {
             match image::open(path) {
@@ -2538,7 +2539,7 @@ pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
                     cache.insert(path.to_string(), rb.clone());
                     rb
                 }
-                Err(_) => return false,
+                Err(_) => return None,
             }
         }
     };
@@ -2553,7 +2554,7 @@ pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
         let (vx, vy, vw, vh) = get_screen_capture_bounds();
 
         if vw <= 0 || vh <= 0 {
-            return false;
+            return None;
         }
 
         with_screen_capture_gdi(vx, vy, vw, vh, |screen_raw| {
@@ -2566,16 +2567,62 @@ pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
                 th,
                 tolerance,
             )
-            .is_some()
+            .map(|(sx, sy)| {
+                let center_x = vx + sx as i32 + (tw as i32 / 2);
+                let center_y = vy + sy as i32 + (th as i32 / 2);
+                (center_x, center_y)
+            })
         })
-        .unwrap_or(false)
+        .unwrap_or(None)
     }
     #[cfg(not(windows))]
-    false
+    None
+}
+
+pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
+    find_image_coords_with_tolerance(path, tolerance).is_some()
 }
 
 pub fn check_image_present(path: &str) -> bool {
     check_image_present_with_tolerance(path, 25)
+}
+
+pub fn execute_click(x: i32, y: i32, click_type: BlueprintClickType) {
+    #[cfg(windows)]
+    {
+        send_mouse_move(x, y);
+        thread::sleep(Duration::from_millis(20));
+        match click_type {
+            BlueprintClickType::Left => {
+                send_mouse_button(1, true, x, y);
+                thread::sleep(Duration::from_millis(30));
+                send_mouse_button(1, false, x, y);
+            }
+            BlueprintClickType::Right => {
+                send_mouse_button(2, true, x, y);
+                thread::sleep(Duration::from_millis(30));
+                send_mouse_button(2, false, x, y);
+            }
+            BlueprintClickType::Middle => {
+                send_mouse_button(3, true, x, y);
+                thread::sleep(Duration::from_millis(30));
+                send_mouse_button(3, false, x, y);
+            }
+            BlueprintClickType::DoubleLeft => {
+                send_mouse_button(1, true, x, y);
+                thread::sleep(Duration::from_millis(25));
+                send_mouse_button(1, false, x, y);
+                thread::sleep(Duration::from_millis(50));
+                send_mouse_button(1, true, x, y);
+                thread::sleep(Duration::from_millis(25));
+                send_mouse_button(1, false, x, y);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (x, y, click_type);
+    }
 }
 
 /// Exécute une séquence arbitraire de MacroAction avec précision temporelle et vérification d'arrêt d'urgence.

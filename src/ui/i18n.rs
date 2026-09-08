@@ -1171,6 +1171,62 @@ impl Language {
             Language::En => "Drag and drop nodes or click in the library on the left to build your workflow.",
         }
     }
+
+    pub fn blueprint_click_image(&self) -> &'static str {
+        match self {
+            Language::Fr => "Cliquer sur l'image",
+            Language::En => "Click Image",
+        }
+    }
+
+    pub fn blueprint_click_coordinates(&self) -> &'static str {
+        match self {
+            Language::Fr => "Clic Coordonnées",
+            Language::En => "Click Coordinates",
+        }
+    }
+
+    pub fn blueprint_move_cursor(&self) -> &'static str {
+        match self {
+            Language::Fr => "Déplacer Curseur",
+            Language::En => "Move Cursor",
+        }
+    }
+
+    pub fn blueprint_key_press(&self) -> &'static str {
+        match self {
+            Language::Fr => "Touche Clavier",
+            Language::En => "Key Press",
+        }
+    }
+
+    pub fn blueprint_random_delay(&self) -> &'static str {
+        match self {
+            Language::Fr => "Délai Aléatoire",
+            Language::En => "Random Delay",
+        }
+    }
+
+    pub fn blueprint_mouse_scroll(&self) -> &'static str {
+        match self {
+            Language::Fr => "Défilement Molette",
+            Language::En => "Mouse Scroll",
+        }
+    }
+
+    pub fn blueprint_capture_cursor(&self) -> &'static str {
+        match self {
+            Language::Fr => "Capturer la position actuelle du curseur",
+            Language::En => "Capture current cursor position",
+        }
+    }
+
+    pub fn blueprint_last_detected_image(&self) -> &'static str {
+        match self {
+            Language::Fr => "Dernière image trouvée",
+            Language::En => "Last matched image",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1209,6 +1265,20 @@ mod tests {
         assert_ne!(
             fr.emergency_detach_shortcut_hint(),
             en.emergency_detach_shortcut_hint()
+        );
+        assert_ne!(fr.blueprint_click_image(), en.blueprint_click_image());
+        assert_ne!(
+            fr.blueprint_click_coordinates(),
+            en.blueprint_click_coordinates()
+        );
+        assert_ne!(fr.blueprint_move_cursor(), en.blueprint_move_cursor());
+        assert_ne!(fr.blueprint_key_press(), en.blueprint_key_press());
+        assert_ne!(fr.blueprint_random_delay(), en.blueprint_random_delay());
+        assert_ne!(fr.blueprint_mouse_scroll(), en.blueprint_mouse_scroll());
+        assert_ne!(fr.blueprint_capture_cursor(), en.blueprint_capture_cursor());
+        assert_ne!(
+            fr.blueprint_last_detected_image(),
+            en.blueprint_last_detected_image()
         );
     }
 
