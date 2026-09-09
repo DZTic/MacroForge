@@ -9,6 +9,7 @@ pub enum ToolbarAction {
     None,
     ToggleRecord,
     TogglePlay,
+    TogglePlayBlueprint,
     EmergencyStop,
     OpenMainWindow,
     CloseToolbar,
@@ -45,6 +46,7 @@ impl FloatingToolbar {
         ctx: &egui::Context,
         is_recording: bool,
         is_playing: bool,
+        is_blueprint_running: bool,
         is_embedded: bool,
         lang: Language,
     ) -> ToolbarAction {
@@ -55,7 +57,7 @@ impl FloatingToolbar {
 
         let mut triggered_action = ToolbarAction::None;
         let viewport_id = ViewportId::from_hash_of("macroforge_floating_toolbar");
-        let tb_width = if is_embedded { 336.0 } else { 300.0 };
+        let tb_width = if is_embedded { 372.0 } else { 336.0 };
 
         ctx.show_viewport_immediate(
             viewport_id,
@@ -163,6 +165,24 @@ impl FloatingToolbar {
                                 }
                             }
 
+                            // 3b. Bouton Blueprint (Play / Stop Blueprint)
+                            let bp_tip = if !is_blueprint_running {
+                                match lang {
+                                    Language::Fr => "Exécuter le Blueprint (F7)",
+                                    Language::En => "Run Blueprint (F7)",
+                                }
+                            } else {
+                                match lang {
+                                    Language::Fr => "Arrêter le Blueprint (F4)",
+                                    Language::En => "Stop Blueprint (F4)",
+                                }
+                            };
+                            let bp_resp =
+                                render_blueprint_btn(ui, is_blueprint_running, bp_tip, btn_size);
+                            if bp_resp.clicked() {
+                                triggered_action = ToolbarAction::TogglePlayBlueprint;
+                            }
+
                             ui.add_space(3.0);
 
                             // 4. Capsule d'état centrale (Status Pill)
@@ -176,7 +196,17 @@ impl FloatingToolbar {
                                 .inner_margin(Margin::symmetric(8.0, 3.0));
 
                             status_frame.show(ui, |ui| {
-                                if is_playing {
+                                if is_blueprint_running {
+                                    ui.horizontal(|ui| {
+                                        ui.spacing_mut().item_spacing = egui::vec2(3.0, 0.0);
+                                        ui.label(
+                                            egui::RichText::new("▶ BP")
+                                                .color(colors::ACCENT_CYAN_HOVER)
+                                                .size(11.0)
+                                                .strong(),
+                                        );
+                                    });
+                                } else if is_playing {
                                     ui.label(
                                         egui::RichText::new(format!(
                                             "▶ {}/{}",
@@ -417,6 +447,79 @@ fn render_play_btn(
     resp.on_hover_text(tooltip)
 }
 
+/// Rendu vectoriel du bouton Blueprint (Play / Stop Blueprint) avec insigne "BP"
+fn render_blueprint_btn(
+    ui: &mut egui::Ui,
+    is_running: bool,
+    tooltip: &str,
+    size: Vec2,
+) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let is_hovered = resp.hovered();
+    let is_clicked = resp.is_pointer_button_down_on();
+
+    let (bg_fill, border_stroke) = if is_running {
+        // En cours d'exécution : ambre/warning pour arrêt d'urgence F4
+        if is_clicked {
+            (
+                Color32::from_rgb(180, 83, 9),
+                Stroke::new(1.5_f32, colors::ACCENT_WARNING_HOVER),
+            )
+        } else if is_hovered {
+            (
+                Color32::from_rgb(217, 119, 6),
+                Stroke::new(1.5_f32, colors::ACCENT_WARNING_HOVER),
+            )
+        } else {
+            (
+                Color32::from_rgba_premultiplied(180, 83, 9, 230),
+                Stroke::new(1.5_f32, colors::ACCENT_WARNING),
+            )
+        }
+    } else {
+        // En veille : bleu cyan / indigo glass
+        if is_clicked {
+            (
+                Color32::from_rgb(30, 58, 138),
+                Stroke::new(1.5_f32, colors::ACCENT_CYAN_HOVER),
+            )
+        } else if is_hovered {
+            (
+                Color32::from_rgba_premultiplied(37, 99, 235, 180),
+                Stroke::new(1.5_f32, colors::ACCENT_CYAN_HOVER),
+            )
+        } else {
+            (
+                Color32::from_rgba_premultiplied(29, 78, 216, 160),
+                Stroke::new(1.0_f32, Color32::from_rgba_premultiplied(96, 165, 250, 180)),
+            )
+        }
+    };
+
+    let rounding = Rounding::same(7.0_f32);
+    ui.painter().rect(rect, rounding, bg_fill, border_stroke);
+
+    let center = rect.center();
+    if is_running {
+        // Carré d'arrêt blanc (Stop blueprint)
+        let sq_size = Vec2::splat(9.0_f32);
+        let sq_rect = Rect::from_center_size(center, sq_size);
+        ui.painter()
+            .rect_filled(sq_rect, Rounding::same(1.5_f32), Color32::WHITE);
+    } else {
+        // Insigne "BP" stylisé et net
+        ui.painter().text(
+            center,
+            egui::Align2::CENTER_CENTER,
+            "BP",
+            egui::FontId::proportional(11.0),
+            Color32::WHITE,
+        );
+    }
+
+    resp.on_hover_text(tooltip)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WindowBtnType {
     OpenEditor,
@@ -634,7 +737,7 @@ mod tests {
         toolbar.is_visible = false;
         // Simuler le show quand invisible
         let ctx = egui::Context::default();
-        let action = toolbar.show(&ctx, false, false, false, Language::Fr);
+        let action = toolbar.show(&ctx, false, false, false, false, Language::Fr);
         assert_eq!(action, ToolbarAction::None);
         assert!(!toolbar.win32_configured);
     }

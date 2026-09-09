@@ -57,6 +57,8 @@ pub enum BlueprintNodeType {
         image_path: String,
         timeout_ms: u64,
         tolerance: u8,
+        #[serde(default)]
+        delay_after_ms: u64,
     },
     /// Clique sur une image : soit la dernière détectée, soit une image spécifique
     /// Sortie 0: Effectué (Done), Sortie 1: Échec / Absent (Failed)
@@ -155,26 +157,10 @@ impl BlueprintNodeType {
         }
     }
 
-    pub fn input_pins(&self, lang: Language) -> Vec<String> {
+    pub fn input_pins(&self, _lang: Language) -> Vec<String> {
         match self {
-            BlueprintNodeType::Start => vec![],
-            BlueprintNodeType::Macro { .. }
-            | BlueprintNodeType::ImageCondition { .. }
-            | BlueprintNodeType::WaitImage { .. }
-            | BlueprintNodeType::ClickImage { .. }
-            | BlueprintNodeType::ClickCoordinate { .. }
-            | BlueprintNodeType::MouseMove { .. }
-            | BlueprintNodeType::KeyPress { .. }
-            | BlueprintNodeType::RandomDelay { .. }
-            | BlueprintNodeType::MouseScroll { .. }
-            | BlueprintNodeType::Delay { .. }
-            | BlueprintNodeType::Stop => {
-                vec!["Exec".to_string()]
-            }
-            BlueprintNodeType::Loop { .. } => match lang {
-                Language::Fr => vec!["Exec".to_string(), "Réinit".to_string()],
-                Language::En => vec!["Exec".to_string(), "Reset".to_string()],
-            },
+            BlueprintNodeType::Start => Vec::new(),
+            _ => vec!["Exec".to_string()],
         }
     }
 
@@ -207,7 +193,7 @@ impl BlueprintNodeType {
                 Language::En => vec!["Done".to_string(), "Failed (Miss)".to_string()],
             },
             BlueprintNodeType::Loop { .. } => match lang {
-                Language::Fr => vec!["Répéter".to_string(), "Terminé".to_string()],
+                Language::Fr => vec!["Corps de boucle".to_string(), "Terminé".to_string()],
                 Language::En => vec!["Loop Body".to_string(), "Completed".to_string()],
             },
             BlueprintNodeType::Stop => vec![],
@@ -230,10 +216,9 @@ impl BlueprintNodeType {
             BlueprintNodeType::KeyPress { .. } => (240.0, 130.0),
             BlueprintNodeType::RandomDelay { .. } => (220.0, 115.0),
             BlueprintNodeType::MouseScroll { .. } => (210.0, 105.0),
-            BlueprintNodeType::ImageCondition { .. } | BlueprintNodeType::WaitImage { .. } => {
-                (260.0, 150.0)
-            }
-            BlueprintNodeType::Loop { .. } => (220.0, 125.0),
+            BlueprintNodeType::ImageCondition { .. } => (260.0, 150.0),
+            BlueprintNodeType::WaitImage { .. } => (260.0, 175.0),
+            BlueprintNodeType::Loop { .. } => (230.0, 130.0),
             BlueprintNodeType::Macro { .. } => (240.0, 105.0),
             BlueprintNodeType::Delay { .. } => (210.0, 100.0),
             BlueprintNodeType::Start | BlueprintNodeType::Stop => (180.0, 85.0),
@@ -342,8 +327,8 @@ impl BlueprintGraph {
         if from.node_id == to.node_id {
             return false;
         }
-        // Remplacer une connexion existante vers cette broche d'entrée
-        self.connections.retain(|c| c.to != to);
+        // Une broche de sortie ne peut alimenter qu'une seule action suivante à la fois
+        self.connections.retain(|c| c.from != from);
         // Éviter les doublons exacts
         let conn = BlueprintConnection { from, to };
         if !self.connections.contains(&conn) {
@@ -595,6 +580,7 @@ mod tests {
                 image_path: "test.png".to_string(),
                 timeout_ms: 5000,
                 tolerance: 25,
+                delay_after_ms: 500,
             },
             BlueprintNodeType::ClickImage {
                 use_last_detected: true,
@@ -690,5 +676,101 @@ mod tests {
             BlueprintClickType::DoubleLeft.label(Language::En),
             "Double Click"
         );
+    }
+
+    #[test]
+    fn test_blueprint_multi_connections_to_input() {
+        let mut graph = BlueprintGraph::new();
+        // Start node est id 1
+        let start_id = graph.nodes[0].id;
+
+        let node_a = graph.add_node(
+            BlueprintNodeType::Delay { delay_ms: 100 },
+            [200.0, 100.0],
+            Language::Fr,
+        );
+        let node_b = graph.add_node(
+            BlueprintNodeType::Loop { count: 3 },
+            [400.0, 100.0],
+            Language::Fr,
+        );
+
+        let pin_start_out = PinId {
+            node_id: start_id,
+            is_output: true,
+            pin_index: 0,
+        };
+        let pin_a_in = PinId {
+            node_id: node_a,
+            is_output: false,
+            pin_index: 0,
+        };
+        let pin_a_out = PinId {
+            node_id: node_a,
+            is_output: true,
+            pin_index: 0,
+        };
+        let pin_b_in = PinId {
+            node_id: node_b,
+            is_output: false,
+            pin_index: 0,
+        };
+        let pin_b_loop_out = PinId {
+            node_id: node_b,
+            is_output: true,
+            pin_index: 0,
+        };
+
+        // 1. Brancher Start -> A
+        assert!(graph.connect(pin_start_out, pin_a_in));
+        // 2. Brancher A -> B
+        assert!(graph.connect(pin_a_out, pin_b_in));
+        // 3. Rebrancher B (Loop out) -> A (Entrée) pour boucler : l'entrée pin_a_in reçoit alors 2 fils !
+        assert!(graph.connect(pin_b_loop_out, pin_a_in));
+
+        // Vérifier que pin_a_in a bien reçu les 2 connexions sans que la première ne soit écrasée
+        let connections_to_a: Vec<_> = graph
+            .connections
+            .iter()
+            .filter(|c| c.to == pin_a_in)
+            .collect();
+        assert_eq!(connections_to_a.len(), 2);
+        assert_eq!(graph.connections.len(), 3);
+
+        // Si une sortie est reconnectée ailleurs, son ancienne sortie est remplacée
+        let pin_b_done_out = PinId {
+            node_id: node_b,
+            is_output: true,
+            pin_index: 1,
+        };
+        let node_c = graph.add_node(BlueprintNodeType::Stop, [600.0, 100.0], Language::Fr);
+        let pin_c_in = PinId {
+            node_id: node_c,
+            is_output: false,
+            pin_index: 0,
+        };
+        assert!(graph.connect(pin_b_done_out, pin_c_in));
+        assert_eq!(graph.connections.len(), 4);
+    }
+
+    #[test]
+    fn test_wait_image_backward_compatible_deserialization() {
+        // JSON sans le champ delay_after_ms : doit être désérialisé avec delay_after_ms = 0 par défaut
+        let legacy_json = r#"{
+            "WaitImage": {
+                "image_path": "test.png",
+                "timeout_ms": 3000,
+                "tolerance": 20
+            }
+        }"#;
+
+        let node_type: BlueprintNodeType =
+            serde_json::from_str(legacy_json).expect("Deserialization of legacy WaitImage failed");
+        match node_type {
+            BlueprintNodeType::WaitImage { delay_after_ms, .. } => {
+                assert_eq!(delay_after_ms, 0);
+            }
+            _ => panic!("Expected WaitImage variant"),
+        }
     }
 }

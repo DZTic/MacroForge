@@ -229,6 +229,7 @@ impl BlueprintRunnerState {
                         image_path,
                         timeout_ms,
                         tolerance,
+                        delay_after_ms,
                     } => {
                         let step_msg = match lang {
                             Language::Fr => format!(
@@ -267,6 +268,34 @@ impl BlueprintRunnerState {
 
                         if let Some(pos) = found_pos {
                             last_detected_image_pos = Some(pos);
+                            if *delay_after_ms > 0 {
+                                let delay_msg = match lang {
+                                    Language::Fr => format!(
+                                        "⏳ Image trouvée ! Pause post-détection de {} ms...",
+                                        delay_after_ms
+                                    ),
+                                    Language::En => format!(
+                                        "⏳ Image detected! Post-detection delay of {} ms...",
+                                        delay_after_ms
+                                    ),
+                                };
+                                set_status(&delay_msg);
+
+                                let delay_start = Instant::now();
+                                let target_delay = Duration::from_millis(*delay_after_ms);
+                                while delay_start.elapsed() < target_delay {
+                                    if check_stopped() {
+                                        break;
+                                    }
+                                    let remaining =
+                                        target_delay.saturating_sub(delay_start.elapsed());
+                                    let sleep_chunk = remaining.min(Duration::from_millis(15));
+                                    thread::sleep(sleep_chunk);
+                                }
+                                if check_stopped() {
+                                    break;
+                                }
+                            }
                             Some(0) // Pin 0 = Found
                         } else {
                             Some(1) // Pin 1 = Timeout
@@ -545,14 +574,41 @@ impl BlueprintRunnerState {
 
                         if *count == 0 || *current_counter <= *count {
                             let step_msg = match lang {
-                                Language::Fr => format!("🔁 Boucle itération #{}", current_counter),
-                                Language::En => format!("🔁 Loop iteration #{}", current_counter),
+                                Language::Fr => {
+                                    if *count == 0 {
+                                        format!(
+                                            "🔁 Boucle itération #{} (infinie)",
+                                            current_counter
+                                        )
+                                    } else {
+                                        format!(
+                                            "🔁 Boucle itération #{}/{}",
+                                            current_counter, count
+                                        )
+                                    }
+                                }
+                                Language::En => {
+                                    if *count == 0 {
+                                        format!("🔁 Loop iteration #{} (infinite)", current_counter)
+                                    } else {
+                                        format!("🔁 Loop iteration #{}/{}", current_counter, count)
+                                    }
+                                }
                             };
                             set_status(&step_msg);
-                            Some(0) // Pin 0 = Body
+                            Some(0) // Pin 0 = Corps de boucle
                         } else {
                             *current_counter = 0; // Réinitialiser pour une exécution future
-                            Some(1) // Pin 1 = Completed
+                            let step_msg = match lang {
+                                Language::Fr => {
+                                    format!("✅ Boucle terminée ({} itérations).", count)
+                                }
+                                Language::En => {
+                                    format!("✅ Loop finished ({} iterations).", count)
+                                }
+                            };
+                            set_status(&step_msg);
+                            Some(1) // Pin 1 = Terminé
                         }
                     }
                     BlueprintNodeType::Stop => {
@@ -731,5 +787,97 @@ mod tests {
         assert!(
             status.contains("terminée") || status.contains("Échec") || status.contains("arrêt")
         );
+    }
+
+    #[test]
+    fn test_runner_loop_cycle_with_multi_wire_input() {
+        let runner = BlueprintRunnerState::new();
+        let mut graph = BlueprintGraph::new();
+        let start_id = graph.find_start_node().unwrap();
+
+        let step_node = graph.add_node(
+            BlueprintNodeType::Delay { delay_ms: 10 },
+            [200.0, 200.0],
+            Language::Fr,
+        );
+
+        let loop_node = graph.add_node(
+            BlueprintNodeType::Loop { count: 2 },
+            [350.0, 200.0],
+            Language::Fr,
+        );
+
+        let stop_node = graph.add_node(BlueprintNodeType::Stop, [500.0, 200.0], Language::Fr);
+
+        // 1. Start -> step_node
+        graph.connect(
+            PinId {
+                node_id: start_id,
+                is_output: true,
+                pin_index: 0,
+            },
+            PinId {
+                node_id: step_node,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        // 2. step_node -> loop_node
+        graph.connect(
+            PinId {
+                node_id: step_node,
+                is_output: true,
+                pin_index: 0,
+            },
+            PinId {
+                node_id: loop_node,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        // 3. loop_node (Pin 0 = Corps de boucle) -> step_node (Reboucle vers l'entrée de step_node !)
+        // L'entrée de step_node reçoit maintenant 2 fils (start + rebouclage de la boucle)
+        graph.connect(
+            PinId {
+                node_id: loop_node,
+                is_output: true,
+                pin_index: 0,
+            },
+            PinId {
+                node_id: step_node,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        // 4. loop_node (Pin 1 = Terminé) -> stop_node
+        graph.connect(
+            PinId {
+                node_id: loop_node,
+                is_output: true,
+                pin_index: 1,
+            },
+            PinId {
+                node_id: stop_node,
+                is_output: false,
+                pin_index: 0,
+            },
+        );
+
+        assert!(runner.run_graph(graph, Language::Fr));
+
+        let start = Instant::now();
+        while runner.is_active() && start.elapsed() < Duration::from_millis(3000) {
+            thread::sleep(Duration::from_millis(15));
+        }
+
+        assert!(
+            !runner.is_active(),
+            "Runner should have finished loop cycle"
+        );
+        let status = runner.get_status();
+        assert!(status.contains("terminé") || status.contains("arrêt"));
     }
 }
