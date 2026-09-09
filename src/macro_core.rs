@@ -2662,7 +2662,9 @@ pub fn bgra_capture_to_egui_texture(
     }
 
     let rgba: Vec<u8> = bgra
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|px| [px[2], px[1], px[0], 255])
         .collect();
     let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba)?;
@@ -2846,33 +2848,20 @@ pub fn test_image_search(path: &str, tolerance: u8) -> ImageTestResult {
     result.capture_y = vy;
     result.capture_origin = get_capture_target_title();
 
-    // Capture réduite de moitié pour l'aperçu dans l'UI (limite mémoire)
-    if vw > 1600 && vh > 900 {
-        let half = image::RgbaImage::from_raw(
-            vw as u32,
-            vh as u32,
-            screen_raw
-                .chunks_exact(4)
-                .flat_map(|px| [px[2], px[1], px[0], 255u8])
-                .collect(),
-        )
-        .and_then(|img| {
-            let scaled = image::imageops::resize(
-                &img,
-                vw as u32 / 2,
-                vh as u32 / 2,
-                image::imageops::FilterType::Nearest,
-            );
-            // Re-passer en BGRA pour homogénéité avec bgra_capture_to_egui_texture
-            let raw = scaled
-                .chunks_exact(4)
-                .flat_map(|px| [px[2], px[1], px[0], 255u8])
-                .collect();
-            image::RgbaImage::from_raw(vw as u32 / 2, vh as u32 / 2, raw)
-        });
-        if let Some(small) = half {
-            result.capture_small = Some(small.into_raw());
+    // Capture réduite de moitié pour l'aperçu dans l'UI (limite mémoire) :
+    // sous-échantillonnage direct du BGRA (1 pixel sur 2), sans conversion
+    let hw = vw as usize / 2;
+    let hh = vh as usize / 2;
+    if hw > 0 && hh > 0 {
+        let mut small = Vec::with_capacity(hw * hh * 4);
+        for y in 0..hh {
+            let row = (y * 2) * vw as usize * 4;
+            for x in 0..hw {
+                let idx = row + (x * 2) * 4;
+                small.extend_from_slice(&screen_raw[idx..idx + 4]);
+            }
         }
+        result.capture_small = Some(small);
     }
 
     let mut found_pos = find_template_in_bgra(
