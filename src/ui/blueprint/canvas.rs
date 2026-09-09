@@ -1710,9 +1710,9 @@ impl BlueprintCanvas {
                         ui.add_space(4.0);
                         let guide_frame = egui::Frame::none()
                             .fill(Color32::from_rgba_unmultiplied(20, 25, 40, 180))
-                            .stroke(egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(234, 179, 8, 80)))
-                            .rounding(egui::Rounding::same(6.0))
-                            .inner_margin(egui::Margin::same(10.0));
+                            .stroke(egui::Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(234, 179, 8, 80)))
+                            .rounding(egui::Rounding::same(6.0_f32))
+                            .inner_margin(egui::Margin::same(10.0_f32));
 
                         guide_frame.show(ui, |ui| {
                             let guide = match lang {
