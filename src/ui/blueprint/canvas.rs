@@ -31,6 +31,9 @@ pub struct BlueprintCanvas {
     pub selected_node: Option<NodeId>,
     pub editing_node_id: Option<NodeId>,
     pub status_notification: Option<(String, std::time::Instant)>,
+    /// Demande d'ouverture du modal de test d'image (chemin, tolérance),
+    /// émise par les boutons 🔍 des nœuds Condition/Attente Image.
+    pub test_image_request: Option<(String, u8)>,
 }
 
 impl Default for BlueprintCanvas {
@@ -49,6 +52,7 @@ impl BlueprintCanvas {
             selected_node: None,
             editing_node_id: None,
             status_notification: None,
+            test_image_request: None,
         }
     }
 
@@ -1053,6 +1057,17 @@ impl BlueprintCanvas {
                                         }
                                     }
                                 }
+                                let test_btn = egui::Button::new(
+                                    egui::RichText::new("🔍").size(10.5 * self.zoom),
+                                );
+                                if ui
+                                    .add(test_btn)
+                                    .on_hover_text(lang.image_test_node_button_tooltip())
+                                    .clicked()
+                                {
+                                    self.test_image_request =
+                                        Some((image_path.clone(), *tolerance));
+                                }
                             });
                             ui.horizontal(|ui| {
                                 ui.label(
@@ -1106,6 +1121,17 @@ impl BlueprintCanvas {
                                             *image_path = p.to_string();
                                         }
                                     }
+                                }
+                                let test_btn = egui::Button::new(
+                                    egui::RichText::new("🔍").size(10.5 * self.zoom),
+                                );
+                                if ui
+                                    .add(test_btn)
+                                    .on_hover_text(lang.image_test_node_button_tooltip())
+                                    .clicked()
+                                {
+                                    self.test_image_request =
+                                        Some((image_path.clone(), *tolerance));
                                 }
                             });
                             ui.horizontal(|ui| {

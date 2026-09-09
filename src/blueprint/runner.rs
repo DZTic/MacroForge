@@ -83,6 +83,10 @@ impl BlueprintRunnerState {
             let mut loop_counters: HashMap<NodeId, u32> = HashMap::new();
             let mut last_detected_image_pos: Option<(i32, i32)> = None;
             let mut max_steps = 100_000u32; // Protection anti-boucle infinie sans délai
+                                            // Indique si la fenêtre de jeu doit être remontée au premier plan
+                                            // avant la prochaine recherche d'image (sinon la capture GDI risque
+                                            // de photographier MacroForge recouvrant le jeu).
+            let mut foreground_refresh_done = false;
 
             let set_status = |msg: &str| {
                 if let Ok(mut status) = status_msg_clone.lock() {
@@ -163,6 +167,14 @@ impl BlueprintRunnerState {
                         tolerance,
                         timeout_ms,
                     } => {
+                        // Remonter le jeu au premier plan avant la première
+                        // recherche d'image de cette exécution (comme play_macro).
+                        if !foreground_refresh_done {
+                            foreground_refresh_done = true;
+                            macro_core::bring_game_to_foreground();
+                            thread::sleep(Duration::from_millis(150));
+                        }
+
                         let step_msg = match lang {
                             Language::Fr => {
                                 format!("👁️ Recherche de l'image (tolérance: {})...", tolerance)
@@ -231,6 +243,14 @@ impl BlueprintRunnerState {
                         tolerance,
                         delay_after_ms,
                     } => {
+                        // Remonter le jeu au premier plan avant la première
+                        // recherche d'image de cette exécution (comme play_macro).
+                        if !foreground_refresh_done {
+                            foreground_refresh_done = true;
+                            macro_core::bring_game_to_foreground();
+                            thread::sleep(Duration::from_millis(150));
+                        }
+
                         let step_msg = match lang {
                             Language::Fr => format!(
                                 "⏳ Attente apparition image (timeout: {}ms)...",
