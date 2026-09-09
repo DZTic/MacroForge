@@ -29,6 +29,7 @@ pub struct BlueprintCanvas {
     pub dragged_node: Option<(NodeId, Vec2)>,
     pub dragged_cable_from: Option<PinId>,
     pub selected_node: Option<NodeId>,
+    pub editing_node_id: Option<NodeId>,
     pub status_notification: Option<(String, std::time::Instant)>,
 }
 
@@ -46,6 +47,7 @@ impl BlueprintCanvas {
             dragged_node: None,
             dragged_cable_from: None,
             selected_node: None,
+            editing_node_id: None,
             status_notification: None,
         }
     }
@@ -106,6 +108,9 @@ impl BlueprintCanvas {
             let canvas_size = ui.available_size();
             self.render_canvas_area(ui, canvas_size, graph, runner, lang);
         });
+
+        // 3. Modale d'édition avancée de nœud suite à un double-clic
+        self.render_node_edit_modal(ui.ctx(), graph, lang);
     }
 
     fn render_top_bar(
@@ -392,6 +397,7 @@ impl BlueprintCanvas {
                     image_path: "embedded://extreme.png".to_string(),
                     timeout_ms: 5000,
                     tolerance: 25,
+                    delay_after_ms: 0,
                 },
             ),
             (
@@ -569,6 +575,11 @@ impl BlueprintCanvas {
 
             if node_resp.clicked() {
                 self.selected_node = Some(node_id);
+            }
+
+            if node_resp.double_clicked() {
+                self.selected_node = Some(node_id);
+                self.editing_node_id = Some(node_id);
             }
 
             if node_resp.drag_started() && self.dragged_cable_from.is_none() {
@@ -1062,6 +1073,7 @@ impl BlueprintCanvas {
                             image_path,
                             timeout_ms,
                             tolerance,
+                            delay_after_ms,
                         } => {
                             ui.horizontal(|ui| {
                                 ui.label(
@@ -1114,6 +1126,23 @@ impl BlueprintCanvas {
                                         .speed(100),
                                 );
                             });
+                            ui.horizontal(|ui| {
+                                let pause_label = match lang {
+                                    Language::Fr => "Pause après:",
+                                    Language::En => "Post-wait:",
+                                };
+                                ui.label(
+                                    egui::RichText::new(pause_label)
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(delay_after_ms)
+                                        .range(0..=60000)
+                                        .speed(50)
+                                        .suffix("ms"),
+                                );
+                            });
                         }
                         BlueprintNodeType::Delay { delay_ms } => {
                             ui.horizontal(|ui| {
@@ -1132,8 +1161,8 @@ impl BlueprintCanvas {
                         BlueprintNodeType::Loop { count } => {
                             ui.horizontal(|ui| {
                                 let label = match lang {
-                                    Language::Fr => "Nb (0=inf):",
-                                    Language::En => "Count (0=inf):",
+                                    Language::Fr => "Itérations (0=∞):",
+                                    Language::En => "Iterations (0=∞):",
                                 };
                                 ui.label(
                                     egui::RichText::new(label)
@@ -1142,6 +1171,15 @@ impl BlueprintCanvas {
                                 );
                                 ui.add(egui::DragValue::new(count).range(0..=1000).speed(1));
                             });
+                            let hint_text = match lang {
+                                Language::Fr => "↳ Reboucler fin sur entrée",
+                                Language::En => "↳ Loop end back to in",
+                            };
+                            ui.label(
+                                egui::RichText::new(hint_text)
+                                    .size(9.0 * self.zoom)
+                                    .color(Color32::from_rgb(234, 179, 8)),
+                            );
                         }
                         BlueprintNodeType::ClickImage {
                             use_last_detected,
@@ -1516,5 +1554,428 @@ impl BlueprintCanvas {
         }
 
         delete_clicked
+    }
+
+    /// Modale d'édition avancée d'un nœud ouverte lors d'un double-clic
+    pub fn render_node_edit_modal(
+        &mut self,
+        ctx: &egui::Context,
+        graph: &mut BlueprintGraph,
+        lang: Language,
+    ) {
+        let editing_id = match self.editing_node_id {
+            Some(id) => id,
+            None => return,
+        };
+
+        let node = match graph.find_node_mut(editing_id) {
+            Some(n) => n,
+            None => {
+                self.editing_node_id = None;
+                return;
+            }
+        };
+
+        let modal_title = match lang {
+            Language::Fr => format!("⚙ Paramètres du Nœud : {}", node.title),
+            Language::En => format!("⚙ Node Settings: {}", node.title),
+        };
+
+        let mut is_open = true;
+
+        egui::Window::new(modal_title)
+            .open(&mut is_open)
+            .collapsible(false)
+            .resizable(true)
+            .default_size([460.0, 380.0])
+            .min_width(400.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(8.0, 8.0);
+
+                // 1. Titre éditable du nœud
+                ui.horizontal(|ui| {
+                    let label = match lang {
+                        Language::Fr => "Titre du nœud :",
+                        Language::En => "Node title:",
+                    };
+                    ui.label(egui::RichText::new(label).strong().color(colors::TEXT_PRIMARY));
+                    ui.text_edit_singleline(&mut node.title);
+                });
+
+                ui.separator();
+
+                // 2. Paramètres spécifiques au type de nœud
+                match &mut node.node_type {
+                    BlueprintNodeType::WaitImage {
+                        image_path,
+                        timeout_ms,
+                        tolerance,
+                        delay_after_ms,
+                    } => {
+                        ui.label(
+                            egui::RichText::new(match lang {
+                                Language::Fr => "Configuration de l'attente d'apparition d'image :",
+                                Language::En => "Image detection wait configuration:",
+                            })
+                            .strong()
+                            .color(colors::ACCENT_CYAN_HOVER),
+                        );
+
+                        ui.horizontal(|ui| {
+                            ui.label("Image :");
+                            let path_label = if image_path.is_empty() {
+                                "Parcourir...".to_string()
+                            } else {
+                                image_path.clone()
+                            };
+                            if ui
+                                .button(egui::RichText::new(format!("📁 {}", path_label)))
+                                .on_hover_text(image_path.as_str())
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("Image", &["png", "bmp", "jpg"])
+                                    .pick_file()
+                                {
+                                    if let Some(p) = path.to_str() {
+                                        *image_path = p.to_string();
+                                    }
+                                }
+                            }
+                        });
+
+                        ui.horizontal(|ui| {
+                            let tol_label = match lang {
+                                Language::Fr => "Tolérance chromatique (0-100) :",
+                                Language::En => "Color tolerance (0-100):",
+                            };
+                            ui.label(tol_label);
+                            ui.add(egui::Slider::new(tolerance, 0..=100));
+                        });
+
+                        ui.horizontal(|ui| {
+                            let timeout_label = match lang {
+                                Language::Fr => "Délai max d'attente (timeout ms) :",
+                                Language::En => "Max wait timeout (ms):",
+                            };
+                            ui.label(timeout_label);
+                            ui.add(
+                                egui::DragValue::new(timeout_ms)
+                                    .range(100..=120000)
+                                    .speed(100)
+                                    .suffix(" ms"),
+                            );
+                        });
+
+                        ui.horizontal(|ui| {
+                            let post_label = match lang {
+                                Language::Fr => "Délai après détection (ms) :",
+                                Language::En => "Post-detection delay (ms):",
+                            };
+                            ui.label(egui::RichText::new(post_label).strong().color(colors::ACCENT_SUCCESS));
+                            ui.add(
+                                egui::DragValue::new(delay_after_ms)
+                                    .range(0..=60000)
+                                    .speed(50)
+                                    .suffix(" ms"),
+                            );
+                        });
+
+                        let help_text = match lang {
+                            Language::Fr => "💡 Le délai après détection permet d'attendre qu'une interface ou une animation se stabilise avant d'exécuter la prochaine action.",
+                            Language::En => "💡 The post-detection delay allows animations or UI elements to settle before executing the next action.",
+                        };
+                        ui.label(egui::RichText::new(help_text).size(11.0).color(colors::TEXT_MUTED));
+                    }
+                    BlueprintNodeType::Loop { count } => {
+                        ui.label(
+                            egui::RichText::new(match lang {
+                                Language::Fr => "Configuration de la Boucle :",
+                                Language::En => "Loop Configuration:",
+                            })
+                            .strong()
+                            .color(Color32::from_rgb(234, 179, 8)),
+                        );
+
+                        ui.horizontal(|ui| {
+                            let count_label = match lang {
+                                Language::Fr => "Nombre d'itérations (0 = infinie) :",
+                                Language::En => "Iterations count (0 = infinite):",
+                            };
+                            ui.label(count_label);
+                            ui.add(egui::DragValue::new(count).range(0..=10000).speed(1));
+                        });
+
+                        ui.add_space(4.0);
+                        let guide_frame = egui::Frame::none()
+                            .fill(Color32::from_rgba_unmultiplied(20, 25, 40, 180))
+                            .stroke(egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(234, 179, 8, 80)))
+                            .rounding(egui::Rounding::same(6.0))
+                            .inner_margin(egui::Margin::same(10.0));
+
+                        guide_frame.show(ui, |ui| {
+                            let guide = match lang {
+                                Language::Fr => "📌 Comment utiliser la boucle :\n1. Connecter l'action précédente à l'entrée [Exec].\n2. Relier la sortie [Corps de boucle] à la 1ère action à répéter.\n3. Raccorder la dernière action de votre séquence sur l'entrée [Exec] (rebouclage multi-fils).\n4. Connecter la sortie [Terminé] à la suite du graphe.",
+                                Language::En => "📌 How to use the loop:\n1. Connect the previous action to the [Exec] input.\n2. Wire [Loop Body] to the first action to repeat.\n3. Wire the last action of your loop back to the [Exec] input (multi-wire loopback).\n4. Wire [Completed] to the next sequence after the loop.",
+                            };
+                            ui.label(egui::RichText::new(guide).size(11.5).color(colors::TEXT_SECONDARY));
+                        });
+                    }
+                    BlueprintNodeType::ClickCoordinate {
+                        x,
+                        y,
+                        click_type,
+                        delay_after_ms,
+                    } => {
+                        ui.label(
+                            egui::RichText::new(match lang {
+                                Language::Fr => "Paramètres du Clic aux Coordonnées :",
+                                Language::En => "Coordinate Click Settings:",
+                            })
+                            .strong()
+                            .color(Color32::from_rgb(14, 165, 233)),
+                        );
+
+                        ui.horizontal(|ui| {
+                            ui.label("X :");
+                            ui.add(egui::DragValue::new(x).speed(1));
+                            ui.label("Y :");
+                            ui.add(egui::DragValue::new(y).speed(1));
+
+                            let cap_tip = match lang {
+                                Language::Fr => "Capturer la position actuelle du curseur",
+                                Language::En => "Capture current cursor position",
+                            };
+                            if ui.button("📍 Capturer Curseur").on_hover_text(cap_tip).clicked() {
+                                if let Some((cx, cy)) = capture_cursor() {
+                                    *x = cx;
+                                    *y = cy;
+                                }
+                            }
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.label("Type de clic :");
+                            egui::ComboBox::from_id_salt("modal_click_coord_combo")
+                                .selected_text(click_type.label(lang))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(click_type, BlueprintClickType::Left, BlueprintClickType::Left.label(lang));
+                                    ui.selectable_value(click_type, BlueprintClickType::Right, BlueprintClickType::Right.label(lang));
+                                    ui.selectable_value(click_type, BlueprintClickType::DoubleLeft, BlueprintClickType::DoubleLeft.label(lang));
+                                    ui.selectable_value(click_type, BlueprintClickType::Middle, BlueprintClickType::Middle.label(lang));
+                                });
+                        });
+
+                        ui.horizontal(|ui| {
+                            let label = match lang {
+                                Language::Fr => "Délai après clic (ms) :",
+                                Language::En => "Delay after click (ms):",
+                            };
+                            ui.label(label);
+                            ui.add(egui::DragValue::new(delay_after_ms).range(0..=10000).speed(25).suffix(" ms"));
+                        });
+                    }
+                    BlueprintNodeType::ClickImage {
+                        use_last_detected,
+                        image_path,
+                        tolerance,
+                        timeout_ms,
+                        click_type,
+                        offset_x,
+                        offset_y,
+                    } => {
+                        let chk_label = match lang {
+                            Language::Fr => "Cliquer sur la dernière image détectée",
+                            Language::En => "Click on the last matched image",
+                        };
+                        ui.checkbox(use_last_detected, chk_label);
+
+                        if !*use_last_detected {
+                            ui.horizontal(|ui| {
+                                ui.label("Image :");
+                                if ui.button(format!("📁 {}", if image_path.is_empty() { "Parcourir..." } else { image_path.as_str() })).clicked() {
+                                    if let Some(path) = rfd::FileDialog::new().add_filter("Image", &["png", "bmp", "jpg"]).pick_file() {
+                                        if let Some(p) = path.to_str() {
+                                            *image_path = p.to_string();
+                                        }
+                                    }
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Tolérance :");
+                                ui.add(egui::Slider::new(tolerance, 0..=100));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Timeout (ms) :");
+                                ui.add(egui::DragValue::new(timeout_ms).range(0..=60000).speed(50).suffix(" ms"));
+                            });
+                        }
+
+                        ui.horizontal(|ui| {
+                            ui.label("Type de clic :");
+                            egui::ComboBox::from_id_salt("modal_click_img_combo")
+                                .selected_text(click_type.label(lang))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(click_type, BlueprintClickType::Left, BlueprintClickType::Left.label(lang));
+                                    ui.selectable_value(click_type, BlueprintClickType::Right, BlueprintClickType::Right.label(lang));
+                                    ui.selectable_value(click_type, BlueprintClickType::DoubleLeft, BlueprintClickType::DoubleLeft.label(lang));
+                                    ui.selectable_value(click_type, BlueprintClickType::Middle, BlueprintClickType::Middle.label(lang));
+                                });
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.label("Décalage ΔX :");
+                            ui.add(egui::DragValue::new(offset_x).speed(1));
+                            ui.label("ΔY :");
+                            ui.add(egui::DragValue::new(offset_y).speed(1));
+                        });
+                    }
+                    BlueprintNodeType::ImageCondition {
+                        image_path,
+                        tolerance,
+                        timeout_ms,
+                    } => {
+                        ui.horizontal(|ui| {
+                            ui.label("Image :");
+                            if ui.button(format!("📁 {}", if image_path.is_empty() { "Parcourir..." } else { image_path.as_str() })).clicked() {
+                                if let Some(path) = rfd::FileDialog::new().add_filter("Image", &["png", "bmp", "jpg"]).pick_file() {
+                                    if let Some(p) = path.to_str() {
+                                        *image_path = p.to_string();
+                                    }
+                                }
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Tolérance :");
+                            ui.add(egui::Slider::new(tolerance, 0..=100));
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Timeout (ms) :");
+                            ui.add(egui::DragValue::new(timeout_ms).range(0..=60000).speed(50).suffix(" ms"));
+                        });
+                    }
+                    BlueprintNodeType::MouseMove { x, y, relative } => {
+                        ui.horizontal(|ui| {
+                            ui.label(if *relative { "ΔX :" } else { "X :" });
+                            ui.add(egui::DragValue::new(x).speed(1));
+                            ui.label(if *relative { "ΔY :" } else { "Y :" });
+                            ui.add(egui::DragValue::new(y).speed(1));
+
+                            if !*relative && ui.button("📍 Capturer").clicked() {
+                                if let Some((cx, cy)) = capture_cursor() {
+                                    *x = cx;
+                                    *y = cy;
+                                }
+                            }
+                        });
+                        ui.checkbox(relative, match lang {
+                            Language::Fr => "Déplacement relatif (Δ)",
+                            Language::En => "Relative movement (Δ)",
+                        });
+                    }
+                    BlueprintNodeType::KeyPress {
+                        key_name,
+                        vk_code,
+                        is_extended,
+                        hold_ms,
+                    } => {
+                        ui.horizontal(|ui| {
+                            ui.label("Touche :");
+                            egui::ComboBox::from_id_salt("modal_key_preset")
+                                .selected_text(key_name.as_str())
+                                .show_ui(ui, |ui| {
+                                    let common_keys: &[(&str, u16, bool)] = &[
+                                        ("Enter", 13, false),
+                                        ("Space", 32, false),
+                                        ("Escape", 27, false),
+                                        ("Tab", 9, false),
+                                        ("Backspace", 8, false),
+                                        ("Up", 38, true),
+                                        ("Down", 40, true),
+                                        ("Left", 37, true),
+                                        ("Right", 39, true),
+                                        ("F1", 112, false),
+                                        ("F2", 113, false),
+                                        ("F3", 114, false),
+                                        ("F5", 116, false),
+                                        ("A", 65, false),
+                                        ("E", 69, false),
+                                        ("F", 70, false),
+                                        ("R", 82, false),
+                                    ];
+                                    for (name, vk, ext) in common_keys {
+                                        if ui.selectable_label(key_name == *name, *name).clicked() {
+                                            *key_name = name.to_string();
+                                            *vk_code = *vk;
+                                            *is_extended = *ext;
+                                        }
+                                    }
+                                });
+                        });
+
+                        ui.horizontal(|ui| {
+                            let label = match lang {
+                                Language::Fr => "Maintien de la touche (ms) :",
+                                Language::En => "Key hold duration (ms):",
+                            };
+                            ui.label(label);
+                            ui.add(egui::DragValue::new(hold_ms).range(0..=5000).speed(10).suffix(" ms"));
+                        });
+                    }
+                    BlueprintNodeType::RandomDelay { min_ms, max_ms } => {
+                        ui.horizontal(|ui| {
+                            ui.label("Min (ms) :");
+                            ui.add(egui::DragValue::new(min_ms).range(1..=60000).speed(25));
+                            ui.label("Max (ms) :");
+                            ui.add(egui::DragValue::new(max_ms).range(1..=60000).speed(25));
+                        });
+                    }
+                    BlueprintNodeType::MouseScroll { steps } => {
+                        ui.horizontal(|ui| {
+                            let label = match lang {
+                                Language::Fr => "Crans molette (+haut/-bas) :",
+                                Language::En => "Wheel steps (+up/-down):",
+                            };
+                            ui.label(label);
+                            ui.add(egui::DragValue::new(steps).range(-50..=50).speed(1));
+                        });
+                    }
+                    BlueprintNodeType::Delay { delay_ms } => {
+                        ui.horizontal(|ui| {
+                            let label = match lang {
+                                Language::Fr => "Durée de la pause (ms) :",
+                                Language::En => "Pause duration (ms):",
+                            };
+                            ui.label(label);
+                            ui.add(egui::DragValue::new(delay_ms).range(10..=60000).speed(50).suffix(" ms"));
+                        });
+                    }
+                    BlueprintNodeType::Macro { name, actions } => {
+                        ui.label(format!("Macro : {} ({} actions)", name, actions.len()));
+                    }
+                    _ => {}
+                }
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(4.0);
+
+                // 3. Bouton de validation / fermeture
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let close_label = match lang {
+                        Language::Fr => "Valider & Fermer",
+                        Language::En => "Apply & Close",
+                    };
+                    let btn = GlassButton::new(close_label).variant(ButtonVariant::Primary);
+                    if ui.add(btn).clicked() {
+                        self.editing_node_id = None;
+                    }
+                });
+            });
+
+        if !is_open {
+            self.editing_node_id = None;
+        }
     }
 }
