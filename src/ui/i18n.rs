@@ -1227,6 +1227,142 @@ impl Language {
             Language::En => "Last matched image",
         }
     }
+
+    pub fn image_test_modal_title(&self) -> &'static str {
+        match self {
+            Language::Fr => "🔍 Test de recherche d'image",
+            Language::En => "🔍 Image Search Test",
+        }
+    }
+
+    pub fn image_test_image_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Image :",
+            Language::En => "Image:",
+        }
+    }
+
+    pub fn image_test_tolerance_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Tolérance :",
+            Language::En => "Tolerance:",
+        }
+    }
+
+    pub fn image_test_run_btn(&self) -> &'static str {
+        match self {
+            Language::Fr => "Tester maintenant",
+            Language::En => "Test now",
+        }
+    }
+
+    pub fn image_test_run_tooltip(&self) -> &'static str {
+        match self {
+            Language::Fr => {
+                "Capture l'écran comme en exécution et vérifie si l'image y est détectée"
+            }
+            Language::En => {
+                "Captures the screen as during execution and checks whether the image is detected"
+            }
+        }
+    }
+
+    pub fn image_test_stats_label(&self) -> &'static str {
+        match self {
+            Language::Fr => "Réussis",
+            Language::En => "Passed",
+        }
+    }
+
+    pub fn image_test_idle_hint(&self) -> &'static str {
+        match self {
+            Language::Fr => {
+                "Placez le jeu dans l'état souhaité, puis cliquez sur « Tester maintenant »."
+            }
+            Language::En => "Put the game in the desired state, then click \"Test now\".",
+        }
+    }
+
+    pub fn image_test_scanning(&self) -> &'static str {
+        match self {
+            Language::Fr => "👁️ Analyse de l'écran en cours...",
+            Language::En => "👁️ Scanning the screen...",
+        }
+    }
+
+    pub fn image_test_found(&self) -> &'static str {
+        match self {
+            Language::Fr => "✅ Image détectée à l'écran",
+            Language::En => "✅ Image detected on screen",
+        }
+    }
+
+    pub fn image_test_not_found(&self) -> &'static str {
+        match self {
+            Language::Fr => "❌ Image NON détectée à l'écran",
+            Language::En => "❌ Image NOT detected on screen",
+        }
+    }
+
+    pub fn image_test_found_advice(&self) -> &'static str {
+        match self {
+            Language::Fr => "Cette image sera trouvée en jeu : le nœud prendra la branche [Match].",
+            Language::En => {
+                "This image will be found in game: the node will take the [Match] branch."
+            }
+        }
+    }
+
+    pub fn image_test_miss_advice(&self) -> &'static str {
+        match self {
+            Language::Fr => "En jeu, ce nœud prendrait la branche [Miss]. Prenez une autre capture ou augmentez la tolérance.",
+            Language::En => "In game, this node would take the [Miss] branch. Take another capture or increase the tolerance.",
+        }
+    }
+
+    pub fn image_test_error_hint(&self) -> &'static str {
+        match self {
+            Language::Fr => {
+                "Vérifiez que le fichier image existe toujours et est un PNG/BMP/JPG valide."
+            }
+            Language::En => "Check that the image file still exists and is a valid PNG/BMP/JPG.",
+        }
+    }
+
+    pub fn image_test_template_size(&self) -> &'static str {
+        match self {
+            Language::Fr => "Template",
+            Language::En => "Template",
+        }
+    }
+
+    pub fn image_test_capture_size(&self) -> &'static str {
+        match self {
+            Language::Fr => "Capture",
+            Language::En => "Capture",
+        }
+    }
+
+    pub fn image_test_capture_zone(&self) -> &'static str {
+        match self {
+            Language::Fr => "Zone capturée :",
+            Language::En => "Capture zone:",
+        }
+    }
+
+    pub fn image_test_preview_unavailable(&self) -> &'static str {
+        match self {
+            Language::Fr => "Aperçu de la capture indisponible.",
+            Language::En => "Capture preview unavailable.",
+        }
+    }
+
+    pub fn image_test_node_button_tooltip(&self) -> &'static str {
+        match self {
+            Language::Fr => "Tester si cette image serait détectée en jeu",
+            Language::En => "Test whether this image would be detected in game",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1279,6 +1415,13 @@ mod tests {
         assert_ne!(
             fr.blueprint_last_detected_image(),
             en.blueprint_last_detected_image()
+        );
+        assert_ne!(fr.image_test_modal_title(), en.image_test_modal_title());
+        assert_ne!(fr.image_test_run_btn(), en.image_test_run_btn());
+        assert_ne!(fr.image_test_found(), en.image_test_not_found());
+        assert_ne!(
+            fr.image_test_node_button_tooltip(),
+            en.image_test_node_button_tooltip()
         );
     }
 
