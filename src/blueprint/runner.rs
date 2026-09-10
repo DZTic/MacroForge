@@ -79,14 +79,14 @@ impl BlueprintRunnerState {
         macro_core::notify_event(EngineEvent::PlaybackStateChanged(true));
 
         thread::spawn(move || {
-            // Le lancement depuis l'interface laisse MacroForge au premier plan :
-            // rendre le focus à la fenêtre cible pour que les clics l'atteignent.
-            macro_core::ensure_target_window_focus();
-
             let mut current_id = Some(start_id);
             let mut loop_counters: HashMap<NodeId, u32> = HashMap::new();
             let mut last_detected_image_pos: Option<(i32, i32)> = None;
             let mut max_steps = 100_000u32; // Protection anti-boucle infinie sans délai
+                                            // Indique si la fenêtre de jeu doit être remontée au premier plan
+                                            // avant la prochaine recherche d'image (sinon la capture GDI risque
+                                            // de photographier MacroForge recouvrant le jeu).
+            let mut foreground_refresh_done = false;
 
             let set_status = |msg: &str| {
                 if let Ok(mut status) = status_msg_clone.lock() {
@@ -167,6 +167,14 @@ impl BlueprintRunnerState {
                         tolerance,
                         timeout_ms,
                     } => {
+                        // Remonter le jeu au premier plan avant la première
+                        // recherche d'image de cette exécution (comme play_macro).
+                        if !foreground_refresh_done {
+                            foreground_refresh_done = true;
+                            macro_core::bring_game_to_foreground();
+                            thread::sleep(Duration::from_millis(150));
+                        }
+
                         let step_msg = match lang {
                             Language::Fr => {
                                 format!("👁️ Recherche de l'image (tolérance: {})...", tolerance)
@@ -235,6 +243,14 @@ impl BlueprintRunnerState {
                         tolerance,
                         delay_after_ms,
                     } => {
+                        // Remonter le jeu au premier plan avant la première
+                        // recherche d'image de cette exécution (comme play_macro).
+                        if !foreground_refresh_done {
+                            foreground_refresh_done = true;
+                            macro_core::bring_game_to_foreground();
+                            thread::sleep(Duration::from_millis(150));
+                        }
+
                         let step_msg = match lang {
                             Language::Fr => format!(
                                 "⏳ Attente apparition image (timeout: {}ms)...",
@@ -330,6 +346,14 @@ impl BlueprintRunnerState {
                             };
                             set_status(&step_msg);
 
+                            // Remonter le jeu au premier plan avant la première
+                            // recherche d'image de cette exécution (comme play_macro).
+                            if !foreground_refresh_done {
+                                foreground_refresh_done = true;
+                                macro_core::bring_game_to_foreground();
+                                thread::sleep(Duration::from_millis(150));
+                            }
+
                             let start = Instant::now();
                             let mut found = None;
                             let timeout = Duration::from_millis(*timeout_ms);
@@ -383,7 +407,7 @@ impl BlueprintRunnerState {
 
                             // La recherche d'image peut avoir pris du temps : s'assurer
                             // que la fenêtre cible est bien au premier plan avant de cliquer.
-                            macro_core::ensure_target_window_focus();
+                            macro_core::bring_game_to_foreground();
 
                             for i in 0..count {
                                 if check_stopped() {

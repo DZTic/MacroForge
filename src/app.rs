@@ -1,7 +1,8 @@
 use crate::events::EngineEvent;
 use crate::macro_core::{self, ActionType, MacroAction, MACRO_STATE};
 use crate::ui::dialogs::{
-    ActionEditorModal, ActionModalTab, ActionModalTarget, StopImageConfigModal, WindowLockModal,
+    ActionEditorModal, ActionModalTab, ActionModalTarget, ImageTestModal, StopImageConfigModal,
+    WindowLockModal,
 };
 use crate::ui::i18n::Language;
 use crate::ui::theme::{self, colors};
@@ -73,6 +74,7 @@ pub struct MacroForgeApp {
     action_modal: ActionEditorModal,
     stop_image_modal: StopImageConfigModal,
     window_lock_modal: WindowLockModal,
+    image_test_modal: ImageTestModal,
 
     // Toolbar flottante native
     toolbar: crate::ui::FloatingToolbar,
@@ -139,6 +141,7 @@ impl MacroForgeApp {
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
             window_lock_modal: WindowLockModal::new(),
+            image_test_modal: ImageTestModal::new(),
 
             toolbar: crate::ui::FloatingToolbar {
                 is_visible: false,
@@ -898,7 +901,8 @@ impl eframe::App for MacroForgeApp {
         // afin qu'elle ne recouvre jamais la pop-up egui ni n'intercepte les clics de souris
         let any_modal_open = self.action_modal.is_open
             || self.stop_image_modal.is_open
-            || self.window_lock_modal.is_open;
+            || self.window_lock_modal.is_open
+            || self.image_test_modal.is_open;
         if any_modal_open {
             macro_core::hide_embedded_target_window();
         }
@@ -940,6 +944,9 @@ impl eframe::App for MacroForgeApp {
                 Language::En => "✅ Target window lock configuration saved.".to_string(),
             };
         }
+
+        // Modal de test de recherche d'image (nœuds Condition/Attente Image du Blueprint)
+        self.image_test_modal.show(ctx, self.lang);
 
         // 2. Toolbar flottante native (Multi-viewport)
         let is_embedded = macro_core::get_window_lock().embed_in_macroforge
@@ -1856,6 +1863,12 @@ impl eframe::App for MacroForgeApp {
                         &self.actions_cache,
                         self.lang,
                     );
+
+                    // Un bouton 🔍 de nœud a demandé un test de recherche d'image
+                    if let Some((path, tolerance)) = self.blueprint_canvas.test_image_request.take()
+                    {
+                        self.image_test_modal.open_for(&path, tolerance);
+                    }
                 } else {
                     let is_embedded = macro_core::get_window_lock().embed_in_macroforge
                         || macro_core::is_target_window_embedded();
@@ -1974,6 +1987,7 @@ mod tests {
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
             window_lock_modal: WindowLockModal::new(),
+            image_test_modal: ImageTestModal::new(),
             toolbar: crate::ui::FloatingToolbar {
                 is_visible: false,
                 current_action_idx: 0,
@@ -2028,6 +2042,7 @@ mod tests {
             action_modal: ActionEditorModal::new(),
             stop_image_modal: StopImageConfigModal::new(),
             window_lock_modal: WindowLockModal::new(),
+            image_test_modal: ImageTestModal::new(),
             toolbar: crate::ui::FloatingToolbar {
                 is_visible: false,
                 current_action_idx: 0,

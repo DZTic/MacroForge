@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 #[cfg(windows)]
 use winapi::um::libloaderapi::GetModuleHandleW;
@@ -446,11 +446,18 @@ const FAILED_IMAGE_DATA: &[u8] = include_bytes!("../failed.PNG");
 
 pub type EmbeddedViewportRect = (i32, i32, i32, i32, bool);
 
+/// Entrée du cache de templates : image décodée + date de modification du
+/// fichier source (None pour les images intégrées).
+type CachedTemplate = (Arc<image::RgbaImage>, Option<SystemTime>);
+
 lazy_static::lazy_static! {
     pub static ref MACRO_STATE: Mutex<MacroState> = Mutex::new(MacroState::new());
     pub static ref EVENT_SENDER: Mutex<Option<Sender<EngineEvent>>> = Mutex::new(None);
     pub static ref EGUI_CTX: Mutex<Option<eframe::egui::Context>> = Mutex::new(None);
-    pub static ref IMAGE_CACHE: Mutex<HashMap<String, Arc<image::RgbaImage>>> = Mutex::new(HashMap::new());
+    // Cache des templates avec metadata de fichier : une image remplacee sur le
+    // disque (meme chemin) est rechargee automatiquement au prochain acces.
+    pub static ref IMAGE_CACHE: Mutex<HashMap<String, CachedTemplate>> =
+        Mutex::new(HashMap::new());
     static ref LAST_RECORD_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
     static ref SAVED_WINDOW_STATES: Mutex<HashMap<isize, OriginalWindowState>> = Mutex::new(HashMap::new());
     static ref EMBEDDED_VIEWPORT: Mutex<Option<EmbeddedViewportRect>> = Mutex::new(None);
@@ -480,6 +487,42 @@ pub fn set_event_sender(sender: Sender<EngineEvent>) {
 
 pub fn set_egui_ctx(ctx: eframe::egui::Context) {
     *EGUI_CTX.lock().unwrap() = Some(ctx);
+}
+
+/// Charge (et met en cache) le template RGBA correspondant au chemin.
+/// Les images intégrées ("embedded://...") ne sont jamais invalidées ;
+/// les images disque sont rechargées si le fichier a été modifié (mtime),
+/// afin qu'une image remplacée sur le disque soit réellement recherchée.
+pub fn load_template_cached(path: &str) -> Option<Arc<image::RgbaImage>> {
+    let is_embedded = path == "embedded://extreme.png" || path == "embedded://failed.PNG";
+    let mtime = if is_embedded {
+        None
+    } else {
+        std::fs::metadata(path).ok().and_then(|m| m.modified().ok())
+    };
+
+    let mut cache = IMAGE_CACHE.lock().unwrap();
+    if let Some((img, cached_mtime)) = cache.get(path) {
+        // Image intégrée : toujours valide. Image disque : valide si le fichier n'a pas changé.
+        if is_embedded || *cached_mtime == mtime {
+            return Some(Arc::clone(img));
+        }
+    }
+
+    let img = if is_embedded {
+        let data = if path == "embedded://extreme.png" {
+            EXTREME_IMAGE_DATA
+        } else {
+            FAILED_IMAGE_DATA
+        };
+        image::load_from_memory(data).ok()?.to_rgba8()
+    } else {
+        image::open(path).ok()?.to_rgba8()
+    };
+
+    let arc = Arc::new(img);
+    cache.insert(path.to_string(), (Arc::clone(&arc), mtime));
+    Some(arc)
 }
 
 pub fn notify_event(event: EngineEvent) {
@@ -883,7 +926,7 @@ pub fn find_template_in_bgra(
                     continue;
                 }
 
-                // 4. Vérification complète sur grille (step_by 2)
+                // 4. Pré-vérification rapide sur grille espacée (step_by 2)
                 let mut matched = true;
                 'tmatch: for ty in (0..template_height).step_by(2) {
                     let t_row_start = ty * template_width * 4;
@@ -907,6 +950,37 @@ pub fn find_template_in_bgra(
                         ) {
                             matched = false;
                             break 'tmatch;
+                        }
+                    }
+                }
+
+                // 5. Vérification exhaustive de TOUS les pixels : la grille espacée
+                //    ne teste que les positions paires et laisserait sinon passer
+                //    des faux positifs (moitié des pixels seulement conforme).
+                if matched {
+                    'fullmatch: for ty in 0..template_height {
+                        let t_row_start = ty * template_width * 4;
+                        let s_row_start = (sy + ty) * screen_width * 4;
+                        for tx in 0..template_width {
+                            let t_idx = t_row_start + tx * 4;
+                            let s_idx = s_row_start + (sx + tx) * 4;
+                            let (cur_r, cur_g, cur_b) = (
+                                screen_raw[s_idx + 2],
+                                screen_raw[s_idx + 1],
+                                screen_raw[s_idx],
+                            );
+                            if !pixels_match(
+                                cur_r,
+                                cur_g,
+                                cur_b,
+                                template_raw[t_idx],
+                                template_raw[t_idx + 1],
+                                template_raw[t_idx + 2],
+                                tolerance,
+                            ) {
+                                matched = false;
+                                break 'fullmatch;
+                            }
                         }
                     }
                 }
@@ -1223,20 +1297,28 @@ fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
 #[cfg(not(windows))]
 fn force_foreground_window(_hwnd: isize) {}
 
-/// Ramène la fenêtre cible (dernier focus non-MacroForge) au premier plan.
-/// À appeler avant d'envoyer des clics/touches : au lancement d'une exécution
-/// depuis l'interface, MacroForge détient le focus et les actions s'y perdent.
-#[cfg(windows)]
-pub fn ensure_target_window_focus() {
-    let target_hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
-    if !target_hwnd.is_null() {
-        force_foreground_window(target_hwnd);
-        thread::sleep(Duration::from_millis(60));
+/// Remonte la fenêtre de jeu suivie au premier plan afin que la capture d'écran
+/// montre le jeu et non une fenêtre la recouvrant (comportement identique à la
+/// relecture de macro classique). Ne fait rien si aucune fenêtre n'est suivie
+/// ou si la fenêtre est intégrée dans MacroForge.
+pub fn bring_game_to_foreground() -> bool {
+    #[cfg(windows)]
+    {
+        if is_target_window_embedded() {
+            return false;
+        }
+        let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+        if hwnd.is_null() {
+            return false;
+        }
+        force_foreground_window(hwnd);
+        true
+    }
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
-
-#[cfg(not(windows))]
-pub fn ensure_target_window_focus() {}
 
 pub fn play_macro() {
     let mut state = MACRO_STATE.lock().unwrap();
@@ -1548,41 +1630,11 @@ pub fn play_macro() {
                                 detail: "Recherche image...".into(),
                             });
 
-                            let template_arc = {
-                                let mut cache = IMAGE_CACHE.lock().unwrap();
-                                if let Some(img) = cache.get(path.as_str()) {
-                                    img.clone()
-                                } else if path == "embedded://extreme.png"
-                                    || path == "embedded://failed.PNG"
-                                {
-                                    let data = if path == "embedded://extreme.png" {
-                                        EXTREME_IMAGE_DATA
-                                    } else {
-                                        FAILED_IMAGE_DATA
-                                    };
-                                    match image::load_from_memory(data) {
-                                        Ok(img) => {
-                                            let rb = Arc::new(img.to_rgba8());
-                                            cache.insert(path.clone(), rb.clone());
-                                            rb
-                                        }
-                                        Err(e) => {
-                                            error!("{} WaitImage: ERREUR chargement image intégrée: {} — action ignorée.", ts(), e);
-                                            continue;
-                                        }
-                                    }
-                                } else {
-                                    match image::open(path) {
-                                        Ok(img) => {
-                                            let rb = Arc::new(img.to_rgba8());
-                                            cache.insert(path.clone(), rb.clone());
-                                            rb
-                                        }
-                                        Err(e) => {
-                                            error!("{} WaitImage: ERREUR ouverture image '{}': {} — action ignorée.", ts(), path, e);
-                                            continue;
-                                        }
-                                    }
+                            let template_arc = match load_template_cached(path) {
+                                Some(img) => img,
+                                None => {
+                                    error!("{} WaitImage: ERREUR chargement image '{}' — action ignorée.", ts(), path);
+                                    continue;
                                 }
                             };
 
@@ -2529,35 +2581,7 @@ pub fn load_macro_from_file(path: &str) -> Result<usize, String> {
 }
 
 pub fn find_image_coords_with_tolerance(path: &str, tolerance: u8) -> Option<(i32, i32)> {
-    let template_arc = {
-        let mut cache = IMAGE_CACHE.lock().unwrap();
-        if let Some(img) = cache.get(path) {
-            img.clone()
-        } else if path == "embedded://extreme.png" || path == "embedded://failed.PNG" {
-            let data = if path == "embedded://extreme.png" {
-                EXTREME_IMAGE_DATA
-            } else {
-                FAILED_IMAGE_DATA
-            };
-            match image::load_from_memory(data) {
-                Ok(img) => {
-                    let rb = Arc::new(img.to_rgba8());
-                    cache.insert(path.to_string(), rb.clone());
-                    rb
-                }
-                Err(_) => return None,
-            }
-        } else {
-            match image::open(path) {
-                Ok(img) => {
-                    let rb = Arc::new(img.to_rgba8());
-                    cache.insert(path.to_string(), rb.clone());
-                    rb
-                }
-                Err(_) => return None,
-            }
-        }
-    };
+    let template_arc = load_template_cached(path)?;
 
     let (tw, th) = template_arc.dimensions();
     let tw = tw as usize;
@@ -2596,6 +2620,72 @@ pub fn find_image_coords_with_tolerance(path: &str, tolerance: u8) -> Option<(i3
 
 pub fn check_image_present_with_tolerance(path: &str, tolerance: u8) -> bool {
     find_image_coords_with_tolerance(path, tolerance).is_some()
+}
+
+/// Titre de la fenêtre cible capturée (fenêtre de jeu suivie), ou None si
+/// la capture couvre l'ensemble du bureau virtuel.
+#[cfg(windows)]
+pub fn get_capture_target_title() -> Option<String> {
+    let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+    if hwnd.is_null() {
+        return None;
+    }
+    let mut buf = [0u16; 256];
+    let len = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
+    if len > 0 {
+        let title = String::from_utf16_lossy(&buf[..len as usize]);
+        let trimmed = title.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    None
+}
+
+#[cfg(not(windows))]
+pub fn get_capture_target_title() -> Option<String> {
+    None
+}
+
+/// Étend la capture d'écran BGRA (x, y, w, h) en texture egui, éventuellement
+/// réduite pour tenir sous max_side pixels, en préservant les proportions.
+/// Retourne (texture, [largeur, hauteur] d'affichage en points).
+pub fn bgra_capture_to_egui_texture(
+    ctx: &eframe::egui::Context,
+    bgra: &[u8],
+    w: usize,
+    h: usize,
+    max_side: usize,
+) -> Option<(eframe::egui::TextureHandle, [f32; 2])> {
+    if w == 0 || h == 0 || bgra.len() < w * h * 4 {
+        return None;
+    }
+
+    let rgba: Vec<u8> = bgra
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|px| [px[2], px[1], px[0], 255])
+        .collect();
+    let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba)?;
+    let img = if w > max_side || h > max_side {
+        let scale = max_side as f64 / w.max(h) as f64;
+        let nw = (w as f64 * scale).round().max(1.0) as u32;
+        let nh = (h as f64 * scale).round().max(1.0) as u32;
+        image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Nearest)
+    } else {
+        img
+    };
+
+    let (tw, th) = img.dimensions();
+    let color_img =
+        eframe::egui::ColorImage::from_rgba_unmultiplied([tw as usize, th as usize], img.as_raw());
+    let handle = ctx.load_texture(
+        "screen_capture_preview",
+        color_img,
+        eframe::egui::TextureOptions::default(),
+    );
+    Some((handle, [tw as f32, th as f32]))
 }
 
 pub fn check_image_present(path: &str) -> bool {
@@ -2637,6 +2727,203 @@ pub fn execute_click(x: i32, y: i32, click_type: BlueprintClickType) {
     #[cfg(not(windows))]
     {
         let _ = (x, y, click_type);
+    }
+}
+
+/// Résultat détaillé d'un test de recherche d'image sur l'écran courant.
+#[derive(Debug, Clone)]
+pub struct ImageTestResult {
+    /// Image trouvée dans les limites capturées
+    pub found: bool,
+    /// Position absolue (bureau virtuel) du coin haut-gauche du template si trouvé
+    pub pos: Option<(i32, i32)>,
+    /// Dimensions du template chargé, None si le fichier est introuvable/corrompu
+    pub template_size: Option<(u32, u32)>,
+    /// Chemin du template chargé (peut différer de la demande si resampling)
+    pub template_path: Option<String>,
+    /// Origine de la capture dans le bureau virtuel (coin haut-gauche)
+    pub capture_x: i32,
+    pub capture_y: i32,
+    /// Aperçu BGRA de la capture analysée
+    pub capture: Vec<u8>,
+    pub capture_width: usize,
+    pub capture_height: usize,
+    /// Capture réduite de 2x pour l'affichage, None si assez petite
+    pub capture_small: Option<Vec<u8>>,
+    /// Fenêtre dont la zone client a été capturée, None = bureau virtuel complet
+    pub capture_origin: Option<String>,
+    /// Erreur bloquante (fichier image introuvable...)
+    pub error: Option<String>,
+}
+
+/// Recharge le template depuis le disque sans servir le cache, pour tester
+/// exactement le fichier actuel. Retourne (pixels RGBA, largeur, hauteur).
+fn load_template_for_test(path: &str) -> Result<(Vec<u8>, u32, u32), String> {
+    let is_embedded = path == "embedded://extreme.png" || path == "embedded://failed.PNG";
+    let img = if is_embedded {
+        let data = if path == "embedded://extreme.png" {
+            EXTREME_IMAGE_DATA
+        } else {
+            FAILED_IMAGE_DATA
+        };
+        image::load_from_memory(data)
+            .map_err(|e| format!("Image intégrée invalide: {}", e))?
+            .to_rgba8()
+    } else {
+        image::open(path)
+            .map_err(|e| format!("Impossible d'ouvrir '{}': {}", path, e))?
+            .to_rgba8()
+    };
+    let (w, h) = (img.width(), img.height());
+    Ok((img.into_raw(), w, h))
+}
+
+/// Rend un template éventuellement sous-échantillonné de `factor` (>= 1).
+fn downscale_template(raw: &[u8], tw: u32, th: u32, factor: u32) -> Option<Vec<u8>> {
+    if factor <= 1 {
+        return Some(raw.to_vec());
+    }
+    let img = image::RgbaImage::from_raw(tw, th, raw.to_vec())?;
+    let scaled = image::imageops::resize(
+        &img,
+        tw / factor,
+        th / factor,
+        image::imageops::FilterType::Triangle,
+    );
+    Some(scaled.into_raw())
+}
+
+/// Teste la recherche d'une image sur l'écran actuel, comme le ferait un nœud
+/// Blueprint ImageCondition / WaitImage : capture de la zone suivie (ou du
+/// bureau virtuel), matching exhaustif avec la tolérance donnée.
+#[cfg(windows)]
+pub fn test_image_search(path: &str, tolerance: u8) -> ImageTestResult {
+    let mut result = ImageTestResult {
+        found: false,
+        pos: None,
+        template_size: None,
+        template_path: None,
+        capture_x: 0,
+        capture_y: 0,
+        capture: Vec::new(),
+        capture_width: 0,
+        capture_height: 0,
+        capture_small: None,
+        capture_origin: None,
+        error: None,
+    };
+
+    // Charger le template depuis le disque (recharge forcé pour tester
+    // exactement le fichier actuel, même si le cache de lecture en a une copie)
+    let (template_raw, tw, th) = match load_template_for_test(path) {
+        Ok(v) => v,
+        Err(e) => {
+            result.error = Some(e);
+            return result;
+        }
+    };
+    result.template_size = Some((tw, th));
+    result.template_path = Some(path.to_string());
+
+    // Capturer la même zone que check_image_present_with_tolerance
+    let (vx, vy, vw, vh) = get_screen_capture_bounds();
+    if vw <= 0 || vh <= 0 {
+        result.error = Some("Impossible de capturer l'écran (dimensions invalides).".into());
+        return result;
+    }
+
+    let screen_opt = capture_screen_gdi(vx, vy, vw, vh);
+    let screen_raw = match screen_opt {
+        Some(s) => s,
+        None => {
+            result.error = Some("Échec de la capture d'écran GDI.".into());
+            return result;
+        }
+    };
+
+    result.capture = screen_raw.clone();
+    result.capture_width = vw as usize;
+    result.capture_height = vh as usize;
+    result.capture_x = vx;
+    result.capture_y = vy;
+    result.capture_origin = get_capture_target_title();
+
+    // Capture réduite de moitié pour l'aperçu dans l'UI (limite mémoire) :
+    // sous-échantillonnage direct du BGRA (1 pixel sur 2), sans conversion
+    let hw = vw as usize / 2;
+    let hh = vh as usize / 2;
+    if hw > 0 && hh > 0 {
+        let mut small = Vec::with_capacity(hw * hh * 4);
+        for y in 0..hh {
+            let row = (y * 2) * vw as usize * 4;
+            for x in 0..hw {
+                let idx = row + (x * 2) * 4;
+                small.extend_from_slice(&screen_raw[idx..idx + 4]);
+            }
+        }
+        result.capture_small = Some(small);
+    }
+
+    let mut found_pos = find_template_in_bgra(
+        &screen_raw,
+        vw as usize,
+        vh as usize,
+        &template_raw,
+        tw as usize,
+        th as usize,
+        tolerance,
+    );
+
+    // Si non trouvé en taille native, tenter les sous-échantillonnages entiers
+    // (template trop grand pour la zone capturée, ex. screenshot 2560x1440
+    // pris sur un écran 1920x1080)
+    if found_pos.is_none() {
+        let mut factor = 2u32;
+        while tw / factor >= 16 && th / factor >= 16 {
+            let nw = tw / factor;
+            let nh = th / factor;
+            if nw as usize <= vw as usize && nh as usize <= vh as usize {
+                if let Some(scaled) = downscale_template(&template_raw, tw, th, factor) {
+                    found_pos = find_template_in_bgra(
+                        &screen_raw,
+                        vw as usize,
+                        vh as usize,
+                        &scaled,
+                        nw as usize,
+                        nh as usize,
+                        tolerance,
+                    );
+                    if found_pos.is_some() {
+                        result.template_size = Some((nw, nh));
+                        break;
+                    }
+                }
+            }
+            factor += 1;
+        }
+    }
+
+    if let Some((sx, sy)) = found_pos {
+        result.found = true;
+        result.pos = Some((vx + sx as i32, vy + sy as i32));
+    }
+
+    result
+}
+
+#[cfg(not(windows))]
+pub fn test_image_search(_path: &str, _tolerance: u8) -> ImageTestResult {
+    ImageTestResult {
+        found: false,
+        pos: None,
+        template_size: None,
+        template_path: None,
+        capture: Vec::new(),
+        capture_width: 0,
+        capture_height: 0,
+        capture_small: None,
+        capture_origin: None,
+        error: Some("Test de recherche d'image non supporté sur cette plateforme.".into()),
     }
 }
 
@@ -3140,6 +3427,49 @@ mod tests {
     }
 
     #[test]
+    fn test_load_template_cached_reloads_replaced_file() {
+        // Le cache doit servir l'image en mémoire si le fichier n'a pas changé,
+        // mais la recharger si elle est remplacée sur le disque (bug : le
+        // moteur cherchait indéfiniment l'ancienne version).
+        let path = std::env::temp_dir().join(format!("mf_cache_test_{}.png", std::process::id()));
+        let path_str = path.to_str().unwrap().to_string();
+
+        let img1 = image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 10, 10, 255]));
+        img1.save(&path).expect("sauvegarde png 1");
+        let t1 = load_template_cached(&path_str).expect("premier chargement");
+        assert_eq!(t1.as_raw()[..4], [200, 10, 10, 255]);
+
+        // Second accès sans modification : même instance (cache hit)
+        let t2 = load_template_cached(&path_str).expect("cache hit");
+        assert!(Arc::ptr_eq(&t1, &t2));
+
+        // Remplacement du fichier : attendre que la mtime change (granularité FS)
+        thread::sleep(Duration::from_millis(50));
+        let img2 = image::RgbaImage::from_pixel(4, 4, image::Rgba([10, 10, 220, 255]));
+        img2.save(&path).expect("sauvegarde png 2");
+
+        let t3 = load_template_cached(&path_str).expect("rechargement");
+        assert!(
+            !Arc::ptr_eq(&t1, &t3),
+            "l'image remplacée doit être rechargée"
+        );
+        assert_eq!(t3.as_raw()[..4], [10, 10, 220, 255]);
+
+        // Fichier supprimé : chargement impossible
+        std::fs::remove_file(&path).ok();
+        assert!(load_template_cached(&path_str).is_none());
+
+        // Nettoyage du cache pour ne pas polluer les autres tests
+        IMAGE_CACHE.lock().unwrap().remove(&path_str);
+    }
+
+    #[test]
+    fn test_bring_game_to_foreground_is_safe_without_game() {
+        // Sans fenêtre de jeu suivie, l'appel ne doit ni paniquer ni bloquer.
+        let _ = bring_game_to_foreground();
+    }
+
+    #[test]
     fn test_find_template_in_bgra_out_of_bounds() {
         let screen = vec![0u8; 100];
         let template = vec![0u8; 100];
@@ -3153,6 +3483,46 @@ mod tests {
         );
         assert_eq!(
             find_template_in_bgra(&screen, 5, 5, &template, 5, 0, 25),
+            None
+        );
+    }
+
+    #[test]
+    fn test_find_template_in_bgra_no_partial_false_positive() {
+        // Template 4x4 uniforme blanc ; l'écran contient un carré 4x4 dont
+        // SEULE la moitié des pixels (positions impaires) diffère.
+        // L'ancienne verification sur grille step_by(2) ignorait les pixels
+        // impairs et détectait à tort ce carré : il ne doit PAS matcher.
+        let sw = 20;
+        let sh = 20;
+        let tw = 4;
+        let th = 4;
+        let mut screen_bgra = vec![0u8; sw * sh * 4];
+        let mut template_rgba = vec![0u8; tw * th * 4];
+
+        for i in 0..(tw * th) {
+            template_rgba[i * 4] = 255;
+            template_rgba[i * 4 + 1] = 255;
+            template_rgba[i * 4 + 2] = 255;
+            template_rgba[i * 4 + 3] = 255;
+        }
+
+        for ty in 0..th {
+            for tx in 0..tw {
+                // Colonnes impaires sur lignes paires : non conformes, mais invisibles
+                // pour la grille step_by(2) et pour les 3 points de rejet précoce.
+                let mismatch = ty % 2 == 0 && tx % 2 == 1;
+                let v = if mismatch { 0 } else { 255 };
+                let idx = ((5 + ty) * sw + (5 + tx)) * 4;
+                screen_bgra[idx] = v;
+                screen_bgra[idx + 1] = v;
+                screen_bgra[idx + 2] = v;
+                screen_bgra[idx + 3] = 255;
+            }
+        }
+
+        assert_eq!(
+            find_template_in_bgra(&screen_bgra, sw, sh, &template_rgba, tw, th, 10),
             None
         );
     }
