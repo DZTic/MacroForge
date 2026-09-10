@@ -28,9 +28,23 @@ winapi = { version = "0.3", features = [
     "processthreadsapi"
 ] }
 
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "macro_core_bench"
+harness = false
+
 [profile.release]
 opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Profil release avec symboles pour le profilage CPU (samply, docs/profiling.md) :
+# le profil release standard strip les symboles, inutilisables par un profileur.
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false

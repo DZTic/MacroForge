@@ -2647,6 +2647,17 @@ pub fn get_capture_target_title() -> Option<String> {
     None
 }
 
+/// Conversion d'une capture BGRA (GDI) vers RGBA avec alpha opaque.
+/// Extrait de `bgra_capture_to_egui_texture` pour être mesurable dans
+/// benches/macro_core_bench.rs (issue #58).
+pub(crate) fn bgra_to_rgba(bgra: &[u8]) -> Vec<u8> {
+    bgra.as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|px| [px[2], px[1], px[0], 255])
+        .collect()
+}
+
 /// Étend la capture d'écran BGRA (x, y, w, h) en texture egui, éventuellement
 /// réduite pour tenir sous max_side pixels, en préservant les proportions.
 /// Retourne (texture, [largeur, hauteur] d'affichage en points).
@@ -2661,12 +2672,7 @@ pub fn bgra_capture_to_egui_texture(
         return None;
     }
 
-    let rgba: Vec<u8> = bgra
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .flat_map(|px| [px[2], px[1], px[0], 255])
-        .collect();
+    let rgba = bgra_to_rgba(bgra);
     let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba)?;
     let img = if w > max_side || h > max_side {
         let scale = max_side as f64 / w.max(h) as f64;
@@ -2779,7 +2785,8 @@ fn load_template_for_test(path: &str) -> Result<(Vec<u8>, u32, u32), String> {
 }
 
 /// Rend un template éventuellement sous-échantillonné de `factor` (>= 1).
-fn downscale_template(raw: &[u8], tw: u32, th: u32, factor: u32) -> Option<Vec<u8>> {
+/// pub(crate) pour rester mesurable dans benches/macro_core_bench.rs (issue #58).
+pub(crate) fn downscale_template(raw: &[u8], tw: u32, th: u32, factor: u32) -> Option<Vec<u8>> {
     if factor <= 1 {
         return Some(raw.to_vec());
     }
@@ -3527,19 +3534,22 @@ mod tests {
         );
     }
 
+    // Non-régression perf (issue #58) : les mesures détaillées 1080p/4K vivent
+    // désormais dans benches/macro_core_bench.rs (criterion). Ce test garde un
+    // seuil grossier exécutable à la demande : `cargo test --bin macroforge
+    // -- --ignored test_find_template_regression_1080p`.
     #[test]
-    fn test_find_template_perf_1080p_and_4k() {
-        // 1080p : 1920x1080
-        let sw_1080 = 1920;
-        let sh_1080 = 1080;
+    #[ignore]
+    fn test_find_template_regression_1080p() {
+        let sw = 1920;
+        let sh = 1080;
         let tw = 32;
         let th = 32;
-        let mut screen_1080 = vec![30u8; sw_1080 * sh_1080 * 4];
+        let mut screen = vec![30u8; sw * sh * 4];
         let mut template = vec![0u8; tw * th * 4];
 
         let target_x = 1200;
         let target_y = 750;
-
         for ty in 0..th {
             for tx in 0..tw {
                 let t_idx = (ty * tw + tx) * 4;
@@ -3548,47 +3558,23 @@ mod tests {
                 template[t_idx + 2] = 50;
                 template[t_idx + 3] = 255;
 
-                let s_idx = ((target_y + ty) * sw_1080 + (target_x + tx)) * 4;
-                screen_1080[s_idx] = 50;
-                screen_1080[s_idx + 1] = 100;
-                screen_1080[s_idx + 2] = 200;
-                screen_1080[s_idx + 3] = 255;
+                let s_idx = ((target_y + ty) * sw + (target_x + tx)) * 4;
+                screen[s_idx] = 50;
+                screen[s_idx + 1] = 100;
+                screen[s_idx + 2] = 200;
+                screen[s_idx + 3] = 255;
             }
         }
 
-        let start_1080 = Instant::now();
-        let found_1080 =
-            find_template_in_bgra(&screen_1080, sw_1080, sh_1080, &template, tw, th, 25);
-        let elapsed_1080 = start_1080.elapsed();
-        assert_eq!(found_1080, Some((target_x, target_y)));
-        println!("Benchmark 1080p matching time: {:?}", elapsed_1080);
+        let start = Instant::now();
+        let found = find_template_in_bgra(&screen, sw, sh, &template, tw, th, 25);
+        let elapsed = start.elapsed();
+        assert_eq!(found, Some((target_x, target_y)));
         assert!(
-            elapsed_1080.as_millis() < 50,
-            "1080p template matching should be ultra fast (< 50ms, target < 16ms), took {:?}",
-            elapsed_1080
+            elapsed.as_millis() < 50,
+            "1080p template matching took {:?} (budget < 50ms)",
+            elapsed
         );
-
-        // 4K : 3840x2160
-        let sw_4k = 3840;
-        let sh_4k = 2160;
-        let mut screen_4k = vec![30u8; sw_4k * sh_4k * 4];
-        let target_4k_x = 2800;
-        let target_4k_y = 1500;
-        for ty in 0..th {
-            for tx in 0..tw {
-                let s_idx = ((target_4k_y + ty) * sw_4k + (target_4k_x + tx)) * 4;
-                screen_4k[s_idx] = 50;
-                screen_4k[s_idx + 1] = 100;
-                screen_4k[s_idx + 2] = 200;
-                screen_4k[s_idx + 3] = 255;
-            }
-        }
-
-        let start_4k = Instant::now();
-        let found_4k = find_template_in_bgra(&screen_4k, sw_4k, sh_4k, &template, tw, th, 25);
-        let elapsed_4k = start_4k.elapsed();
-        assert_eq!(found_4k, Some((target_4k_x, target_4k_y)));
-        println!("Benchmark 4K matching time: {:?}", elapsed_4k);
     }
 
     #[test]
