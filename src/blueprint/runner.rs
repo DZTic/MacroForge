@@ -405,9 +405,10 @@ impl BlueprintRunnerState {
                             };
                             set_status(&step_msg);
 
-                            // La recherche d'image peut avoir pris du temps : s'assurer
-                            // que la fenêtre cible est bien au premier plan avant de cliquer.
-                            macro_core::bring_game_to_foreground();
+                            // S'assurer que la fenêtre cible (située sous le curseur ou en arrière-plan)
+                            // est proprement activée et au premier plan avant d'injecter les clics.
+                            macro_core::ensure_window_under_point_focused(click_x, click_y);
+                            thread::sleep(Duration::from_millis(80));
 
                             for i in 0..count {
                                 if check_stopped() {
@@ -415,9 +416,9 @@ impl BlueprintRunnerState {
                                 }
                                 macro_core::execute_click(click_x, click_y, *click_type);
                                 if i + 1 < count {
-                                    // Petit écart entre clics pour laisser l'application
-                                    // traiter chaque clic indépendamment.
-                                    thread::sleep(Duration::from_millis(60));
+                                    // Espacement suffisant entre clics successifs pour laisser le temps
+                                    // au moteur de jeu de traiter chaque événement indépendamment.
+                                    thread::sleep(Duration::from_millis(100));
                                 }
                             }
                             if check_stopped() {
@@ -461,6 +462,9 @@ impl BlueprintRunnerState {
                             ),
                         };
                         set_status(&step_msg);
+
+                        macro_core::ensure_window_under_point_focused(*x, *y);
+                        thread::sleep(Duration::from_millis(80));
 
                         macro_core::execute_click(*x, *y, *click_type);
                         if *delay_after_ms > 0 {

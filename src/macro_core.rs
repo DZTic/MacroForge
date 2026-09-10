@@ -25,6 +25,26 @@ use winapi::um::winuser::{
     RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT, WM_INPUT, WNDCLASSW,
 };
 
+#[cfg(windows)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub fn is_macroforge_hwnd(hwnd: winapi::shared::windef::HWND) -> bool {
+    use winapi::um::processthreadsapi::GetCurrentProcessId;
+    use winapi::um::winuser::GetWindowThreadProcessId;
+    if hwnd.is_null() {
+        return false;
+    }
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        pid == GetCurrentProcessId()
+    }
+}
+
+#[cfg(not(windows))]
+pub fn is_macroforge_hwnd(_hwnd: isize) -> bool {
+    false
+}
+
 /// Call once at startup — polls foreground window every 200ms and stores
 /// the last window that is NOT one of our own MacroForge windows.
 #[cfg(windows)]
@@ -37,15 +57,18 @@ pub fn start_focus_tracker() {
                 if hwnd.is_null() {
                     continue;
                 }
-                // Read window title to exclude MacroForge windows
-                let mut buf = [0u16; 256];
-                let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
-                if len == 0 {
+                // Exclure toute fenêtre appartenant au processus MacroForge (principale, toolbar, overlay)
+                if is_macroforge_hwnd(hwnd) {
                     continue;
                 }
-                let title = String::from_utf16_lossy(&buf[..len as usize]);
-                if title.contains("MacroForge") {
-                    continue;
+                // Exclure les fenêtres ayant explicitement "MacroForge" dans leur titre
+                let mut buf = [0u16; 256];
+                let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+                if len > 0 {
+                    let title = String::from_utf16_lossy(&buf[..len as usize]);
+                    if title.contains("MacroForge") {
+                        continue;
+                    }
                 }
                 if IsWindowVisible(hwnd) == 0 {
                     continue;
@@ -59,54 +82,80 @@ pub fn start_focus_tracker() {
 #[cfg(windows)]
 pub fn send_mouse_move(x: i32, y: i32) {
     use winapi::um::winuser::{
-        GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+        GetSystemMetrics, SetCursorPos, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
         SM_YVIRTUALSCREEN,
     };
     unsafe {
+        // 1. Positionnement matériel immédiat du curseur Windows (critique pour le hit-testing des moteurs de jeu)
+        SetCursorPos(x, y);
+
         let vx = GetSystemMetrics(SM_XVIRTUALSCREEN) as f64;
         let vy = GetSystemMetrics(SM_YVIRTUALSCREEN) as f64;
         let vw = GetSystemMetrics(SM_CXVIRTUALSCREEN) as f64;
         let vh = GetSystemMetrics(SM_CYVIRTUALSCREEN) as f64;
 
-        // Formule de normalisation de précision Windows
-        let nx = (((x as f64 - vx) * 65536.0) / vw) as i32;
-        let ny = (((y as f64 - vy) * 65536.0) / vh) as i32;
+        if vw > 1.0 && vh > 1.0 {
+            // Formule de normalisation de haute précision Windows (0..65535)
+            let nx = (((x as f64 - vx) * 65535.0) / (vw - 1.0)).round() as i32;
+            let ny = (((y as f64 - vy) * 65535.0) / (vh - 1.0)).round() as i32;
 
-        let mut input = INPUT {
-            type_: INPUT_MOUSE,
-            u: std::mem::zeroed(),
-        };
-        *input.u.mi_mut() = MOUSEINPUT {
-            dx: nx,
-            dy: ny,
-            mouseData: 0,
-            dwFlags: MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | 0x4000,
-            time: 0,
-            dwExtraInfo: 0,
-        };
-        SendInput(1, &mut input, std::mem::size_of::<INPUT>() as i32);
+            let mut input = INPUT {
+                type_: INPUT_MOUSE,
+                u: std::mem::zeroed(),
+            };
+            *input.u.mi_mut() = MOUSEINPUT {
+                dx: nx,
+                dy: ny,
+                mouseData: 0,
+                dwFlags: MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | 0x4000,
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            SendInput(1, &mut input, std::mem::size_of::<INPUT>() as i32);
+        }
     }
 }
 
 #[cfg(windows)]
 pub fn send_mouse_button(button: u8, down: bool, x: i32, y: i32) {
-    use winapi::um::winuser::{SendInput, INPUT, INPUT_MOUSE, MOUSEINPUT};
-    // S'assurer que le curseur est positionné sur la cible si des coordonnées valides sont fournies
+    use winapi::um::winuser::{
+        GetSystemMetrics, SendInput, SetCursorPos, INPUT, INPUT_MOUSE, MOUSEEVENTF_ABSOLUTE,
+        MOUSEINPUT, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+    };
+    // S'assurer que le curseur matériel est immédiatement positionné sur la cible
     if x > 0 || y > 0 {
-        send_mouse_move(x, y);
+        unsafe {
+            SetCursorPos(x, y);
+        }
     }
     unsafe {
         let flag = mouse_button_dwflags(button, down);
+
+        let (dx, dy, flags) = if x > 0 || y > 0 {
+            let vx = GetSystemMetrics(SM_XVIRTUALSCREEN) as f64;
+            let vy = GetSystemMetrics(SM_YVIRTUALSCREEN) as f64;
+            let vw = GetSystemMetrics(SM_CXVIRTUALSCREEN) as f64;
+            let vh = GetSystemMetrics(SM_CYVIRTUALSCREEN) as f64;
+            if vw > 1.0 && vh > 1.0 {
+                let nx = (((x as f64 - vx) * 65535.0) / (vw - 1.0)).round() as i32;
+                let ny = (((y as f64 - vy) * 65535.0) / (vh - 1.0)).round() as i32;
+                (nx, ny, flag | MOUSEEVENTF_ABSOLUTE | 0x4000)
+            } else {
+                (0, 0, flag)
+            }
+        } else {
+            (0, 0, flag)
+        };
 
         let mut input = INPUT {
             type_: INPUT_MOUSE,
             u: std::mem::zeroed(),
         };
         *input.u.mi_mut() = MOUSEINPUT {
-            dx: 0,
-            dy: 0,
+            dx,
+            dy,
             mouseData: 0,
-            dwFlags: flag,
+            dwFlags: flags,
             time: 0,
             dwExtraInfo: 0,
         };
@@ -1235,12 +1284,13 @@ pub fn get_screen_capture_bounds() -> (i32, i32, i32, i32) {
 /// altérer son mode plein écran ni provoquer d'artefacts d'affichage ou de saut de mode.
 #[cfg(windows)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
+pub fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
     use winapi::um::processthreadsapi::GetCurrentThreadId;
     use winapi::um::winuser::{
-        AttachThreadInput, BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId,
-        IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow, ShowWindow,
-        SystemParametersInfoA, SPIF_SENDCHANGE, SPI_SETFOREGROUNDLOCKTIMEOUT, SW_RESTORE,
+        keybd_event, AttachThreadInput, BringWindowToTop, GetForegroundWindow,
+        GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow,
+        ShowWindow, SystemParametersInfoA, KEYEVENTF_KEYUP, SPIF_SENDCHANGE,
+        SPI_SETFOREGROUNDLOCKTIMEOUT, SW_RESTORE, VK_MENU,
     };
 
     if hwnd.is_null() || unsafe { IsWindow(hwnd) == 0 || IsWindowVisible(hwnd) == 0 } {
@@ -1258,6 +1308,12 @@ fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
             ShowWindow(hwnd, SW_RESTORE);
             thread::sleep(Duration::from_millis(50));
         }
+
+        // Déverrouiller la restriction de focus Windows même depuis un thread worker :
+        // la simulation d'un appui furtif sur Alt (VK_MENU) donne les droits système
+        // de transfert de premier plan.
+        keybd_event(VK_MENU as u8, 0, 0, 0);
+        keybd_event(VK_MENU as u8, 0, KEYEVENTF_KEYUP, 0);
 
         let cur_thread = GetCurrentThreadId();
         let fg_thread = if !cur_fg.is_null() {
@@ -1295,7 +1351,119 @@ fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
 }
 
 #[cfg(not(windows))]
-fn force_foreground_window(_hwnd: isize) {}
+pub fn force_foreground_window(_hwnd: isize) {}
+
+/// Recherche la fenêtre cible non-MacroForge située sous les coordonnées (x, y).
+/// Si la toolbar flottante est positionnée directement sur le point, traverse la toolbar
+/// pour identifier l'application sous-jacente.
+#[cfg(windows)]
+pub fn find_target_window_at_point(x: i32, y: i32) -> Option<winapi::shared::windef::HWND> {
+    use winapi::shared::windef::POINT;
+    use winapi::um::winuser::{
+        GetAncestor, GetWindow, GetWindowLongPtrW, IsWindowVisible, SetWindowLongPtrW,
+        WindowFromPoint, GA_ROOT, GWL_EXSTYLE, GW_HWNDNEXT, WS_EX_TRANSPARENT,
+    };
+
+    unsafe {
+        let pt = POINT { x, y };
+        let wnd = WindowFromPoint(pt);
+        if wnd.is_null() {
+            return None;
+        }
+        let root = GetAncestor(wnd, GA_ROOT);
+        let candidate = if !root.is_null() { root } else { wnd };
+        if IsWindowVisible(candidate) != 0 && !is_macroforge_hwnd(candidate) {
+            return Some(candidate);
+        }
+
+        // Si la fenêtre au point appartient à MacroForge (ex. la toolbar flottante),
+        // sonder temporairement en mode transparent aux clics pour identifier l'app en dessous.
+        let orig_ex = GetWindowLongPtrW(candidate, GWL_EXSTYLE);
+        SetWindowLongPtrW(candidate, GWL_EXSTYLE, orig_ex | WS_EX_TRANSPARENT as isize);
+        let under_wnd = WindowFromPoint(pt);
+        SetWindowLongPtrW(candidate, GWL_EXSTYLE, orig_ex);
+
+        if !under_wnd.is_null() {
+            let under_root = GetAncestor(under_wnd, GA_ROOT);
+            let under_target = if !under_root.is_null() {
+                under_root
+            } else {
+                under_wnd
+            };
+            if IsWindowVisible(under_target) != 0 && !is_macroforge_hwnd(under_target) {
+                return Some(under_target);
+            }
+        }
+
+        // Fallback: chercher dans l'ordre Z de l'arborescence des fenêtres
+        let mut next = GetWindow(candidate, GW_HWNDNEXT);
+        while !next.is_null() {
+            if IsWindowVisible(next) != 0 && !is_macroforge_hwnd(next) {
+                let mut rect = winapi::shared::windef::RECT {
+                    left: 0,
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                };
+                if winapi::um::winuser::GetWindowRect(next, &mut rect) != 0
+                    && x >= rect.left
+                    && x <= rect.right
+                    && y >= rect.top
+                    && y <= rect.bottom
+                {
+                    return Some(next);
+                }
+            }
+            next = GetWindow(next, GW_HWNDNEXT);
+        }
+
+        None
+    }
+}
+
+#[cfg(not(windows))]
+pub fn find_target_window_at_point(_x: i32, _y: i32) -> Option<isize> {
+    None
+}
+
+/// S'assure que la fenêtre cible (située aux coordonnées de clic ou suivie) est bien au premier plan
+/// et possède le focus avant l'envoi d'entrées.
+#[cfg(windows)]
+pub fn ensure_window_under_point_focused(x: i32, y: i32) -> bool {
+    if is_target_window_embedded() {
+        return false;
+    }
+
+    let hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+    let valid_last_hwnd = !hwnd.is_null()
+        && unsafe {
+            winapi::um::winuser::IsWindow(hwnd) != 0
+                && winapi::um::winuser::IsWindowVisible(hwnd) != 0
+                && !is_macroforge_hwnd(hwnd)
+        };
+
+    let target_hwnd = if valid_last_hwnd {
+        hwnd
+    } else if let Some(pt_hwnd) = find_target_window_at_point(x, y) {
+        LAST_GAME_HWND.store(pt_hwnd as isize, Ordering::Relaxed);
+        pt_hwnd
+    } else {
+        std::ptr::null_mut()
+    };
+
+    if !target_hwnd.is_null() {
+        force_foreground_window(target_hwnd);
+        thread::sleep(Duration::from_millis(60));
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(not(windows))]
+pub fn ensure_window_under_point_focused(_x: i32, _y: i32) -> bool {
+    false
+}
 
 /// Remonte la fenêtre de jeu suivie au premier plan afin que la capture d'écran
 /// montre le jeu et non une fenêtre la recouvrant (comportement identique à la
@@ -2698,37 +2866,85 @@ pub fn check_image_present(path: &str) -> bool {
     check_image_present_with_tolerance(path, 25)
 }
 
+/// Exécute une action en s'assurant que si le point (x, y) est couvert par une fenêtre
+/// appartenant à MacroForge (ex. la toolbar flottante), cette fenêtre passe temporairement
+/// en mode transparent aux clics (WS_EX_TRANSPARENT) afin que l'injection SendInput atteigne
+/// directement l'application sous-jacente.
+#[cfg(windows)]
+pub fn with_macroforge_windows_clickthrough<R>(x: i32, y: i32, f: impl FnOnce() -> R) -> R {
+    use winapi::shared::windef::POINT;
+    use winapi::um::winuser::{
+        GetAncestor, GetWindowLongPtrW, SetWindowLongPtrW, WindowFromPoint, GA_ROOT, GWL_EXSTYLE,
+        WS_EX_TRANSPARENT,
+    };
+
+    let pt = POINT { x, y };
+    let under_pt = unsafe { WindowFromPoint(pt) };
+    let mut modified_window = None;
+
+    if !under_pt.is_null() {
+        let root = unsafe { GetAncestor(under_pt, GA_ROOT) };
+        let candidate = if !root.is_null() { root } else { under_pt };
+        if is_macroforge_hwnd(candidate) {
+            unsafe {
+                let orig_ex = GetWindowLongPtrW(candidate, GWL_EXSTYLE);
+                if (orig_ex as u32 & WS_EX_TRANSPARENT) == 0 {
+                    SetWindowLongPtrW(candidate, GWL_EXSTYLE, orig_ex | WS_EX_TRANSPARENT as isize);
+                    modified_window = Some((candidate, orig_ex));
+                }
+            }
+        }
+    }
+
+    let result = f();
+
+    if let Some((hwnd, orig_ex)) = modified_window {
+        unsafe {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, orig_ex);
+        }
+    }
+
+    result
+}
+
+#[cfg(not(windows))]
+pub fn with_macroforge_windows_clickthrough<R>(_x: i32, _y: i32, f: impl FnOnce() -> R) -> R {
+    f()
+}
+
 pub fn execute_click(x: i32, y: i32, click_type: BlueprintClickType) {
     #[cfg(windows)]
     {
-        send_mouse_move(x, y);
-        thread::sleep(Duration::from_millis(20));
-        match click_type {
-            BlueprintClickType::Left => {
-                send_mouse_button(1, true, x, y);
-                thread::sleep(Duration::from_millis(30));
-                send_mouse_button(1, false, x, y);
+        with_macroforge_windows_clickthrough(x, y, || {
+            send_mouse_move(x, y);
+            thread::sleep(Duration::from_millis(25));
+            match click_type {
+                BlueprintClickType::Left => {
+                    send_mouse_button(1, true, x, y);
+                    thread::sleep(Duration::from_millis(50));
+                    send_mouse_button(1, false, x, y);
+                }
+                BlueprintClickType::Right => {
+                    send_mouse_button(2, true, x, y);
+                    thread::sleep(Duration::from_millis(50));
+                    send_mouse_button(2, false, x, y);
+                }
+                BlueprintClickType::Middle => {
+                    send_mouse_button(3, true, x, y);
+                    thread::sleep(Duration::from_millis(50));
+                    send_mouse_button(3, false, x, y);
+                }
+                BlueprintClickType::DoubleLeft => {
+                    send_mouse_button(1, true, x, y);
+                    thread::sleep(Duration::from_millis(50));
+                    send_mouse_button(1, false, x, y);
+                    thread::sleep(Duration::from_millis(65));
+                    send_mouse_button(1, true, x, y);
+                    thread::sleep(Duration::from_millis(50));
+                    send_mouse_button(1, false, x, y);
+                }
             }
-            BlueprintClickType::Right => {
-                send_mouse_button(2, true, x, y);
-                thread::sleep(Duration::from_millis(30));
-                send_mouse_button(2, false, x, y);
-            }
-            BlueprintClickType::Middle => {
-                send_mouse_button(3, true, x, y);
-                thread::sleep(Duration::from_millis(30));
-                send_mouse_button(3, false, x, y);
-            }
-            BlueprintClickType::DoubleLeft => {
-                send_mouse_button(1, true, x, y);
-                thread::sleep(Duration::from_millis(25));
-                send_mouse_button(1, false, x, y);
-                thread::sleep(Duration::from_millis(50));
-                send_mouse_button(1, true, x, y);
-                thread::sleep(Duration::from_millis(25));
-                send_mouse_button(1, false, x, y);
-            }
-        }
+        });
     }
     #[cfg(not(windows))]
     {
@@ -3747,5 +3963,29 @@ mod tests {
 
         // Nettoyage
         *EMBEDDED_VIEWPORT.lock().unwrap() = None;
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_is_macroforge_hwnd_null_safe() {
+        assert!(!is_macroforge_hwnd(std::ptr::null_mut()));
+    }
+
+    #[test]
+    fn test_ensure_window_under_point_focused_safe() {
+        // Doit s'exécuter sans paniquer même sur des coordonnées fictives
+        let _ = ensure_window_under_point_focused(-9999, -9999);
+    }
+
+    #[test]
+    fn test_with_macroforge_windows_clickthrough_executes_closure() {
+        let executed = with_macroforge_windows_clickthrough(100, 100, || 42);
+        assert_eq!(executed, 42);
+    }
+
+    #[test]
+    fn test_execute_click_non_panicking() {
+        // Doit s'exécuter sans erreur
+        execute_click(0, 0, BlueprintClickType::Left);
     }
 }
