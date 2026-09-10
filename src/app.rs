@@ -1148,43 +1148,6 @@ impl eframe::App for MacroForgeApp {
                             }
                         }
 
-                        if self.main_view_mode == MainViewMode::Blueprint {
-                            ui.add_space(4.0);
-                            ui.separator();
-                            ui.add_space(4.0);
-
-                            let is_bp_running = self.blueprint_runner.is_active();
-                            if !is_bp_running {
-                                let run_btn = GlassButton::new(self.lang.blueprint_run())
-                                    .icon("▶")
-                                    .shortcut("F7")
-                                    .compact(is_compact)
-                                    .variant(ButtonVariant::Success);
-                                if ui
-                                    .add(run_btn)
-                                    .on_hover_text("Exécuter le graphe de Blueprint (F7)")
-                                    .clicked()
-                                {
-                                    self.blueprint_runner
-                                        .run_graph(self.blueprint_graph.clone(), self.lang);
-                                }
-                            } else {
-                                let stop_btn = GlassButton::new(self.lang.blueprint_stop())
-                                    .icon("⏹")
-                                    .shortcut("F4")
-                                    .compact(is_compact)
-                                    .variant(ButtonVariant::Warning);
-                                if ui
-                                    .add(stop_btn)
-                                    .on_hover_text("Interrompre l'exécution du Blueprint (F4)")
-                                    .clicked()
-                                {
-                                    self.blueprint_runner.stop();
-                                    macro_core::emergency_stop();
-                                }
-                            }
-                        }
-
                         // Commandes alignées à droite sans débordement
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Badge d'état dynamique
@@ -1361,27 +1324,6 @@ impl eframe::App for MacroForgeApp {
                                     .variant(ButtonVariant::Secondary);
                                 if ui.add(img_btn).clicked() {
                                     self.action_modal.open_for_new(ActionModalTab::Image);
-                                }
-                            }
-
-                            if self.main_view_mode == MainViewMode::Blueprint {
-                                let is_bp_running = self.blueprint_runner.is_active();
-                                if !is_bp_running {
-                                    let btn = GlassButton::new("▶ Lancer BP")
-                                        .compact(true)
-                                        .variant(ButtonVariant::Success);
-                                    if ui.add(btn).clicked() {
-                                        self.blueprint_runner
-                                            .run_graph(self.blueprint_graph.clone(), self.lang);
-                                    }
-                                } else {
-                                    let btn = GlassButton::new("⏹ Arrêter BP")
-                                        .compact(true)
-                                        .variant(ButtonVariant::Warning);
-                                    if ui.add(btn).clicked() {
-                                        self.blueprint_runner.stop();
-                                        macro_core::emergency_stop();
-                                    }
                                 }
                             }
                         });
