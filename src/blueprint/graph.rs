@@ -35,6 +35,12 @@ impl BlueprintClickType {
     }
 }
 
+/// Valeur par défaut de `ClickImage::click_count` pour les Blueprints sauvegardés
+/// avant l'ajout du champ (désérialisation rétrocompatible : 1 clic).
+fn default_click_count() -> u32 {
+    1
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum BlueprintNodeType {
     /// Point d'entrée du graphe
@@ -70,6 +76,9 @@ pub enum BlueprintNodeType {
         click_type: BlueprintClickType,
         offset_x: i32,
         offset_y: i32,
+        /// Nombre de clics consécutifs à envoyer (>= 1)
+        #[serde(default = "default_click_count")]
+        click_count: u32,
     },
     /// Clique aux coordonnées d'écran spécifiques (X, Y)
     /// Sortie 0: Suivant
@@ -206,9 +215,9 @@ impl BlueprintNodeType {
                 use_last_detected, ..
             } => {
                 if *use_last_detected {
-                    (260.0, 160.0)
+                    (260.0, 190.0)
                 } else {
-                    (270.0, 205.0)
+                    (270.0, 235.0)
                 }
             }
             BlueprintNodeType::ClickCoordinate { .. } => (260.0, 160.0),
@@ -590,6 +599,7 @@ mod tests {
                 click_type: BlueprintClickType::Left,
                 offset_x: 0,
                 offset_y: 0,
+                click_count: 1,
             },
             BlueprintNodeType::ClickImage {
                 use_last_detected: false,
@@ -599,6 +609,7 @@ mod tests {
                 click_type: BlueprintClickType::Right,
                 offset_x: 10,
                 offset_y: -5,
+                click_count: 3,
             },
             BlueprintNodeType::ClickCoordinate {
                 x: 500,
@@ -655,6 +666,7 @@ mod tests {
             click_type: BlueprintClickType::Left,
             offset_x: 0,
             offset_y: 0,
+            click_count: 2,
         };
         assert_eq!(click_img.input_pins(Language::Fr).len(), 1);
         let out_fr = click_img.output_pins(Language::Fr);
@@ -771,6 +783,31 @@ mod tests {
                 assert_eq!(delay_after_ms, 0);
             }
             _ => panic!("Expected WaitImage variant"),
+        }
+    }
+
+    #[test]
+    fn test_click_image_backward_compatible_deserialization() {
+        // JSON sans le champ click_count : doit être désérialisé avec click_count = 1 par défaut
+        let legacy_json = r#"{
+            "ClickImage": {
+                "use_last_detected": false,
+                "image_path": "btn.png",
+                "tolerance": 25,
+                "timeout_ms": 3000,
+                "click_type": "Left",
+                "offset_x": 0,
+                "offset_y": 0
+            }
+        }"#;
+
+        let node_type: BlueprintNodeType =
+            serde_json::from_str(legacy_json).expect("Deserialization of legacy ClickImage failed");
+        match node_type {
+            BlueprintNodeType::ClickImage { click_count, .. } => {
+                assert_eq!(click_count, 1);
+            }
+            _ => panic!("Expected ClickImage variant"),
         }
     }
 }

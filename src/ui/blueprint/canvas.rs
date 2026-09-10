@@ -410,6 +410,7 @@ impl BlueprintCanvas {
                     click_type: BlueprintClickType::Left,
                     offset_x: 0,
                     offset_y: 0,
+                    click_count: 1,
                 },
             ),
             (
@@ -1189,6 +1190,7 @@ impl BlueprintCanvas {
                             click_type,
                             offset_x,
                             offset_y,
+                            click_count,
                         } => {
                             ui.horizontal(|ui| {
                                 let chk_label = match lang {
@@ -1294,6 +1296,22 @@ impl BlueprintCanvas {
                                         BlueprintClickType::Middle.label(lang),
                                     );
                                 });
+
+                                let count_tip = match lang {
+                                    Language::Fr => "Nombre de clics consécutifs",
+                                    Language::En => "Number of consecutive clicks",
+                                };
+                                let count_label = match lang {
+                                    Language::Fr => "Clics:",
+                                    Language::En => "Clicks:",
+                                };
+                                ui.label(
+                                    egui::RichText::new(count_label)
+                                        .size(10.5 * self.zoom)
+                                        .color(colors::TEXT_MUTED),
+                                );
+                                ui.add(egui::DragValue::new(click_count).range(1..=50).speed(1))
+                                    .on_hover_text(count_tip);
                             });
 
                             ui.horizontal(|ui| {
@@ -1784,6 +1802,7 @@ impl BlueprintCanvas {
                         click_type,
                         offset_x,
                         offset_y,
+                        click_count,
                     } => {
                         let chk_label = match lang {
                             Language::Fr => "Cliquer sur la dernière image détectée",
@@ -1822,6 +1841,23 @@ impl BlueprintCanvas {
                                     ui.selectable_value(click_type, BlueprintClickType::DoubleLeft, BlueprintClickType::DoubleLeft.label(lang));
                                     ui.selectable_value(click_type, BlueprintClickType::Middle, BlueprintClickType::Middle.label(lang));
                                 });
+
+                            let count_label = match lang {
+                                Language::Fr => "Nombre de clics :",
+                                Language::En => "Click count:",
+                            };
+                            let count_tip = match lang {
+                                Language::Fr => "Nombre de clics consécutifs envoyés sur l'image",
+                                Language::En => "Number of consecutive clicks sent on the image",
+                            };
+                            ui.label(count_label);
+                            ui.add(
+                                egui::DragValue::new(click_count)
+                                    .range(1..=50)
+                                    .speed(1)
+                                    .suffix("×"),
+                            )
+                            .on_hover_text(count_tip);
                         });
 
                         ui.horizontal(|ui| {

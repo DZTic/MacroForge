@@ -1223,6 +1223,21 @@ fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
 #[cfg(not(windows))]
 fn force_foreground_window(_hwnd: isize) {}
 
+/// Ramène la fenêtre cible (dernier focus non-MacroForge) au premier plan.
+/// À appeler avant d'envoyer des clics/touches : au lancement d'une exécution
+/// depuis l'interface, MacroForge détient le focus et les actions s'y perdent.
+#[cfg(windows)]
+pub fn ensure_target_window_focus() {
+    let target_hwnd = LAST_GAME_HWND.load(Ordering::Relaxed) as winapi::shared::windef::HWND;
+    if !target_hwnd.is_null() {
+        force_foreground_window(target_hwnd);
+        thread::sleep(Duration::from_millis(60));
+    }
+}
+
+#[cfg(not(windows))]
+pub fn ensure_target_window_focus() {}
+
 pub fn play_macro() {
     let mut state = MACRO_STATE.lock().unwrap();
     if state.is_playing || state.is_recording {

@@ -79,6 +79,10 @@ impl BlueprintRunnerState {
         macro_core::notify_event(EngineEvent::PlaybackStateChanged(true));
 
         thread::spawn(move || {
+            // Le lancement depuis l'interface laisse MacroForge au premier plan :
+            // rendre le focus à la fenêtre cible pour que les clics l'atteignent.
+            macro_core::ensure_target_window_focus();
+
             let mut current_id = Some(start_id);
             let mut loop_counters: HashMap<NodeId, u32> = HashMap::new();
             let mut last_detected_image_pos: Option<(i32, i32)> = None;
@@ -309,6 +313,7 @@ impl BlueprintRunnerState {
                         click_type,
                         offset_x,
                         offset_y,
+                        click_count,
                     } => {
                         let target_coords = if *use_last_detected {
                             last_detected_image_pos
@@ -357,23 +362,43 @@ impl BlueprintRunnerState {
                         if let Some((cx, cy)) = target_coords {
                             let click_x = cx + offset_x;
                             let click_y = cy + offset_y;
+                            let count = (*click_count).max(1);
                             let step_msg = match lang {
                                 Language::Fr => format!(
-                                    "🎯 Clic ({}) sur l'image à ({}, {})...",
+                                    "🎯 Clic ({}) ×{} sur l'image à ({}, {})...",
                                     click_type.label(lang),
+                                    count,
                                     click_x,
                                     click_y
                                 ),
                                 Language::En => format!(
-                                    "🎯 Click ({}) on image at ({}, {})...",
+                                    "🎯 Click ({}) x{} on image at ({}, {})...",
                                     click_type.label(lang),
+                                    count,
                                     click_x,
                                     click_y
                                 ),
                             };
                             set_status(&step_msg);
 
-                            macro_core::execute_click(click_x, click_y, *click_type);
+                            // La recherche d'image peut avoir pris du temps : s'assurer
+                            // que la fenêtre cible est bien au premier plan avant de cliquer.
+                            macro_core::ensure_target_window_focus();
+
+                            for i in 0..count {
+                                if check_stopped() {
+                                    break;
+                                }
+                                macro_core::execute_click(click_x, click_y, *click_type);
+                                if i + 1 < count {
+                                    // Petit écart entre clics pour laisser l'application
+                                    // traiter chaque clic indépendamment.
+                                    thread::sleep(Duration::from_millis(60));
+                                }
+                            }
+                            if check_stopped() {
+                                break;
+                            }
                             thread::sleep(Duration::from_millis(50));
                             Some(0) // Pin 0 = Effectué
                         } else {
@@ -741,6 +766,7 @@ mod tests {
                 click_type: BlueprintClickType::Left,
                 offset_x: 0,
                 offset_y: 0,
+                click_count: 1,
             },
             [250.0, 200.0],
             Language::Fr,
