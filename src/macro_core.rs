@@ -19,9 +19,8 @@ use winapi::um::timeapi::{timeBeginPeriod, timeEndPeriod};
 use winapi::um::winuser::{
     CreateWindowExW, DefWindowProcW, GetForegroundWindow, GetMessageW, GetRawInputData,
     GetWindowTextW, IsWindowVisible, MapVirtualKeyW, RegisterClassW, RegisterRawInputDevices,
-    SendInput, CW_USEDEFAULT, INPUT, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT,
-    KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC_EX, MAPVK_VSC_TO_VK_EX,
-    MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_MOVE, MOUSEINPUT, MSG, RAWINPUT, RAWINPUTDEVICE,
+    SendInput, CW_USEDEFAULT, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
+    KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC_EX, MAPVK_VSC_TO_VK_EX, MSG, RAWINPUT, RAWINPUTDEVICE,
     RAWINPUTHEADER, RIDEV_INPUTSINK, RID_INPUT, WM_INPUT, WNDCLASSW,
 };
 
@@ -82,13 +81,10 @@ pub fn start_focus_tracker() {
 #[cfg(windows)]
 pub fn send_mouse_move(x: i32, y: i32) {
     use winapi::um::winuser::{
-        GetSystemMetrics, SetCursorPos, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-        SM_YVIRTUALSCREEN,
+        GetSystemMetrics, SendInput, INPUT, INPUT_MOUSE, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_MOVE,
+        MOUSEINPUT, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
     };
     unsafe {
-        // 1. Positionnement matériel immédiat du curseur Windows (critique pour le hit-testing des moteurs de jeu)
-        SetCursorPos(x, y);
-
         let vx = GetSystemMetrics(SM_XVIRTUALSCREEN) as f64;
         let vy = GetSystemMetrics(SM_YVIRTUALSCREEN) as f64;
         let vw = GetSystemMetrics(SM_CXVIRTUALSCREEN) as f64;
@@ -117,45 +113,23 @@ pub fn send_mouse_move(x: i32, y: i32) {
 }
 
 #[cfg(windows)]
-pub fn send_mouse_button(button: u8, down: bool, x: i32, y: i32) {
-    use winapi::um::winuser::{
-        GetSystemMetrics, SendInput, SetCursorPos, INPUT, INPUT_MOUSE, MOUSEEVENTF_ABSOLUTE,
-        MOUSEINPUT, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
-    };
-    // S'assurer que le curseur matériel est immédiatement positionné sur la cible
-    if x > 0 || y > 0 {
-        unsafe {
-            SetCursorPos(x, y);
-        }
-    }
+pub fn send_mouse_button(button: u8, down: bool, _x: i32, _y: i32) {
+    use winapi::um::winuser::{SendInput, INPUT, INPUT_MOUSE, MOUSEINPUT};
     unsafe {
+        // Un clic ne doit jamais déplacer le curseur : pas de MOUSEEVENTF_ABSOLUTE
+        // ni de MOUSEEVENTF_MOVE ici, sinon le curseur est téléporté aux
+        // coordonnées fournies, ce qui casse les rotations caméra 3D / FPS (issue #33 et régression #67).
         let flag = mouse_button_dwflags(button, down);
-
-        let (dx, dy, flags) = if x > 0 || y > 0 {
-            let vx = GetSystemMetrics(SM_XVIRTUALSCREEN) as f64;
-            let vy = GetSystemMetrics(SM_YVIRTUALSCREEN) as f64;
-            let vw = GetSystemMetrics(SM_CXVIRTUALSCREEN) as f64;
-            let vh = GetSystemMetrics(SM_CYVIRTUALSCREEN) as f64;
-            if vw > 1.0 && vh > 1.0 {
-                let nx = (((x as f64 - vx) * 65535.0) / (vw - 1.0)).round() as i32;
-                let ny = (((y as f64 - vy) * 65535.0) / (vh - 1.0)).round() as i32;
-                (nx, ny, flag | MOUSEEVENTF_ABSOLUTE | 0x4000)
-            } else {
-                (0, 0, flag)
-            }
-        } else {
-            (0, 0, flag)
-        };
 
         let mut input = INPUT {
             type_: INPUT_MOUSE,
             u: std::mem::zeroed(),
         };
         *input.u.mi_mut() = MOUSEINPUT {
-            dx,
-            dy,
+            dx: 0,
+            dy: 0,
             mouseData: 0,
-            dwFlags: flags,
+            dwFlags: flag,
             time: 0,
             dwExtraInfo: 0,
         };
@@ -1287,10 +1261,9 @@ pub fn get_screen_capture_bounds() -> (i32, i32, i32, i32) {
 pub fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
     use winapi::um::processthreadsapi::GetCurrentThreadId;
     use winapi::um::winuser::{
-        keybd_event, AttachThreadInput, BringWindowToTop, GetForegroundWindow,
-        GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow,
-        ShowWindow, SystemParametersInfoA, KEYEVENTF_KEYUP, SPIF_SENDCHANGE,
-        SPI_SETFOREGROUNDLOCKTIMEOUT, SW_RESTORE, VK_MENU,
+        AttachThreadInput, BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId,
+        IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow, ShowWindow,
+        SystemParametersInfoA, SPIF_SENDCHANGE, SPI_SETFOREGROUNDLOCKTIMEOUT, SW_RESTORE,
     };
 
     if hwnd.is_null() || unsafe { IsWindow(hwnd) == 0 || IsWindowVisible(hwnd) == 0 } {
@@ -1308,12 +1281,6 @@ pub fn force_foreground_window(hwnd: winapi::shared::windef::HWND) {
             ShowWindow(hwnd, SW_RESTORE);
             thread::sleep(Duration::from_millis(50));
         }
-
-        // Déverrouiller la restriction de focus Windows même depuis un thread worker :
-        // la simulation d'un appui furtif sur Alt (VK_MENU) donne les droits système
-        // de transfert de premier plan.
-        keybd_event(VK_MENU as u8, 0, 0, 0);
-        keybd_event(VK_MENU as u8, 0, KEYEVENTF_KEYUP, 0);
 
         let cur_thread = GetCurrentThreadId();
         let fg_thread = if !cur_fg.is_null() {
@@ -2916,32 +2883,35 @@ pub fn execute_click(x: i32, y: i32, click_type: BlueprintClickType) {
     #[cfg(windows)]
     {
         with_macroforge_windows_clickthrough(x, y, || {
+            unsafe {
+                winapi::um::winuser::SetCursorPos(x, y);
+            }
             send_mouse_move(x, y);
             thread::sleep(Duration::from_millis(25));
             match click_type {
                 BlueprintClickType::Left => {
-                    send_mouse_button(1, true, x, y);
+                    send_mouse_button(1, true, 0, 0);
                     thread::sleep(Duration::from_millis(50));
-                    send_mouse_button(1, false, x, y);
+                    send_mouse_button(1, false, 0, 0);
                 }
                 BlueprintClickType::Right => {
-                    send_mouse_button(2, true, x, y);
+                    send_mouse_button(2, true, 0, 0);
                     thread::sleep(Duration::from_millis(50));
-                    send_mouse_button(2, false, x, y);
+                    send_mouse_button(2, false, 0, 0);
                 }
                 BlueprintClickType::Middle => {
-                    send_mouse_button(3, true, x, y);
+                    send_mouse_button(3, true, 0, 0);
                     thread::sleep(Duration::from_millis(50));
-                    send_mouse_button(3, false, x, y);
+                    send_mouse_button(3, false, 0, 0);
                 }
                 BlueprintClickType::DoubleLeft => {
-                    send_mouse_button(1, true, x, y);
+                    send_mouse_button(1, true, 0, 0);
                     thread::sleep(Duration::from_millis(50));
-                    send_mouse_button(1, false, x, y);
+                    send_mouse_button(1, false, 0, 0);
                     thread::sleep(Duration::from_millis(65));
-                    send_mouse_button(1, true, x, y);
+                    send_mouse_button(1, true, 0, 0);
                     thread::sleep(Duration::from_millis(50));
-                    send_mouse_button(1, false, x, y);
+                    send_mouse_button(1, false, 0, 0);
                 }
             }
         });
@@ -3481,30 +3451,35 @@ mod tests {
     #[test]
     fn test_mouse_button_dwflags_do_not_move_cursor() {
         // Les clics ne doivent contenir QUE le flag de bouton : ni MOVE, ni ABSOLUTE.
-        assert_eq!(
-            mouse_button_dwflags(1, true),
-            winapi::um::winuser::MOUSEEVENTF_LEFTDOWN
-        );
-        assert_eq!(
-            mouse_button_dwflags(1, false),
-            winapi::um::winuser::MOUSEEVENTF_LEFTUP
-        );
-        assert_eq!(
-            mouse_button_dwflags(2, true),
-            winapi::um::winuser::MOUSEEVENTF_RIGHTDOWN
-        );
-        assert_eq!(
-            mouse_button_dwflags(2, false),
-            winapi::um::winuser::MOUSEEVENTF_RIGHTUP
-        );
-        assert_eq!(
-            mouse_button_dwflags(3, true),
-            winapi::um::winuser::MOUSEEVENTF_MIDDLEDOWN
-        );
-        assert_eq!(
-            mouse_button_dwflags(42, false),
-            winapi::um::winuser::MOUSEEVENTF_MIDDLEUP
-        );
+        let left_down = mouse_button_dwflags(1, true);
+        assert_eq!(left_down, winapi::um::winuser::MOUSEEVENTF_LEFTDOWN);
+        assert_eq!(left_down & winapi::um::winuser::MOUSEEVENTF_ABSOLUTE, 0);
+        assert_eq!(left_down & winapi::um::winuser::MOUSEEVENTF_MOVE, 0);
+
+        let left_up = mouse_button_dwflags(1, false);
+        assert_eq!(left_up, winapi::um::winuser::MOUSEEVENTF_LEFTUP);
+        assert_eq!(left_up & winapi::um::winuser::MOUSEEVENTF_ABSOLUTE, 0);
+        assert_eq!(left_up & winapi::um::winuser::MOUSEEVENTF_MOVE, 0);
+
+        let right_down = mouse_button_dwflags(2, true);
+        assert_eq!(right_down, winapi::um::winuser::MOUSEEVENTF_RIGHTDOWN);
+        assert_eq!(right_down & winapi::um::winuser::MOUSEEVENTF_ABSOLUTE, 0);
+        assert_eq!(right_down & winapi::um::winuser::MOUSEEVENTF_MOVE, 0);
+
+        let right_up = mouse_button_dwflags(2, false);
+        assert_eq!(right_up, winapi::um::winuser::MOUSEEVENTF_RIGHTUP);
+        assert_eq!(right_up & winapi::um::winuser::MOUSEEVENTF_ABSOLUTE, 0);
+        assert_eq!(right_up & winapi::um::winuser::MOUSEEVENTF_MOVE, 0);
+
+        let mid_down = mouse_button_dwflags(3, true);
+        assert_eq!(mid_down, winapi::um::winuser::MOUSEEVENTF_MIDDLEDOWN);
+        assert_eq!(mid_down & winapi::um::winuser::MOUSEEVENTF_ABSOLUTE, 0);
+        assert_eq!(mid_down & winapi::um::winuser::MOUSEEVENTF_MOVE, 0);
+
+        let other_up = mouse_button_dwflags(42, false);
+        assert_eq!(other_up, winapi::um::winuser::MOUSEEVENTF_MIDDLEUP);
+        assert_eq!(other_up & winapi::um::winuser::MOUSEEVENTF_ABSOLUTE, 0);
+        assert_eq!(other_up & winapi::um::winuser::MOUSEEVENTF_MOVE, 0);
     }
 
     #[test]
@@ -3987,5 +3962,14 @@ mod tests {
     fn test_execute_click_non_panicking() {
         // Doit s'exécuter sans erreur
         execute_click(0, 0, BlueprintClickType::Left);
+    }
+
+    #[test]
+    fn test_send_mouse_button_non_panicking() {
+        // Doit s'exécuter sans paniquer pour n'importe quelles coordonnées
+        send_mouse_button(1, true, 100, 200);
+        send_mouse_button(1, false, 100, 200);
+        send_mouse_button(2, true, 0, 0);
+        send_mouse_button(2, false, 0, 0);
     }
 }
