@@ -40,6 +40,16 @@ cargo build --release
 
 Le fichier exécutable autonome est généré dans `target/release/macroforge.exe`.
 
+### Benchmarks & Profilage
+
+Benchmarks criterion des chemins critiques du moteur (matching d'image,
+conversion BGRA→RGBA) et guide de profilage CPU sous Windows (samply) :
+voir [`docs/profiling.md`](docs/profiling.md).
+
+```bash
+cargo bench   # benchmarks criterion (rapport : target/criterion/report/index.html)
+```
+
 ---
 
 ## 🛠️ Stack Technique
