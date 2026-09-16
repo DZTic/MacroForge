@@ -2565,10 +2565,18 @@ pub fn get_actions_count() -> usize {
 }
 
 pub fn save_macro_to_file(path: &str) -> Result<(), String> {
-    let state = MACRO_STATE.lock().unwrap();
-    let json = serde_json::to_string_pretty(&state.actions).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())?;
-    Ok(())
+    save_macro_snapshot(&MACRO_STATE, |json| std::fs::write(path, json))
+}
+
+fn save_macro_snapshot(
+    state: &Mutex<MacroState>,
+    write: impl FnOnce(String) -> std::io::Result<()>,
+) -> Result<(), String> {
+    // Keep a coherent snapshot, but never hold the engine lock during JSON or I/O.
+    // The owned clone also keeps subsequent edits out of this save operation.
+    let actions = { state.lock().unwrap().actions.clone() };
+    let json = serde_json::to_string_pretty(&actions).map_err(|e| e.to_string())?;
+    write(json).map_err(|e| e.to_string())
 }
 
 pub fn load_macro_from_file(path: &str) -> Result<usize, String> {
@@ -3169,6 +3177,144 @@ pub fn handle_rdev_event(event: Event) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_save_snapshot_releases_lock_during_blocked_write() {
+        let original = vec![
+            MacroAction {
+                action_type: ActionType::KeyPress("Échap".into(), 0x1B, false),
+                delay_ms: 12,
+            },
+            MacroAction {
+                action_type: ActionType::WaitImage("images/cible.png".into(), 5000),
+                delay_ms: 34,
+            },
+        ];
+        let state = Mutex::new(MacroState {
+            actions: original.clone(),
+            ..MacroState::new()
+        });
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        thread::scope(|scope| {
+            let state_ref = &state;
+            let original_ref = &original;
+            let saving = scope.spawn(move || {
+                save_macro_snapshot(state_ref, |json| {
+                    started_tx.send(()).unwrap();
+                    resume_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                    assert_eq!(json, serde_json::to_string_pretty(original_ref).unwrap());
+                    let restored: Vec<MacroAction> = serde_json::from_str(&json).unwrap();
+                    assert_eq!(&restored, original_ref);
+                    Ok(())
+                })
+            });
+            started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            // No scheduler-dependent sleeps: the writer cannot finish before this signal.
+            let progressed = if let Ok(mut state) = state.try_lock() {
+                state.actions.clear();
+                state.is_recording = true;
+                true
+            } else {
+                false
+            };
+            resume_tx.send(()).unwrap();
+            assert!(progressed, "save held the state lock during I/O");
+            saving.join().unwrap().unwrap();
+        });
+        assert!(state.lock().unwrap().actions.is_empty());
+    }
+
+    #[test]
+    fn test_save_snapshot_propagates_write_errors() {
+        let state = Mutex::new(MacroState::new());
+        let error = save_macro_snapshot(&state, |json| {
+            assert_eq!(json, "[]");
+            assert!(state.try_lock().is_ok());
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "simulated write failure",
+            ))
+        })
+        .unwrap_err();
+        assert_eq!(error, "simulated write failure");
+    }
+
+    #[test]
+    fn test_save_snapshot_file_round_trip() {
+        let state = Mutex::new(MacroState {
+            actions: vec![MacroAction {
+                action_type: ActionType::MouseMoveRelative(-12, 34),
+                delay_ms: 56,
+            }],
+            ..MacroState::new()
+        });
+        let path = std::env::temp_dir().join(format!(
+            "macroforge_snapshot_{}_{}.mforge",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        save_macro_snapshot(&state, |json| std::fs::write(&path, json)).unwrap();
+        let data = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let restored: Vec<MacroAction> = serde_json::from_str(&data).unwrap();
+        assert_eq!(restored, state.lock().unwrap().actions);
+    }
+
+    #[test]
+    #[ignore = "manual snapshot/lock contention measurement with simulated slow I/O"]
+    fn measure_save_snapshot_contention() {
+        let state = Mutex::new(MacroState {
+            actions: vec![
+                MacroAction {
+                    action_type: ActionType::KeyPress("KeyA".into(), 65, false),
+                    delay_ms: 10,
+                };
+                100_000
+            ],
+            ..MacroState::new()
+        });
+        let start = Instant::now();
+        let snapshot = { state.lock().unwrap().actions.clone() };
+        eprintln!(
+            "100,000 actions: snapshot lock duration = {:?}",
+            start.elapsed()
+        );
+        drop(snapshot);
+        for hold_lock in [true, false] {
+            let (started_tx, started_rx) = std::sync::mpsc::channel();
+            thread::scope(|scope| {
+                let state_ref = &state;
+                let saving = scope.spawn(move || {
+                    let slow_write = |_: String| {
+                        started_tx.send(()).unwrap();
+                        thread::sleep(Duration::from_millis(100));
+                        Ok(())
+                    };
+                    if hold_lock {
+                        // Previous implementation, retained only as the measurement baseline.
+                        let guard = state_ref.lock().unwrap();
+                        let json = serde_json::to_string_pretty(&guard.actions).unwrap();
+                        let result: std::io::Result<()> = slow_write(json);
+                        result.unwrap();
+                        drop(guard);
+                    } else {
+                        save_macro_snapshot(state_ref, slow_write).unwrap();
+                    }
+                });
+                started_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                let start = Instant::now();
+                let guard = state.lock().unwrap();
+                let elapsed = start.elapsed();
+                drop(guard);
+                eprintln!("hold_lock={hold_lock}: state access during 100 ms write = {elapsed:?}");
+                saving.join().unwrap();
+            });
+        }
+    }
 
     #[test]
     fn test_macro_action_manipulations() {
